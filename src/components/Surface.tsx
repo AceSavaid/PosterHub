@@ -87,10 +87,10 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
       break;
     case 'image':
       inner = el.src ? (
-        <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain' }} />
+        <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain', imageRendering: el.qr ? 'pixelated' : undefined }} />
       ) : (
         <div className="img-placeholder ui-only">
-          <span>Image</span>
+          <span>{el.placeholder ?? 'Image'}</span>
           <small>Double-click to choose, or drop / paste an image</small>
         </div>
       );

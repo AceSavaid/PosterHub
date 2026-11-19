@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import type { Poster } from '../types';
-import { deletePoster, exportPosterFile, listPosters, pickFile, readPosterFile, savePoster } from '../lib/storage';
+import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFile, readPosterFile, savePoster, storageInfo } from '../lib/storage';
 import { importPptx } from '../lib/pptxImport';
 import { uid, PALETTES } from '../model';
 import NewPosterDialog from './NewPosterDialog';
+import { askConfirm, askText, tell } from '../lib/dialogs';
 
 const fmtSize = (p: Poster) => `${Math.round(p.width)} × ${Math.round(p.height)} mm · ${p.width > p.height ? 'landscape' : 'portrait'}`;
 const fmtDate = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -14,14 +15,22 @@ export default function Library({ onOpen }: { onOpen: (p: Poster) => void }) {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [where, setWhere] = useState<{ kind: 'browser' | 'folder'; location: string } | null>(null);
 
   const refresh = () => listPosters().then(setPosters).catch((e) => setError(String(e)));
   useEffect(() => {
     refresh();
+    storageInfo().then(setWhere).catch(() => undefined);
   }, []);
 
   async function create(p: Poster) {
-    await savePoster(p);
+    try {
+      await savePoster(p);
+    } catch (e) {
+      setCreating(false);
+      setError('Could not save the new poster: ' + String(e));
+      return;
+    }
     setCreating(false);
     onOpen(p);
   }
@@ -63,7 +72,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster) => void }) {
         updatedAt: now,
       };
       await savePoster(p);
-      if (r.warnings.length) alert('Imported with notes:\n\n• ' + r.warnings.join('\n• '));
+      if (r.warnings.length) await tell('Imported with notes', '• ' + r.warnings.join('\n• '));
       onOpen(p);
     } catch (e) {
       setError('Could not import that PowerPoint file: ' + (e as Error).message);
@@ -79,14 +88,14 @@ export default function Library({ onOpen }: { onOpen: (p: Poster) => void }) {
   }
 
   async function rename(p: Poster) {
-    const name = prompt('Rename poster', p.name);
+    const name = (await askText('Rename poster', 'Name', p.name, 'Rename'))?.trim();
     if (!name) return;
     await savePoster({ ...p, name, updatedAt: Date.now() });
     refresh();
   }
 
   async function remove(p: Poster) {
-    if (!confirm(`Delete “${p.name}”? This cannot be undone.\n\nTip: use Export first if you want a backup file.`)) return;
+    if (!(await askConfirm(`Delete “${p.name}”?`, 'This cannot be undone.\n\nTip: use Export first if you want a backup file.', 'Delete', true))) return;
     await deletePoster(p.id);
     refresh();
   }
@@ -110,6 +119,12 @@ export default function Library({ onOpen }: { onOpen: (p: Poster) => void }) {
           <h1>My posters</h1>
           {!!posters?.length && <input className="search" placeholder="Search posters" value={query} onChange={(e) => setQuery(e.target.value)} />}
         </div>
+        {where?.kind === 'folder' && (
+          <p className="muted small lib-location">
+            Saved as files in <code>{where.location}</code>{' '}
+            <button className="link" onClick={() => openLibraryFolder().catch((e) => setError(String(e)))}>Show folder</button>
+          </p>
+        )}
         {error && (
           <div className="banner error" onClick={() => setError('')}>
             {error} <span className="muted">(click to dismiss)</span>
@@ -124,7 +139,11 @@ export default function Library({ onOpen }: { onOpen: (p: Poster) => void }) {
               <button className="btn primary big" onClick={() => setCreating(true)}>+ New poster</button>
               <button className="btn big" onClick={importTemplate}>Import PowerPoint template</button>
             </div>
-            <p className="muted small">Posters are saved in this browser automatically. Use Export → Project file to back them up or move them to another computer.</p>
+            <p className="muted small">
+              {where?.kind === 'folder'
+                ? 'Posters are saved automatically as files in your Documents/PosterHub folder, so you can back them up or copy them like any other file.'
+                : 'Posters are saved in this browser automatically. Use Export → Project file to back them up or move them to another computer.'}
+            </p>
           </div>
         )}
         <div className="poster-grid">

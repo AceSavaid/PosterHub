@@ -62,18 +62,47 @@ test.describe('library', () => {
     await expect(page.locator('.poster-card').first()).toContainText('1016 × 762 mm · landscape');
   });
 
-  test('duplicates and deletes posters', async ({ page }) => {
-    page.on('dialog', (d) => d.accept());
+  test('duplicates, renames and deletes posters', async ({ page }) => {
     await newPoster(page, { name: 'Original' });
     await backToLibrary(page);
     await page.locator('.poster-card', { hasText: 'Original' }).getByRole('button', { name: 'Duplicate' }).click();
-    await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
-    await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
-    await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toHaveCount(0);
+    const copy = page.locator('.poster-card', { hasText: 'Original (copy)' });
+    await expect(copy).toBeVisible();
+
+    await copy.getByRole('button', { name: 'Rename' }).click();
+    const rename = page.getByRole('dialog', { name: 'Rename poster' });
+    await rename.getByLabel('Name').fill('Second draft');
+    await rename.getByRole('button', { name: 'Rename' }).click();
+    const renamed = page.locator('.poster-card', { hasText: 'Second draft' });
+    await expect(renamed).toBeVisible();
+
+    // Cancelling a delete keeps the poster.
+    await renamed.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await expect(renamed).toBeVisible();
+
+    await renamed.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+    await expect(renamed).toHaveCount(0);
+    await expect(page.locator('.poster-card', { hasText: 'Original' })).toBeVisible();
   });
 });
 
 test.describe('editing', () => {
+  test('applies a layout after asking first', async ({ page }) => {
+    await newPoster(page);
+    const before = await elements(page).count();
+    expect(before).toBeGreaterThan(0);
+    await page.locator('.panel.left .tabs').getByRole('button', { name: 'Layout' }).click();
+    await page.locator('.panel.left label', { hasText: /^Layout/ }).locator('select').selectOption({ label: 'Blank' });
+    await page.getByRole('button', { name: /^Apply to/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await expect(elements(page)).toHaveCount(before);
+    await page.getByRole('button', { name: /^Apply to/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
+    await expect(elements(page)).toHaveCount(0);
+  });
+
   test('types into text, with undo and redo', async ({ page }) => {
     await newPoster(page);
     const title = page.locator('.poster .el-title .el-body');

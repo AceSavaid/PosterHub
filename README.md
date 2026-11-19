@@ -15,6 +15,15 @@ Make research and academic posters in your browser. No account, no install: ever
 - **Export**: PDF for printing, PowerPoint (editable text, shapes and native charts), PNG, or a `.poster.json` project file you can back up or open on another computer.
 - **Share and present**: copy the poster as an image to paste anywhere, or open View mode to present it full screen.
 
+## Desktop app
+
+PosterHub also comes as a desktop app for Windows, macOS and Linux (built with [Tauri](https://tauri.app)). It is the same app in its own window, with two differences:
+
+- **My posters are files.** Each poster is saved as a `.poster.json` file in **Documents/PosterHub**, so you can back them up, sync them with OneDrive/Dropbox/iCloud, or email them like any other file. The library has a **Show folder** link. Files you copy into that folder show up in the library.
+- **Exports ask where to save** (PDF, PowerPoint, PNG, project file) instead of going to Downloads.
+
+Download the installers from the repository's **Releases** page. The apps are not code-signed yet, so the first launch shows a warning: on Windows click **More info → Run anyway**; on macOS open **System Settings → Privacy & Security** and click **Open Anyway**.
+
 ## Development
 
 ```bash
@@ -23,7 +32,21 @@ npm run dev          # start the app at http://localhost:5173
 npm test             # unit tests (Vitest)
 npm run test:e2e     # browser tests (Playwright; run `npx playwright install chromium` once)
 npm run build        # production build in dist/
+npm run desktop:dev  # run the desktop app (needs Rust; see tauri.app/start/prerequisites)
+npm run desktop:build  # build a desktop installer for this computer
 ```
+
+### Releasing the desktop apps
+
+1. Bump `version` in `package.json` (the desktop app reads its version from there).
+2. Push a tag: `git tag v0.2.0 && git push origin v0.2.0` (or run the **Desktop apps** workflow by hand from the Actions tab).
+3. `.github/workflows/desktop.yml` builds Windows, macOS (Apple silicon and Intel) and Linux installers and attaches them to a **draft** release. Check it and click **Publish**.
+
+Pull requests that touch the desktop code also build the Linux app and run `tests/desktop/smoke.mjs`, which drives the real app and checks posters are created, renamed and deleted on disk.
+
+### Where posters are stored
+
+`src/lib/storage.ts` is the only module the UI uses. It picks a `PosterStore` (`src/lib/store/`): `browserStore` (IndexedDB) on the web, or `FolderStore` (one `.poster.json` per poster in Documents/PosterHub) in the desktop app. Desktop file access is limited to that folder and to files you pick in a Save dialog (`src-tauri/capabilities/default.json`).
 
 The app is a static site (Vite + React + TypeScript). `vite.config.ts` uses relative asset paths so the same build works on GitHub Pages and inside a desktop wrapper (Tauri or Electron) later.
 
@@ -33,10 +56,13 @@ The app is a static site (Vite + React + TypeScript). `vite.config.ts` uses rela
 | --- | --- |
 | `src/types.ts` | The poster document model (sizes in mm, fonts in pt) |
 | `src/model.ts` | Size presets, palettes, layouts, element defaults |
-| `src/lib/` | Storage (IndexedDB), fonts, charts, exporters, PowerPoint import, undo history |
+| `src/lib/` | Storage, fonts, charts, exporters, PowerPoint import, undo history, in-app dialogs |
+| `src/lib/store/` | Where the poster library lives: browser storage or a folder on disk |
+| `src-tauri/` | Desktop app shell (Tauri): window, permissions, icons |
 | `src/components/` | Library, editor, canvas, panels and dialogs |
 | `tests/unit/` | Vitest unit tests |
 | `tests/e2e/` | Playwright end-to-end tests |
+| `tests/desktop/` | Smoke test that drives the real desktop app |
 
 ## Publishing on GitHub Pages
 

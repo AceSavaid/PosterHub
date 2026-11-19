@@ -99,6 +99,8 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .lib-main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 60px; }
 .lib-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .lib-title-row h1 { margin: 0; font-size: 24px; }
+.lib-location { margin: -8px 0 16px; }
+.lib-location code { font-size: 12px; word-break: break-all; }
 .search { max-width: 260px; }
 .empty { text-align: center; padding: 60px 16px; background: var(--bg); border-radius: 12px; border: 1px dashed var(--line); }
 .empty h2 { margin-top: 0; }
@@ -119,6 +121,8 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .modal.xwide { max-width: 1100px; }
 .modal h2 { margin: 0 0 16px; font-size: 20px; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.app-dialog-msg { white-space: pre-line; margin: 0; line-height: 1.5; }
+.btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
 .span2 { grid-column: span 2; }
 .size-row { display: grid; grid-template-columns: 1fr auto 1fr 1fr; gap: 8px; align-items: end; }

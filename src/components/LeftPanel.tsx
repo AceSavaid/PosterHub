@@ -7,6 +7,7 @@ import { FontSelect } from './FontSelect';
 import { fileToDataUrl, pickFile } from '../lib/storage';
 import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fonts';
 import { importPptx } from '../lib/pptxImport';
+import { askConfirm } from '../lib/dialogs';
 
 type Tab = 'insert' | 'layout' | 'design';
 
@@ -156,8 +157,8 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
         </label>
         <button
           className="btn span2"
-          onClick={() => {
-            if (!confirm('Replace everything on the poster with this layout? You can undo afterwards.')) return;
+          onClick={async () => {
+            if (!(await askConfirm('Apply this layout?', 'This replaces everything on the poster with the layout. You can undo afterwards.', 'Apply layout'))) return;
             update((d) => void (d.elements = buildTemplate(template, d)));
           }}
         >

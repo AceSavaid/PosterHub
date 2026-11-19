@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ChartSpec, ElementType, Poster, PosterElement } from '../types';
 import { MM_TO_PX, makeElement, uid } from '../model';
 import { usePosterHistory } from '../lib/usePoster';
+import { align, distribute, intersects, matchSize } from '../lib/arrange';
 import { exportPosterFile, fileToDataUrl, pickFile, savePoster } from '../lib/storage';
 import { ensurePosterFonts } from '../lib/fonts';
 import { copyImageToClipboard, effectiveDpi, exportPdf, exportPng, exportPptx, makeThumbnail } from '../lib/exporters';
@@ -38,7 +39,12 @@ interface Props {
 
 export default function Editor({ initial, onClose }: Props) {
   const { poster, update, updateElement, undo, redo, canUndo, canRedo, ref: posterRef } = usePosterHistory(initial);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  /** the primary (last clicked) selection */
+  const selectedId = selectedIds[selectedIds.length - 1] ?? null;
+  const setSelectedId = useCallback((id: string | null) => setSelectedIds(id ? [id] : []), []);
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
+  const [overflow, setOverflow] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.2);
   const [showGrid, setShowGrid] = useState(true);
@@ -141,7 +147,7 @@ export default function Editor({ initial, onClose }: Props) {
   function insert(type: ElementType, extra?: Partial<PosterElement>) {
     const el = makeElement(type, posterRef.current, extra);
     addElement(el);
-    if (el.style) setTimeout(() => setEditingId(el.id), 50);
+    if (el.style) setEditingId(el.id);
   }
 
   async function insertImageFile(file: Blob, at?: { x: number; y: number }, replaceId?: string) {
@@ -193,17 +199,91 @@ export default function Editor({ initial, onClose }: Props) {
   }
 
   function removeSelected() {
-    if (!selectedId) return;
-    update((d) => void (d.elements = d.elements.filter((e) => e.id !== selectedId)));
+    if (!selectedIds.length) return;
+    const ids = new Set(selectedIds);
+    update((d) => void (d.elements = d.elements.filter((e) => !ids.has(e.id))));
     setSelectedId(null);
   }
 
   function duplicate(src?: PosterElement, offset = 8) {
-    const el = src ?? posterRef.current.elements.find((e) => e.id === selectedId);
-    if (!el) return;
-    const copy = { ...structuredClone(el), id: uid(), x: el.x + offset, y: el.y + offset, locked: false };
-    update((d) => void d.elements.push(copy));
-    setSelectedId(copy.id);
+    const sources = src ? [src] : posterRef.current.elements.filter((e) => selectedIds.includes(e.id));
+    if (!sources.length) return;
+    const copies = sources.map((el) => ({ ...structuredClone(el), id: uid(), x: el.x + offset, y: el.y + offset, locked: false }));
+    update((d) => void d.elements.push(...copies));
+    setSelectedIds(copies.map((c) => c.id));
+  }
+
+  function arrange(fn: (els: PosterElement[], d: Poster) => void) {
+    const ids = new Set(selectedIds);
+    update((d) => {
+      // keep the order the user selected them in (the first one is the reference for "match size")
+      const els = selectedIds.map((id) => d.elements.find((e) => e.id === id)).filter((e): e is PosterElement => !!e && ids.has(e.id));
+      fn(els, d);
+    });
+  }
+
+  /** Text that doesn't fit its box: measured from the rendered poster. */
+  function textNode(id: string) {
+    return posterNode.current?.querySelector<HTMLElement>(`[data-id="${id}"] .el-body`) ?? null;
+  }
+
+  useLayoutEffect(() => {
+    const n = selectedId ? textNode(selectedId) : null;
+    setOverflow(!!n && n.scrollHeight > n.clientHeight + 1);
+  });
+
+  function growToFit() {
+    const n = selectedId && textNode(selectedId);
+    if (!n) return;
+    const el = posterRef.current.elements.find((e) => e.id === selectedId)!;
+    const extra = el.h * MM_TO_PX - n.clientHeight; // padding + border
+    updateElement(el.id, { h: (n.scrollHeight + extra) / MM_TO_PX + 0.5 });
+  }
+
+  function shrinkToFit() {
+    const n = selectedId && textNode(selectedId);
+    if (!n) return;
+    const el = posterRef.current.elements.find((e) => e.id === selectedId)!;
+    const original = n.style.fontSize;
+    let size = el.style!.fontSize;
+    while (size > 4 && n.scrollHeight > n.clientHeight + 1) {
+      size = Math.round((size - Math.max(0.5, size * 0.03)) * 2) / 2;
+      n.style.fontSize = `${size}pt`;
+    }
+    n.style.fontSize = original;
+    updateElement(el.id, (e) => void (e.style!.fontSize = size));
+  }
+
+  /** Rubber-band selection: drag on an empty part of the poster or the grey area. */
+  function startMarquee(e: React.PointerEvent) {
+    if (e.button !== 0) return;
+    const additive = e.shiftKey;
+    const start = { x: e.clientX, y: e.clientY };
+    const before = additive ? selectedIds : [];
+    let moved = false;
+    const toPoster = (cx: number, cy: number) => {
+      const r = posterNode.current!.getBoundingClientRect();
+      const k = zoom * MM_TO_PX;
+      return { x: (cx - r.left) / k, y: (cy - r.top) / k };
+    };
+    const move = (ev: PointerEvent) => {
+      if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 4) return;
+      moved = true;
+      setMarquee({ x0: start.x, y0: start.y, x1: ev.clientX, y1: ev.clientY });
+      const a = toPoster(start.x, start.y);
+      const b = toPoster(ev.clientX, ev.clientY);
+      const box = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) };
+      const hit = posterRef.current.elements.filter((el) => intersects(box, el) && !el.locked).map((el) => el.id);
+      setSelectedIds([...before.filter((id) => !hit.includes(id)), ...hit]);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setMarquee(null);
+      if (!moved && !additive) setSelectedId(null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
   }
 
   function layer(dir: 'front' | 'back' | 'up' | 'down') {
@@ -239,12 +319,15 @@ export default function Editor({ initial, onClose }: Props) {
         e.preventDefault();
         duplicate();
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedId) {
+        if (selectedIds.length) {
           e.preventDefault();
           removeSelected();
         }
       } else if (e.key === 'Escape') {
         setSelectedId(null);
+      } else if (mod && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setSelectedIds(posterRef.current.elements.filter((x) => !x.locked).map((x) => x.id));
       } else if (e.key === 'Enter' && selectedId) {
         const el = posterRef.current.elements.find((x) => x.id === selectedId);
         if (el?.style) {
@@ -256,10 +339,13 @@ export default function Editor({ initial, onClose }: Props) {
         const step = e.shiftKey ? 10 : 1;
         const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
         const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
-        updateElement(selectedId, (el) => {
-          if (el.locked) return;
-          el.x += dx;
-          el.y += dy;
+        const ids = new Set(selectedIds);
+        update((d) => {
+          for (const el of d.elements)
+            if (ids.has(el.id) && !el.locked) {
+              el.x += dx;
+              el.y += dy;
+            }
         }, 'nudge');
       } else if (!mod && e.key === '0' && e.shiftKey) fit();
     };
@@ -458,9 +544,7 @@ export default function Editor({ initial, onClose }: Props) {
         <div
           className="stage"
           ref={scroller}
-          onPointerDown={() => {
-            setSelectedId(null);
-          }}
+          onPointerDown={startMarquee}
           onWheel={(e) => {
             if (!(e.ctrlKey || e.metaKey)) return;
             e.preventDefault();
@@ -474,9 +558,19 @@ export default function Editor({ initial, onClose }: Props) {
               zoom={zoom}
               showGrid={showGrid}
               snap={snap}
-              selectedId={selectedId}
+              selectedIds={selectedIds}
               editingId={editingId}
-              onSelect={setSelectedId}
+              onSelect={(id, additive) =>
+                setSelectedIds((cur) => (additive ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : cur.includes(id) ? cur : [id]))
+              }
+              onMoveMany={(moves, key) =>
+                update((d) => {
+                  for (const m of moves) {
+                    const el = d.elements.find((e) => e.id === m.id);
+                    if (el) Object.assign(el, m.patch);
+                  }
+                }, key)
+              }
               onEdit={setEditingId}
               onChange={(id, patch, key) => updateElement(id, patch, key)}
               onCommitText={(id, html) => updateElement(id, { html })}
@@ -490,7 +584,14 @@ export default function Editor({ initial, onClose }: Props) {
         </div>
         <Inspector
           poster={poster}
-          el={selected}
+          el={selectedIds.length > 1 ? null : selected}
+          multi={selectedIds.length}
+          overflow={overflow}
+          onShrinkText={shrinkToFit}
+          onGrowBox={growToFit}
+          onAlign={(mode) => arrange((els, d) => align(els, mode, { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin }))}
+          onDistribute={(axis) => arrange((els) => distribute(els, axis))}
+          onMatchSize={(dim) => arrange((els) => matchSize(els, dim))}
           editing={!!editingId && editingId === selectedId}
           onChange={(patch, key) => selected && updateElement(selected.id, patch, key)}
           onDelete={removeSelected}
@@ -502,6 +603,12 @@ export default function Editor({ initial, onClose }: Props) {
       </div>
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
       {toast && <div className="toast">{toast}</div>}
+      {marquee && (
+        <div
+          className="marquee"
+          style={{ left: Math.min(marquee.x0, marquee.x1), top: Math.min(marquee.y0, marquee.y1), width: Math.abs(marquee.x1 - marquee.x0), height: Math.abs(marquee.y1 - marquee.y0) }}
+        />
+      )}
     </div>
   );
 }

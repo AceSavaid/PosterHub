@@ -1,0 +1,5 @@
+Condition,Accuracy,Speed
+Baseline,0.62,410
+Week 1,0.71,388
+Week 2,0.78,371
+Week 4,0.85,350

@@ -1,0 +1,201 @@
+import { forwardRef, useRef, useState } from 'react';
+import type { Poster, PosterElement } from '../types';
+import { MM_TO_PX, columnLefts, columnWidth } from '../model';
+import { ElementView, Surface } from './Surface';
+
+type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+
+interface Props {
+  poster: Poster;
+  zoom: number;
+  showGrid: boolean;
+  snap: boolean;
+  selectedId: string | null;
+  editingId: string | null;
+  onSelect: (id: string | null) => void;
+  onEdit: (id: string | null) => void;
+  onChange: (id: string, patch: Partial<PosterElement>, coalesce?: string) => void;
+  onCommitText: (id: string, html: string) => void;
+  onActivate: (el: PosterElement) => void; // double-click on image/chart
+}
+
+interface Guide {
+  axis: 'x' | 'y';
+  at: number;
+}
+
+export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, ref) {
+  const { poster, zoom, showGrid, snap, selectedId, editingId, onSelect, onEdit, onChange, onCommitText, onActivate } = props;
+  const [guides, setGuides] = useState<Guide[]>([]);
+  const dragging = useRef(false);
+
+  const scale = zoom * MM_TO_PX; // screen px per mm
+
+  function snapLines(excludeId: string) {
+    const xs = [0, poster.margin, poster.width - poster.margin, poster.width, poster.width / 2];
+    const ys = [0, poster.margin, poster.height - poster.margin, poster.height, poster.height / 2];
+    const cw = columnWidth(poster);
+    for (const l of columnLefts(poster)) xs.push(l, l + cw);
+    for (const e of poster.elements) {
+      if (e.id === excludeId) continue;
+      xs.push(e.x, e.x + e.w, e.x + e.w / 2);
+      ys.push(e.y, e.y + e.h, e.y + e.h / 2);
+    }
+    return { xs, ys };
+  }
+
+  /** Returns the snap delta for a set of candidate edges. */
+  function bestSnap(edges: number[], lines: number[], threshold: number) {
+    let best: { d: number; at: number } | null = null;
+    for (const e of edges)
+      for (const l of lines) {
+        const d = l - e;
+        if (Math.abs(d) <= threshold && (!best || Math.abs(d) < Math.abs(best.d))) best = { d, at: l };
+      }
+    return best;
+  }
+
+  function startDrag(e: React.PointerEvent, el: PosterElement, handle?: Handle) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    onSelect(el.id);
+    if (el.locked) return;
+    const start = { x: e.clientX, y: e.clientY };
+    const orig = { x: el.x, y: el.y, w: el.w, h: el.h };
+    const lines = snapLines(el.id);
+    const threshold = 6 / scale;
+    const key = (handle ? 'resize-' : 'move-') + el.id + '-' + Date.now();
+    const ratio = orig.w / orig.h;
+    let moved = false;
+
+    const move = (ev: PointerEvent) => {
+      const dx = (ev.clientX - start.x) / scale;
+      const dy = (ev.clientY - start.y) / scale;
+      if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 3) return;
+      moved = true;
+      dragging.current = true;
+      const doSnap = snap && !ev.altKey;
+      const g: Guide[] = [];
+      let { x, y, w, h } = orig;
+      if (!handle) {
+        x += dx;
+        y += dy;
+        if (doSnap) {
+          const sx = bestSnap([x, x + w / 2, x + w], lines.xs, threshold);
+          const sy = bestSnap([y, y + h / 2, y + h], lines.ys, threshold);
+          if (sx) (x += sx.d), g.push({ axis: 'x', at: sx.at });
+          if (sy) (y += sy.d), g.push({ axis: 'y', at: sy.at });
+        }
+      } else {
+        const minS = 5;
+        if (handle.includes('e')) w = Math.max(minS, orig.w + dx);
+        if (handle.includes('s')) h = Math.max(minS, orig.h + dy);
+        if (handle.includes('w')) {
+          w = Math.max(minS, orig.w - dx);
+          x = orig.x + orig.w - w;
+        }
+        if (handle.includes('n')) {
+          h = Math.max(minS, orig.h - dy);
+          y = orig.y + orig.h - h;
+        }
+        // Shift keeps proportions on corner handles (handy for images).
+        if (ev.shiftKey && handle.length === 2) {
+          h = w / ratio;
+          if (handle.includes('n')) y = orig.y + orig.h - h;
+        }
+        if (doSnap) {
+          if (handle.includes('e')) {
+            const s = bestSnap([x + w], lines.xs, threshold);
+            if (s) (w += s.d), g.push({ axis: 'x', at: s.at });
+          }
+          if (handle.includes('w')) {
+            const s = bestSnap([x], lines.xs, threshold);
+            if (s) (x += s.d), (w -= s.d), g.push({ axis: 'x', at: s.at });
+          }
+          if (handle.includes('s')) {
+            const s = bestSnap([y + h], lines.ys, threshold);
+            if (s) (h += s.d), g.push({ axis: 'y', at: s.at });
+          }
+          if (handle.includes('n')) {
+            const s = bestSnap([y], lines.ys, threshold);
+            if (s) (y += s.d), (h -= s.d), g.push({ axis: 'y', at: s.at });
+          }
+        }
+      }
+      setGuides(g);
+      onChange(el.id, { x, y, w, h }, key);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setGuides([]);
+      setTimeout(() => (dragging.current = false), 0);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  const selected = poster.elements.find((e) => e.id === selectedId);
+  const hs = 10 / zoom; // handle size in poster px, constant on screen
+
+  return (
+    <Surface
+      ref={ref}
+      poster={poster}
+      zoom={zoom}
+      showGrid={showGrid}
+      renderElement={(el) => {
+        const isEditing = editingId === el.id;
+        const isText = el.style != null;
+        return (
+          <ElementView
+            key={el.id}
+            el={el}
+            poster={poster}
+            editing={isEditing}
+            onCommitText={(html) => onCommitText(el.id, html)}
+            onEditDone={() => onEdit(null)}
+            className={(el.id === selectedId ? 'selected ' : '') + (el.locked ? 'locked ' : '') + (isEditing ? 'editing' : '')}
+            wrapperProps={{
+              onPointerDown: isEditing ? (e) => e.stopPropagation() : (e) => startDrag(e, el),
+              onDoubleClick: (e) => {
+                e.stopPropagation();
+                if (isText) onEdit(el.id);
+                else onActivate(el);
+              },
+            }}
+          />
+        );
+      }}
+    >
+      {selected && !editingId && (
+        <div
+          className="ui-only sel-box"
+          style={{ left: selected.x * MM_TO_PX, top: selected.y * MM_TO_PX, width: selected.w * MM_TO_PX, height: selected.h * MM_TO_PX, borderWidth: 2 / zoom }}
+        >
+          {!selected.locked &&
+            HANDLES.map((h) => (
+              <div
+                key={h}
+                className={'handle h-' + h}
+                style={{ width: hs, height: hs, margin: -hs / 2, borderWidth: 1.5 / zoom }}
+                onPointerDown={(e) => startDrag(e, selected, h)}
+              />
+            ))}
+        </div>
+      )}
+      {guides.map((g, i) => (
+        <div
+          key={i}
+          className="ui-only guide"
+          style={
+            g.axis === 'x'
+              ? { left: g.at * MM_TO_PX, top: 0, bottom: 0, width: 1 / zoom }
+              : { top: g.at * MM_TO_PX, left: 0, right: 0, height: 1 / zoom }
+          }
+        />
+      ))}
+    </Surface>
+  );
+});

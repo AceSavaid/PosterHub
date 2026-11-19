@@ -446,8 +446,18 @@ export default function Editor({ initial, onClose }: Props) {
     await new Promise((r) => setTimeout(r, 50));
     try {
       if (kind === 'project') return exportPosterFile(p);
-      notify(kind === 'pptx' ? 'Building PowerPoint…' : `Rendering at ${effectiveDpi(p, dpi)} dpi… large posters can take a few seconds.`);
-      if (kind === 'pdf') await exportPdf(posterNode.current!, p, dpi);
+      notify(kind === 'pptx' ? 'Building PowerPoint…' : kind === 'pdf' ? 'Building print-quality PDF…' : `Rendering at ${effectiveDpi(p, dpi)} dpi… large posters can take a few seconds.`);
+      if (kind === 'pdf') {
+        const res = await exportPdf(posterNode.current!, p, dpi, (id) => chartCanvases.get(id)?.toDataURL('image/png'));
+        if (!res.vector) {
+          notify(`Exported the PDF as a ${effectiveDpi(p, dpi)} dpi image because the sharp version could not be built. Check your downloads.`);
+          return;
+        }
+        if (res.warnings.length) {
+          notify('PDF exported. Note: ' + [...new Set(res.warnings)].join(' '));
+          return;
+        }
+      }
       if (kind === 'png') await exportPng(posterNode.current!, p, dpi);
       if (kind === 'pptx') {
         const images = new Map<string, string>();
@@ -513,7 +523,7 @@ export default function Editor({ initial, onClose }: Props) {
             <div className="menu" onMouseLeave={() => setExportOpen(false)}>
               <button onClick={() => runExport('pdf')}>
                 <strong>PDF</strong>
-                <span>For printing</span>
+                <span>For printing: sharp text and graphics at any size</span>
               </button>
               <button onClick={() => runExport('pptx')}>
                 <strong>PowerPoint (.pptx)</strong>
@@ -528,7 +538,7 @@ export default function Editor({ initial, onClose }: Props) {
                 <span>Back up, or open on another computer</span>
               </button>
               <label className="menu-dpi">
-                Image quality for PDF / PNG
+                Image quality for PNG
                 <select value={dpi} onChange={(e) => setDpi(+e.target.value)}>
                   <option value={100}>Draft (100 dpi)</option>
                   <option value={150}>Good (150 dpi)</option>

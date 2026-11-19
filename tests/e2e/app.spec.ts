@@ -157,6 +157,25 @@ test.describe('templates', () => {
     await expect(page.locator('.poster .el-image img[src^="data:image/gif"]')).toHaveCount(1);
   });
 
+  test('starter text fits its boxes in every template, even with narrow columns', async ({ page }) => {
+    test.setTimeout(120_000);
+    const ids = ['classic', 'boxed', 'bars', 'minimal', 'sidebar', 'takeaway', 'showcase', 'framed', 'central', 'banner'];
+    for (const [landscape, columns] of [[false, 5], [true, 6]] as const) {
+      for (const id of ids) {
+        await page.goto('/');
+        await page.getByRole('button', { name: '+ New poster' }).first().click();
+        if (landscape) await page.getByRole('button', { name: 'Landscape' }).click();
+        await page.getByLabel('Columns').selectOption(String(columns));
+        await page.locator(`[data-template="${id}"]`).click();
+        await page.getByRole('button', { name: 'Create poster' }).click();
+        await expect(page.locator('.poster .el-title')).toBeVisible();
+        await page.waitForTimeout(400); // overflow is measured after fonts settle
+        const overflowing = await page.locator('.poster .el[data-overflow="true"]').allTextContents();
+        expect(overflowing, `${id} ${landscape ? 'landscape' : 'portrait'} ${columns} columns`).toEqual([]);
+      }
+    }
+  });
+
   test('rebuilds an existing poster with another layout', async ({ page }) => {
     page.on('dialog', (d) => d.accept());
     await newPoster(page);

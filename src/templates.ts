@@ -231,7 +231,7 @@ class Builder {
     this.add('shape', { x: 0, y: 0, w: x + w + g / 2, h: H, fill: '@primary' });
     let y = m;
     const titleH = Math.min(H * 0.2, w * 0.9);
-    this.add('title', { x, y, w, h: titleH, style: { ...defaultStyle('title', s), fontSize: Math.round(80 * s), color: '#ffffff', align: 'left' } });
+    this.add('title', { x, y, w, h: titleH, style: { ...defaultStyle('title', s), fontSize: Math.max(6, Math.round(Math.min(80 * s, w * 0.38))), color: '#ffffff', align: 'left' } });
     y += titleH + g * 0.5;
     const subH = Math.min(H * 0.07, 70 * s);
     this.add('subtitle', { x, y, w, h: subH, style: { ...defaultStyle('subtitle', s), fontSize: Math.round(32 * s), color: '@surface', align: 'left' } });
@@ -296,8 +296,19 @@ class Builder {
 
   // ---------- sections ----------
 
+  /**
+   * Largest font size (pt), up to `size` at this poster's scale, at which the longest
+   * section name fits on one line in `width` mm. Keeps headings from wrapping in narrow columns.
+   */
+  fitHeading(size: number, width: number) {
+    const mmPerPt = 0.3528;
+    const boldCharWidth = 0.7; // average bold glyph width, in ems
+    const longest = 16; // "Acknowledgements"
+    return Math.max(6, Math.min(Math.round(size * this.s), Math.floor(width / (longest * boldCharWidth * mmPerPt))));
+  }
+
   sectionCount(cw: number, avail: number) {
-    const n = Math.floor(avail / Math.max(cw * 1.3, 200 * this.s));
+    const n = Math.floor(avail / Math.max(cw * 1.3, 350 * this.s));
     const min = avail > 600 * this.s ? 2 : 1;
     return Math.max(min, Math.min(3, n));
   }
@@ -333,10 +344,13 @@ class Builder {
 
     if (style === 'bars' || style === 'framed') {
       headH = 40 * s;
-      const hw = style === 'framed' ? Math.min(bw, Math.max(bw * 0.6, 150 * s)) : bw;
+      const hp = 4 * s;
+      const fs = this.fitHeading(44, bw - 2 * hp);
+      // framed tabs are only as wide as the longest name needs
+      const hw = style === 'framed' ? Math.min(bw, Math.max(bw * 0.6, 16 * 0.7 * 0.3528 * fs + 2 * hp)) : bw;
       this.add('heading', {
         x: bx, y: by, w: hw, h: headH, html: name, fill: style === 'bars' ? '@primary' : '@secondary',
-        padding: 4 * s, radius: 3 * s, style: { ...headStyle, fontSize: Math.round(44 * s), color: '#ffffff' },
+        padding: hp, radius: 3 * s, style: { ...headStyle, fontSize: fs, color: '#ffffff' },
       });
     } else if (style === 'numbered') {
       const numSize = Math.max(6, Math.round(36 * s));
@@ -345,11 +359,12 @@ class Builder {
         // one line box as tall as the circle centres the number vertically (1 pt = 0.3528 mm)
         style: { ...headStyle, align: 'center', color: '#ffffff', fontSize: numSize, lineHeight: headH / (numSize * 0.3528) },
       });
-      this.add('heading', { x: bx + headH + 6 * s, y: by, w: bw - headH - 6 * s, h: headH, html: name });
+      const hw = bw - headH - 6 * s;
+      this.add('heading', { x: bx + headH + 6 * s, y: by, w: hw, h: headH, html: name, style: { ...headStyle, fontSize: this.fitHeading(50, hw) } });
       this.add('shape', { x: bx, y: by + headH + 2 * s, w: bw, h: Math.max(0.5, 1.5 * s), fill: '@surface' });
       headH += 4 * s;
     } else {
-      this.add('heading', { x: bx, y: by, w: bw, h: headH, html: name });
+      this.add('heading', { x: bx, y: by, w: bw, h: headH, html: name, style: { ...headStyle, fontSize: this.fitHeading(50, bw) } });
     }
 
     const gap = 6 * s;
@@ -430,7 +445,7 @@ class Builder {
     const { mid } = parts;
     const avail = bottom - top;
     const stH = avail * 0.4;
-    this.text({ x: mid.x, y: top, w: mid.w, h: stH, html: statement, fill: '@primary', padding: 14 * s, radius: 5 * s }, 80, { fontFamily: '@heading', color: '#ffffff', align: 'center', lineHeight: 1.15 });
+    this.text({ x: mid.x, y: top, w: mid.w, h: stH, html: statement, fill: '@primary', padding: 14 * s, radius: 5 * s }, Math.min(80, (mid.w * 0.28) / s), { fontFamily: '@heading', color: '#ffffff', align: 'center', lineHeight: 1.15 });
     const q = Math.min(mid.w * 0.4, avail * 0.16);
     const capH = 22 * s;
     const figY = top + stH + g;

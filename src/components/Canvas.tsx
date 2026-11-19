@@ -11,9 +11,10 @@ interface Props {
   zoom: number;
   showGrid: boolean;
   snap: boolean;
-  selectedId: string | null;
+  selectedIds: string[];
   editingId: string | null;
-  onSelect: (id: string | null) => void;
+  onSelect: (id: string, additive: boolean) => void;
+  onMoveMany: (moves: { id: string; patch: Partial<PosterElement> }[], coalesce?: string) => void;
   onEdit: (id: string | null) => void;
   onChange: (id: string, patch: Partial<PosterElement>, coalesce?: string) => void;
   onCommitText: (id: string, html: string) => void;
@@ -26,19 +27,21 @@ interface Guide {
 }
 
 export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, ref) {
-  const { poster, zoom, showGrid, snap, selectedId, editingId, onSelect, onEdit, onChange, onCommitText, onActivate } = props;
+  const { poster, zoom, showGrid, snap, selectedIds, editingId, onSelect, onMoveMany, onEdit, onChange, onCommitText, onActivate } = props;
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
   const [guides, setGuides] = useState<Guide[]>([]);
   const dragging = useRef(false);
 
   const scale = zoom * MM_TO_PX; // screen px per mm
 
-  function snapLines(excludeId: string) {
+  function snapLines(exclude: string | string[]) {
+    const ex = new Set(Array.isArray(exclude) ? exclude : [exclude]);
     const xs = [0, poster.margin, poster.width - poster.margin, poster.width, poster.width / 2];
     const ys = [0, poster.margin, poster.height - poster.margin, poster.height, poster.height / 2];
     const cw = columnWidth(poster);
     for (const l of columnLefts(poster)) xs.push(l, l + cw);
     for (const e of poster.elements) {
-      if (e.id === excludeId) continue;
+      if (ex.has(e.id)) continue;
       xs.push(e.x, e.x + e.w, e.x + e.w / 2);
       ys.push(e.y, e.y + e.h, e.y + e.h / 2);
     }
@@ -59,7 +62,13 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
   function startDrag(e: React.PointerEvent, el: PosterElement, handle?: Handle) {
     if (e.button !== 0) return;
     e.stopPropagation();
-    onSelect(el.id);
+    if (e.shiftKey && !handle) {
+      onSelect(el.id, true);
+      return;
+    }
+    // Dragging one of several selected elements moves the whole group.
+    if (!handle && selectedIds.length > 1 && selectedIds.includes(el.id)) return startGroupDrag(e);
+    onSelect(el.id, false);
     if (el.locked) return;
     const start = { x: e.clientX, y: e.clientY };
     const orig = { x: el.x, y: el.y, w: el.w, h: el.h };
@@ -136,7 +145,42 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
     window.addEventListener('pointerup', up);
   }
 
+  function startGroupDrag(e: React.PointerEvent) {
+    const group = poster.elements.filter((x) => selectedIds.includes(x.id) && !x.locked);
+    if (!group.length) return;
+    const start = { x: e.clientX, y: e.clientY };
+    const origs = group.map((g) => ({ id: g.id, x: g.x, y: g.y }));
+    const bx = Math.min(...group.map((g) => g.x));
+    const by = Math.min(...group.map((g) => g.y));
+    const bw = Math.max(...group.map((g) => g.x + g.w)) - bx;
+    const bh = Math.max(...group.map((g) => g.y + g.h)) - by;
+    const lines = snapLines(selectedIds);
+    const threshold = 6 / scale;
+    const key = 'group-' + Date.now();
+    const move = (ev: PointerEvent) => {
+      let dx = (ev.clientX - start.x) / scale;
+      let dy = (ev.clientY - start.y) / scale;
+      const g: Guide[] = [];
+      if (snap && !ev.altKey) {
+        const sx = bestSnap([bx + dx, bx + dx + bw / 2, bx + dx + bw], lines.xs, threshold);
+        const sy = bestSnap([by + dy, by + dy + bh / 2, by + dy + bh], lines.ys, threshold);
+        if (sx) (dx += sx.d), g.push({ axis: 'x', at: sx.at });
+        if (sy) (dy += sy.d), g.push({ axis: 'y', at: sy.at });
+      }
+      setGuides(g);
+      onMoveMany(origs.map((o) => ({ id: o.id, patch: { x: o.x + dx, y: o.y + dy } })), key);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setGuides([]);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
   const selected = poster.elements.find((e) => e.id === selectedId);
+  const others = selectedIds.length > 1 ? poster.elements.filter((e) => selectedIds.includes(e.id)) : [];
   const hs = 10 / zoom; // handle size in poster px, constant on screen
 
   return (
@@ -156,7 +200,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
             editing={isEditing}
             onCommitText={(html) => onCommitText(el.id, html)}
             onEditDone={() => onEdit(null)}
-            className={(el.id === selectedId ? 'selected ' : '') + (el.locked ? 'locked ' : '') + (isEditing ? 'editing' : '')}
+            className={(selectedIds.includes(el.id) ? 'selected ' : '') + (el.locked ? 'locked ' : '') + (isEditing ? 'editing' : '')}
             wrapperProps={{
               onPointerDown: isEditing ? (e) => e.stopPropagation() : (e) => startDrag(e, el),
               onDoubleClick: (e) => {
@@ -185,6 +229,13 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
             ))}
         </div>
       )}
+      {others.map((o) => (
+        <div
+          key={o.id}
+          className="ui-only sel-box multi"
+          style={{ left: o.x * MM_TO_PX, top: o.y * MM_TO_PX, width: o.w * MM_TO_PX, height: o.h * MM_TO_PX, borderWidth: 2 / zoom }}
+        />
+      ))}
       {guides.map((g, i) => (
         <div
           key={i}

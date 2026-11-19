@@ -76,6 +76,7 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
   };
   const deco: CSSProperties = {
     background: el.type === 'shape' && (el.shape === 'line' || isPolygon(el)) ? undefined : resolveColor(el.fill, pal),
+    backgroundImage: el.gradient && el.shape !== 'line' && !isPolygon(el) ? el.gradient : undefined,
     borderRadius: el.shape === 'ellipse' ? '50%' : el.radius ? px(el.radius) : undefined,
     border: el.borderWidth && !isPolygon(el) ? `${el.borderWidth}pt solid ${resolveColor(el.borderColor ?? '@primary', pal)}` : undefined,
     padding: el.padding ? px(el.padding) : undefined,
@@ -102,10 +103,10 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
       break;
     case 'image':
       inner = el.src ? (
-        <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain' }} />
+        <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain', imageRendering: el.qr ? 'pixelated' : undefined }} />
       ) : (
         <div className="img-placeholder ui-only">
-          <span>Image</span>
+          <span>{el.placeholder ?? 'Image'}</span>
           <small>Double-click to choose, or drop / paste an image</small>
         </div>
       );

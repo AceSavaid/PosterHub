@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import JSZip from 'jszip';
 import PptxGenJS from 'pptxgenjs';
+import jsQR from 'jsqr';
 
 const FIXTURES = path.join(import.meta.dirname, '..', 'fixtures');
 
@@ -70,6 +71,120 @@ test.describe('library', () => {
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
     await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toHaveCount(0);
+  });
+});
+
+test.describe('templates', () => {
+  test('shows a gallery of layouts whose previews follow the chosen size and palette', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: '+ New poster' }).first().click();
+    const cards = page.locator('.template-card');
+    expect(await cards.count()).toBeGreaterThanOrEqual(10);
+    const thumb = page.locator('[data-template="sidebar"] svg');
+    const portrait = (await thumb.boundingBox())!;
+    expect(portrait.height).toBeGreaterThan(portrait.width);
+    await page.getByRole('button', { name: 'Landscape' }).click();
+    const landscape = (await thumb.boundingBox())!;
+    expect(landscape.width).toBeGreaterThan(landscape.height);
+    await page.getByRole('button', { name: 'Crimson' }).click();
+    await expect(thumb.locator('rect[fill="#8b1e2d"]').first()).toBeAttached();
+    await page.locator('[data-template="sidebar"]').click();
+    await expect(page.locator('[data-template="sidebar"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-template="classic"]')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  for (const [id, expectText] of [
+    ['sidebar', 'At a glance'],
+    ['minimal', 'Introduction'],
+    ['showcase', 'Results'],
+    ['takeaway', 'main finding'],
+  ] as const) {
+    test(`creates a poster from the ${id} template with labelled logo and QR code areas`, async ({ page }) => {
+      await page.goto('/');
+      await page.getByRole('button', { name: '+ New poster' }).first().click();
+      await page.locator(`[data-template="${id}"]`).click();
+      await page.getByRole('button', { name: 'Create poster' }).click();
+      await expect(page.locator('.poster')).toBeVisible();
+      await expect(page.locator('.poster .el-body', { hasText: expectText }).first()).toBeVisible();
+      await expect(page.locator('.poster .el-image .img-placeholder', { hasText: 'QR code' }).first()).toBeVisible();
+      // nothing spills off the page
+      const out = await page.locator('.poster').evaluate((p) =>
+        Array.from(p.querySelectorAll(':scope > .el')).filter((e) => {
+          const el = e as HTMLElement;
+          return el.offsetLeft < -1 || el.offsetTop < -1 || el.offsetLeft + el.offsetWidth > (p as HTMLElement).offsetWidth + 1 || el.offsetTop + el.offsetHeight > (p as HTMLElement).offsetHeight + 1;
+        }).length,
+      );
+      expect(out).toBe(0);
+    });
+  }
+
+  test('makes a QR code from a pasted link that scans back to the link', async ({ page }) => {
+    await newPoster(page, { template: 'Blank' });
+    await page.getByRole('button', { name: 'QR code' }).click();
+    const box = page.locator('.poster .el-image');
+    await expect(box.locator('.img-placeholder')).toContainText('QR code');
+    const link = page.getByLabel('Link for the QR code');
+    await expect(link).toBeFocused();
+    await link.fill('doi.org/10.1234/poster.2026');
+    await expect(page.getByText('Scans to https://doi.org/10.1234/poster.2026')).toBeVisible();
+    const img = box.locator('img');
+    await expect(img).toHaveAttribute('src', /^data:image\/gif;base64,/);
+    const pixels = await img.evaluate(async (el: HTMLImageElement) => {
+      await el.decode();
+      const c = document.createElement('canvas');
+      c.width = el.naturalWidth;
+      c.height = el.naturalHeight;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(el, 0, 0);
+      return { w: c.width, h: c.height, data: Array.from(ctx.getImageData(0, 0, c.width, c.height).data) };
+    });
+    expect(jsQR(Uint8ClampedArray.from(pixels.data), pixels.w, pixels.h)?.data).toBe('https://doi.org/10.1234/poster.2026');
+
+    // the link is kept with the poster and can be edited later
+    await page.locator('.poster').click({ position: { x: 5, y: 5 } });
+    await box.dblclick();
+    await expect(page.getByLabel('Link for the QR code')).toBeFocused();
+    await expect(page.getByLabel('Link for the QR code')).toHaveValue('https://doi.org/10.1234/poster.2026');
+    await page.getByLabel('Link for the QR code').fill('x'.repeat(3000));
+    await expect(page.getByRole('alert')).toContainText('too long');
+  });
+
+  test('fills a template QR code spot from a link', async ({ page }) => {
+    await newPoster(page, { template: 'Clean minimal' });
+    const spot = page.locator('.poster .el-image', { has: page.locator('.img-placeholder', { hasText: 'QR code' }) }).first();
+    await spot.click();
+    await page.getByLabel('Link for the QR code').fill('https://example.org/paper');
+    await expect(page.locator('.poster .el-image img[src^="data:image/gif"]')).toHaveCount(1);
+  });
+
+  test('starter text fits its boxes in every template, even with narrow columns', async ({ page }) => {
+    test.setTimeout(120_000);
+    const ids = ['classic', 'boxed', 'bars', 'minimal', 'sidebar', 'takeaway', 'showcase', 'framed', 'central', 'banner'];
+    for (const [landscape, columns] of [[false, 5], [true, 6]] as const) {
+      for (const id of ids) {
+        await page.goto('/');
+        await page.getByRole('button', { name: '+ New poster' }).first().click();
+        if (landscape) await page.getByRole('button', { name: 'Landscape' }).click();
+        await page.getByLabel('Columns').selectOption(String(columns));
+        await page.locator(`[data-template="${id}"]`).click();
+        await page.getByRole('button', { name: 'Create poster' }).click();
+        await expect(page.locator('.poster .el-title')).toBeVisible();
+        await page.waitForTimeout(400); // overflow is measured after fonts settle
+        const overflowing = await page.locator('.poster .el[data-overflow="true"]').allTextContents();
+        expect(overflowing, `${id} ${landscape ? 'landscape' : 'portrait'} ${columns} columns`).toEqual([]);
+      }
+    }
+  });
+
+  test('rebuilds an existing poster with another layout', async ({ page }) => {
+    page.on('dialog', (d) => d.accept());
+    await newPoster(page);
+    await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Layout' }).click();
+    await page.getByRole('combobox', { name: 'Layout' }).selectOption('boxed');
+    await expect(page.getByText('Logos either side of the title')).toBeVisible();
+    await page.getByRole('button', { name: /^Apply to/ }).click();
+    await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(2);
   });
 });
 
@@ -315,6 +430,41 @@ test.describe('export, import and sharing', () => {
     const box = await page.locator('.poster').evaluate((el: HTMLElement) => ({ w: el.offsetWidth, h: el.offsetHeight }));
     expect(box.w / box.h).toBeCloseTo(36 / 48, 2);
     await expect(elements(page).first()).toHaveCSS('background-color', 'rgb(91, 42, 134)');
+  });
+
+  test('lets you choose which PowerPoint slide to import', async ({ page }) => {
+    const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'P', width: 36, height: 48 });
+    pptx.layout = 'P';
+    pptx.addSlide().addText('Cover slide', { x: 1, y: 1, w: 34, h: 4, fontSize: 80 });
+    const s2 = pptx.addSlide();
+    s2.addText('Methods slide', { x: 1, y: 1, w: 34, h: 4, fontSize: 80 });
+    s2.addTable(
+      [
+        [{ text: 'Group' }, { text: 'n' }],
+        [{ text: 'Control' }, { text: '24' }],
+      ],
+      { x: 1, y: 8, w: 20, fontSize: 40 },
+    );
+    s2.addChart(pptx.ChartType.bar, [{ name: 'Score', labels: ['A', 'B'], values: [2, 5] }], { x: 1, y: 20, w: 20, h: 14 });
+    const file = path.join(os.tmpdir(), `slides-${Date.now()}.pptx`);
+    await fs.writeFile(file, (await pptx.write({ outputType: 'nodebuffer' })) as Buffer);
+
+    await page.goto('/');
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Import PowerPoint template' }).first().click();
+    await (await chooser).setFiles(file);
+    const picker = page.getByRole('dialog', { name: 'Choose a slide' });
+    await expect(picker).toBeVisible();
+    await expect(picker.locator('.slide-card')).toHaveCount(2);
+    await expect(picker.locator('.slide-thumb .poster')).toHaveCount(2); // previews render
+    await picker.getByRole('button', { name: 'Use Slide 2: Methods slide' }).click();
+
+    await expect(picker).toHaveCount(0);
+    await expect(page.locator('.poster .el-body', { hasText: 'Methods slide' })).toBeVisible();
+    await expect(page.locator('.poster .el-body', { hasText: 'Cover slide' })).toHaveCount(0);
+    await expect(page.locator('.poster .el-body table td', { hasText: 'Control' })).toBeVisible();
+    await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
   });
 
   test('copies the poster as an image', async ({ page, context }) => {

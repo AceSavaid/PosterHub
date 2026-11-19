@@ -139,14 +139,8 @@ export interface NewPosterOptions {
   template: TemplateId;
 }
 
-export type TemplateId = 'classic' | 'banner' | 'central' | 'blank';
-
-export const TEMPLATES: { id: TemplateId; label: string; description: string }[] = [
-  { id: 'classic', label: 'Classic columns', description: 'Title band, sections flowing down each column, references at the bottom.' },
-  { id: 'central', label: 'Central figure', description: 'A large figure in the middle column with text either side.' },
-  { id: 'banner', label: 'Key finding banner', description: 'A bold one-sentence takeaway under the title, then columns.' },
-  { id: 'blank', label: 'Blank', description: 'An empty canvas with the column grid.' },
-];
+export { TEMPLATES, buildTemplate, templateDef, type TemplateId, type TemplateDef } from './templates';
+import { buildTemplate, type TemplateId } from './templates';
 
 export function createPoster(o: NewPosterOptions): Poster {
   const now = Date.now();
@@ -172,71 +166,6 @@ export function createPoster(o: NewPosterOptions): Poster {
   };
   poster.elements = buildTemplate(o.template, poster);
   return poster;
-}
-
-const SECTION_NAMES = ['Introduction', 'Methods', 'Results', 'Discussion', 'Conclusion', 'Future Work', 'Background', 'Analysis'];
-const LOREM =
-  'Replace this text with your own. Keep paragraphs short and readable from two metres away. Use figures to tell the story and text to support them.';
-
-export function buildTemplate(t: TemplateId, poster: Poster): PosterElement[] {
-  if (t === 'blank') return [];
-  const s = typeScale(poster);
-  const W = poster.width;
-  const m = poster.margin;
-  const els: PosterElement[] = [];
-  const bandH = Math.max(poster.height * 0.13, 50 * s);
-  els.push(makeElement('shape', poster, { x: 0, y: 0, w: W, h: bandH, fill: '@primary', locked: false }));
-  els.push(makeElement('title', poster, { x: m, y: bandH * 0.14, w: W - 2 * m, h: bandH * 0.5, style: { ...defaultStyle('title', s), color: '#ffffff' } }));
-  els.push(makeElement('subtitle', poster, { x: m, y: bandH * 0.66, w: W - 2 * m, h: bandH * 0.26, style: { ...defaultStyle('subtitle', s), color: '@surface' } }));
-
-  let top = bandH + m;
-  if (t === 'banner') {
-    const h = 45 * s;
-    els.push(
-      makeElement('text', poster, {
-        x: m, y: top, w: W - 2 * m, h,
-        html: '<b>Key finding:</b> State your main result in one clear sentence that someone walking past will remember.',
-        fill: '@accent', padding: 8 * s, radius: 4 * s,
-        style: { ...defaultStyle('text', s), fontSize: Math.round(40 * s), align: 'center', color: '@text', fontFamily: '@heading' },
-      }),
-    );
-    top += h + poster.gutter;
-  }
-
-  const footerH = Math.max(poster.height * 0.06, 25 * s);
-  const bottom = poster.height - m - footerH - poster.gutter;
-  const lefts = columnLefts(poster);
-  const cw = columnWidth(poster);
-  const avail = bottom - top;
-  let n = 0;
-  lefts.forEach((x, ci) => {
-    const centralCol = t === 'central' && poster.columns >= 3 && ci === Math.floor(poster.columns / 2);
-    if (centralCol) {
-      const headH = 32 * s;
-      els.push(makeElement('heading', poster, { x, y: top, w: cw, h: headH, html: 'Key Figure', style: { ...defaultStyle('heading', s), align: 'center' } }));
-      els.push(makeElement('image', poster, { x, y: top + headH + 6 * s, w: cw, h: avail * 0.6, fill: '@surface' }));
-      els.push(makeElement('text', poster, { x, y: top + headH + avail * 0.6 + 12 * s, w: cw, h: avail * 0.25, html: '<i>Figure 1.</i> Describe what the figure shows and why it matters.', style: { ...defaultStyle('text', s), align: 'center' } }));
-      return;
-    }
-    const sections = poster.height > poster.width ? 2 : 1;
-    const secH = avail / sections;
-    for (let k = 0; k < sections; k++) {
-      const y = top + k * secH;
-      const headH = 32 * s;
-      els.push(makeElement('heading', poster, { x, y, w: cw, h: headH, html: SECTION_NAMES[n % SECTION_NAMES.length] }));
-      els.push(makeElement('text', poster, { x, y: y + headH + 6 * s, w: cw, h: secH - headH - 6 * s - poster.gutter, html: LOREM }));
-      n++;
-    }
-  });
-  els.push(makeElement('shape', poster, { x: 0, y: poster.height - footerH - m, w: W, h: footerH + m, fill: '@surface' }));
-  els.push(
-    makeElement('text', poster, {
-      x: m, y: poster.height - footerH - m * 0.5, w: W - 2 * m, h: footerH,
-      html: '<b>References</b> 1. Author, A. (2025). Title of work. <i>Journal</i>, 1(1), 1–10. &nbsp; <b>Contact</b> you@university.edu',
-      style: { ...defaultStyle('text', s), fontSize: Math.round(20 * s) },
-    }),
-  );
-  return els;
 }
 
 /** Fonts that are always available without network access. */

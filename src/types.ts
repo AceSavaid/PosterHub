@@ -70,12 +70,18 @@ export interface PosterElement {
   html?: string;
   style?: TextStyle;
   fill?: ColorValue; // background colour (or shape fill)
+  /** Optional CSS gradient drawn over `fill` (e.g. from an imported PowerPoint template). `fill` stays the fallback colour. */
+  gradient?: string;
   borderColor?: ColorValue;
   borderWidth?: number; // pt
   radius?: number; // mm
   padding?: number; // mm
   /** image data URL */
   src?: string;
+  /** label shown on an empty image box, e.g. "Logo" or "QR code" */
+  placeholder?: string;
+  /** the link or text encoded when this image is a generated QR code */
+  qr?: string;
   fit?: 'contain' | 'cover' | 'fill';
   chart?: ChartSpec;
   shape?: ShapeKind;

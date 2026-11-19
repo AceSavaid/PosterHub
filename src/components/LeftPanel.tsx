@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ElementType, Poster, PosterElement } from '../types';
-import { PALETTE_ROLES, TEMPLATES, buildTemplate, typeScale, type TemplateId } from '../model';
+import { PALETTE_ROLES, TEMPLATES, buildTemplate, templateDef, typeScale, type TemplateId } from '../model';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
 import { FontSelect } from './FontSelect';
@@ -17,10 +17,11 @@ interface Props {
   onInsert: (type: ElementType, extra?: Partial<PosterElement>) => void;
   onInsertImage: () => void;
   onInsertChart: () => void;
+  onInsertQr: () => void;
   notify: (msg: string) => void;
 }
 
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, notify }: Props) {
+export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
     <aside className="panel left">
@@ -32,7 +33,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
         ))}
       </div>
       <div className="panel-body">
-        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} />}
+        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} />}
         {tab === 'layout' && <LayoutTab poster={poster} update={update} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
       </div>
@@ -40,7 +41,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
   );
 }
 
-function InsertTab({ onInsert, onInsertImage, onInsertChart }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart'>) {
+function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr'>) {
   return (
     <>
       <h3>Text</h3>
@@ -65,6 +66,9 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart }: Pick<Props, 'onIn
         </button>
         <button className="insert-btn" onClick={onInsertChart}>
           <span aria-hidden className="ib-icon">📊</span>Graph from CSV…
+        </button>
+        <button className="insert-btn" onClick={onInsertQr}>
+          <span aria-hidden className="ib-icon">▦</span>QR code
         </button>
       </div>
       <h3>Shapes</h3>
@@ -152,6 +156,7 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
             ))}
           </select>
         </label>
+        <p className="hint span2">{templateDef(template).description}</p>
         <button
           className="btn span2"
           onClick={() => {

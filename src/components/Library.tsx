@@ -1,3 +1,4 @@
+import AppearanceMenu from './AppearanceMenu';
 import { useEffect, useState } from 'react';
 import type { Poster } from '../types';
 import { deletePoster, exportPosterFile, listPosters, pickFile, readPosterFile, savePoster } from '../lib/storage';
@@ -106,6 +107,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster) => void }) {
           <button className="btn" onClick={importTemplate}>Import PowerPoint template</button>
           <button className="btn" onClick={importProject}>Open project file</button>
           <button className="btn primary" onClick={() => setCreating(true)}>+ New poster</button>
+          <AppearanceMenu />
         </div>
       </header>
       <main className="lib-main">

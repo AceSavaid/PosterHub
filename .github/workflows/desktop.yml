@@ -45,7 +45,8 @@ jobs:
         run: |
           export HOME="$RUNNER_TEMP/home" && mkdir -p "$HOME"
           TAURI_WEBVIEW_AUTOMATION=true xvfb-run -a WebKitWebDriver --port=4445 &
-          sleep 3
+          # Wait for the WebDriver server to accept connections (up to 60 s).
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:4445/status >/dev/null && break; sleep 1; done
           node tests/desktop/smoke.mjs src-tauri/target/release/posterhub
 
   release:

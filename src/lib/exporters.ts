@@ -200,6 +200,7 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
       }
       default: {
         const st = e.style!;
+        if (e.html?.includes('<table') && addNativeTable(slide, e, box, p, k)) break;
         const pad = (e.padding ?? 0) * MM_TO_IN * 72 * k;
         slide.addText(htmlToRuns(e.html ?? '') as never, {
           ...box,
@@ -225,6 +226,56 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
   }
   await pptx.writeFile({ fileName: safeFileName(p.name) + '.pptx' });
   return k;
+}
+
+/** Exports a text element holding an HTML table (e.g. imported from PowerPoint) as a real PowerPoint table. */
+export function tableRowsFromHtml(html: string) {
+  const root = document.createElement('div');
+  root.innerHTML = html;
+  const table = root.querySelector('table');
+  if (!table) return null;
+  const widths = Array.from(table.querySelectorAll('col')).map((c) => parseFloat((c as HTMLElement).style.width) || 0);
+  const rows = Array.from(table.rows).map((tr) =>
+    Array.from(tr.cells).map((td) => {
+      const s = td.style;
+      const runs = htmlToRuns(td.innerHTML);
+      return {
+        text: runs as never,
+        options: {
+          fill: s.backgroundColor ? { color: cssColorToHex(s.backgroundColor) } : undefined,
+          color: s.color ? cssColorToHex(s.color) : undefined,
+          bold: s.fontWeight === 'bold' || Number(s.fontWeight) >= 600 ? true : undefined,
+          fontSize: s.fontSize.endsWith('pt') ? parseFloat(s.fontSize) : undefined,
+          align: (s.textAlign || undefined) as 'left' | 'center' | 'right' | 'justify' | undefined,
+          valign: s.verticalAlign === 'middle' ? 'middle' : s.verticalAlign === 'bottom' ? 'bottom' : 'top',
+          colspan: td.colSpan > 1 ? td.colSpan : undefined,
+          rowspan: td.rowSpan > 1 ? td.rowSpan : undefined,
+        },
+      };
+    }),
+  );
+  return { rows, widths };
+}
+
+function addNativeTable(slide: any, e: PosterElement, box: { x: number; y: number; w: number; h: number }, p: Poster, k: number): boolean {
+  try {
+    const t = tableRowsFromHtml(e.html ?? '');
+    if (!t || !t.rows.length) return false;
+    const st = e.style!;
+    const total = t.widths.reduce((a, b) => a + b, 0);
+    for (const row of t.rows) for (const c of row) if (c.options.fontSize) c.options.fontSize *= k;
+    slide.addTable(t.rows, {
+      ...box,
+      colW: total ? t.widths.map((w) => (w / total) * box.w) : undefined,
+      fontFace: resolveFont(st.fontFamily, p),
+      fontSize: st.fontSize * k,
+      color: hex(resolveColor(st.color, p.palette)),
+      border: { type: 'solid', pt: 0.75, color: 'BFBFBF' },
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function addNativeChart(pptx: any, slide: any, e: PosterElement, box: object, p: Poster, k: number): boolean {

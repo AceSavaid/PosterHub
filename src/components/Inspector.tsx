@@ -148,7 +148,15 @@ export default function Inspector({ poster, el, editing, onChange, onDelete, onD
 
         <section>
           <h4>{el.type === 'shape' ? (el.shape === 'line' ? 'Line colour' : 'Fill') : 'Background'}</h4>
-          <ColorInput value={el.fill} palette={poster.palette} allowNone={el.type !== 'shape'} onChange={(c) => onChange({ fill: c })} />
+          <ColorInput value={el.fill} palette={poster.palette} allowNone={el.type !== 'shape'} onChange={(c) => onChange({ fill: c, gradient: undefined })} />
+          {el.gradient && (
+            <p className="muted small">
+              Gradient from the template.{' '}
+              <button className="btn small-btn" onClick={() => onChange({ gradient: undefined })}>
+                Use a solid colour
+              </button>
+            </p>
+          )}
           {el.shape !== 'line' && (
             <>
               <div className="row2">

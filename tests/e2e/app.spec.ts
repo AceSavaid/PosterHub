@@ -317,6 +317,41 @@ test.describe('export, import and sharing', () => {
     await expect(elements(page).first()).toHaveCSS('background-color', 'rgb(91, 42, 134)');
   });
 
+  test('lets you choose which PowerPoint slide to import', async ({ page }) => {
+    const pptx = new PptxGenJS();
+    pptx.defineLayout({ name: 'P', width: 36, height: 48 });
+    pptx.layout = 'P';
+    pptx.addSlide().addText('Cover slide', { x: 1, y: 1, w: 34, h: 4, fontSize: 80 });
+    const s2 = pptx.addSlide();
+    s2.addText('Methods slide', { x: 1, y: 1, w: 34, h: 4, fontSize: 80 });
+    s2.addTable(
+      [
+        [{ text: 'Group' }, { text: 'n' }],
+        [{ text: 'Control' }, { text: '24' }],
+      ],
+      { x: 1, y: 8, w: 20, fontSize: 40 },
+    );
+    s2.addChart(pptx.ChartType.bar, [{ name: 'Score', labels: ['A', 'B'], values: [2, 5] }], { x: 1, y: 20, w: 20, h: 14 });
+    const file = path.join(os.tmpdir(), `slides-${Date.now()}.pptx`);
+    await fs.writeFile(file, (await pptx.write({ outputType: 'nodebuffer' })) as Buffer);
+
+    await page.goto('/');
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Import PowerPoint template' }).first().click();
+    await (await chooser).setFiles(file);
+    const picker = page.getByRole('dialog', { name: 'Choose a slide' });
+    await expect(picker).toBeVisible();
+    await expect(picker.locator('.slide-card')).toHaveCount(2);
+    await expect(picker.locator('.slide-thumb .poster')).toHaveCount(2); // previews render
+    await picker.getByRole('button', { name: 'Use Slide 2: Methods slide' }).click();
+
+    await expect(picker).toHaveCount(0);
+    await expect(page.locator('.poster .el-body', { hasText: 'Methods slide' })).toBeVisible();
+    await expect(page.locator('.poster .el-body', { hasText: 'Cover slide' })).toHaveCount(0);
+    await expect(page.locator('.poster .el-body table td', { hasText: 'Control' })).toBeVisible();
+    await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
+  });
+
   test('copies the poster as an image', async ({ page, context }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     await newPoster(page, { size: 'A4' });

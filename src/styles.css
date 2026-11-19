@@ -264,3 +264,13 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
   .span2 { grid-column: auto; }
   .poster-name { width: 150px; }
 }
+
+/* ---------------- PowerPoint slide picker */
+.slide-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; max-height: 60vh; overflow: auto; padding: 2px; }
+.slide-card { display: flex; flex-direction: column; text-align: left; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 0; cursor: pointer; overflow: hidden; font: inherit; color: inherit; }
+.slide-card:hover, .slide-card:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); outline: none; }
+.slide-thumb { height: 170px; background: var(--bg3); display: flex; align-items: center; justify-content: center; overflow: hidden; pointer-events: none; }
+.slide-thumb .surface-scroll-size { position: relative; flex: none; }
+.slide-thumb .poster { box-shadow: 0 2px 8px rgba(0,0,0,.18); }
+.slide-name { padding: 8px 10px; }
+.slide-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

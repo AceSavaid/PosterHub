@@ -75,6 +75,7 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
   };
   const deco: CSSProperties = {
     background: el.type !== 'shape' || el.shape !== 'line' ? resolveColor(el.fill, pal) : undefined,
+    backgroundImage: el.gradient && el.shape !== 'line' ? el.gradient : undefined,
     borderRadius: el.shape === 'ellipse' ? '50%' : el.radius ? px(el.radius) : undefined,
     border: el.borderWidth ? `${el.borderWidth}pt solid ${resolveColor(el.borderColor ?? '@primary', pal)}` : undefined,
     padding: el.padding ? px(el.padding) : undefined,

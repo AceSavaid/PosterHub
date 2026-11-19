@@ -272,3 +272,38 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .warn-box { background: #fff4e5; color: #6b3b00; border: 1px solid #f5c27a; border-radius: 8px; padding: 10px; gap: 4px !important; }
 .warn-box span { font-size: 12.5px; }
 .view-mode .el[data-overflow="true"] { box-shadow: none; }
+
+/* ---------------- Poster check */
+.check-btn { position: relative; }
+.check-btn.active { background: var(--accent-soft); border-color: var(--accent); }
+.badge { background: #d93025; color: #fff; border-radius: 10px; font-size: 11px; padding: 0 6px; line-height: 17px; font-weight: 700; }
+.check-panel { position: fixed; top: 54px; right: 296px; width: 360px; max-height: calc(100vh - 80px); overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); z-index: 25; padding: 10px 12px 12px; }
+.check-head { display: flex; justify-content: space-between; align-items: center; }
+.check-summary { margin: 2px 0 8px; }
+.check-ok { text-align: center; padding: 16px 8px; }
+.big-tick { font-size: 36px; color: #1e8e3e; }
+.issue-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.issue button { display: flex; gap: 10px; text-align: left; width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); cursor: pointer; }
+.issue button:hover:not(:disabled) { background: var(--bg2); }
+.issue button:disabled { cursor: default; }
+.issue.problem button { border-left: 4px solid #d93025; }
+.issue.warning button { border-left: 4px solid #f29900; }
+.issue.tip button { border-left: 4px solid var(--accent); }
+.issue strong { display: block; font-size: 13px; }
+.issue-detail { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 2px; }
+.menu .menu-warn { background: #fdecea; margin-bottom: 4px; }
+.menu .menu-warn:hover { background: #fbd9d5; }
+.menu .menu-warn strong { color: #8a1c1c; }
+@media (max-width: 900px) { .check-panel { right: 16px; } }
+.el-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.shape-picker { display: flex; flex-wrap: wrap; gap: 4px; }
+.shape-picker .fmt { font-size: 16px; }
+
+/* ---------------- Context menu */
+.context-menu { position: fixed; z-index: 60; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 4px; min-width: 210px; }
+.context-menu button { display: flex; justify-content: space-between; gap: 16px; width: 100%; text-align: left; border: none; background: none; padding: 6px 10px; border-radius: 5px; cursor: pointer; }
+.context-menu button:hover, .context-menu button:focus-visible { background: var(--accent-soft); outline: none; }
+.context-menu button.danger { color: var(--danger); }
+.context-menu kbd { font-size: 10.5px; color: var(--muted); }
+.cm-sep { height: 1px; background: var(--line); margin: 4px 2px; }
+.sel-format { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }

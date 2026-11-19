@@ -7,6 +7,7 @@ import { FontSelect } from './FontSelect';
 import { fileToDataUrl, pickFile } from '../lib/storage';
 import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fonts';
 import { importPptx } from '../lib/pptxImport';
+import { SHAPE_CHOICES } from '../lib/shapes';
 
 type Tab = 'insert' | 'layout' | 'design';
 
@@ -68,15 +69,12 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart }: Pick<Props, 'onIn
       </div>
       <h3>Shapes</h3>
       <div className="insert-list">
-        <button className="insert-btn" onClick={() => onInsert('shape', { shape: 'rect' })}>
-          <span aria-hidden className="ib-icon">▭</span>Box / panel
-        </button>
-        <button className="insert-btn" onClick={() => onInsert('shape', { shape: 'ellipse', fill: '@accent' })}>
-          <span aria-hidden className="ib-icon">◯</span>Circle
-        </button>
-        <button className="insert-btn" onClick={() => onInsert('shape', { shape: 'line', fill: '@primary', h: 1.5 })}>
-          <span aria-hidden className="ib-icon">―</span>Line
-        </button>
+        {SHAPE_CHOICES.map((c) => (
+          <button key={c.label} className="insert-btn" onClick={() => onInsert('shape', { shape: c.kind, ...c.extra })}>
+            <span aria-hidden className="ib-icon">{c.icon}</span>
+            {c.label === 'Rectangle' ? 'Box / panel' : c.label}
+          </button>
+        ))}
       </div>
       <p className="hint">
         Tip: paste text or images straight onto the poster with Ctrl/⌘ + V, or drag image and CSV files in. Double-click any text to edit it.

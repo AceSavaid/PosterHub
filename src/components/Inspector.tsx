@@ -2,6 +2,9 @@ import type { Poster, PosterElement, TextStyle } from '../types';
 import { FontSelect } from './FontSelect';
 import { ColorInput } from './ColorInput';
 import type { AlignMode } from '../lib/arrange';
+import { SHAPE_CHOICES } from '../lib/shapes';
+import { resizeSelection, styleSelection } from '../lib/richtext';
+import { PALETTE_ROLES } from '../model';
 
 interface Props {
   poster: Poster;
@@ -180,7 +183,29 @@ export default function Inspector(props: Props) {
             </div>
             <div className="field-label">Text colour</div>
             <ColorInput value={st.color} palette={poster.palette} onChange={(c) => setStyle({ color: c ?? '@text' })} />
-            {editing && <p className="hint">Select words while typing to make only those bold, italic or underlined.</p>}
+            {editing && (
+              <div className="sel-format">
+                <div className="field-label">Selected words</div>
+                <div className="toolbar-row">
+                  <button className="fmt" title="Larger" aria-label="Make selected words larger" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1.15)}>A+</button>
+                  <button className="fmt" title="Smaller" aria-label="Make selected words smaller" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1 / 1.15)}>A−</button>
+                  <span className="sep" />
+                  {PALETTE_ROLES.filter((r) => r !== 'background' && r !== 'surface').map((r) => (
+                    <button
+                      key={r}
+                      className="swatch"
+                      style={{ background: poster.palette[r] }}
+                      title={'Colour selected words: ' + r}
+                      aria-label={'Colour selected words ' + r}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => styleSelection({ color: poster.palette[r] })}
+                    />
+                  ))}
+                  <button className="swatch" style={{ background: '#ffffff' }} title="White" aria-label="Colour selected words white" onMouseDown={(e) => e.preventDefault()} onClick={() => styleSelection({ color: '#ffffff' })} />
+                </div>
+                <p className="hint">Select words while typing, then use B / I / U, size or colour to change only those words.</p>
+              </div>
+            )}
           </section>
         )}
 
@@ -216,16 +241,44 @@ export default function Inspector(props: Props) {
         {el.type === 'shape' && el.shape !== 'line' && (
           <section>
             <h4>Shape</h4>
-            <div className="seg">
-              <button className={el.shape !== 'ellipse' ? 'active' : ''} onClick={() => onChange({ shape: 'rect' })}>Rectangle</button>
-              <button className={el.shape === 'ellipse' ? 'active' : ''} onClick={() => onChange({ shape: 'ellipse' })}>Ellipse</button>
+            <div className="shape-picker">
+              {SHAPE_CHOICES.filter((c) => c.kind !== 'line').map((c) => {
+                const rounded = !!c.extra?.radius;
+                const active = el.shape === c.kind && (c.kind !== 'rect' || rounded === !!el.radius);
+                return (
+                  <button
+                    key={c.label}
+                    className={'fmt' + (active ? ' on' : '')}
+                    title={c.label}
+                    aria-label={'Change to ' + c.label.toLowerCase()}
+                    onClick={() => onChange((x) => {
+                      x.shape = c.kind;
+                      if (c.kind === 'rect') x.radius = rounded ? c.extra!.radius : 0;
+                      if (c.kind === 'arrow' && !x.direction) x.direction = 'right';
+                    })}
+                  >
+                    {c.icon}
+                  </button>
+                );
+              })}
             </div>
+            {el.shape === 'arrow' && (
+              <label>
+                Points
+                <select value={el.direction ?? 'right'} onChange={(e) => onChange({ direction: e.target.value as PosterElement['direction'] })}>
+                  <option value="right">Right →</option>
+                  <option value="left">Left ←</option>
+                  <option value="up">Up ↑</option>
+                  <option value="down">Down ↓</option>
+                </select>
+              </label>
+            )}
           </section>
         )}
 
         <section>
           <h4>{el.type === 'shape' ? (el.shape === 'line' ? 'Line colour' : 'Fill') : 'Background'}</h4>
-          <ColorInput value={el.fill} palette={poster.palette} allowNone={el.type !== 'shape'} onChange={(c) => onChange({ fill: c })} />
+          <ColorInput value={el.fill} palette={poster.palette} allowNone={el.type !== 'shape' || (el.shape !== 'line' && !!el.borderWidth)} onChange={(c) => onChange({ fill: c })} />
           {el.shape !== 'line' && (
             <>
               <div className="row2">
@@ -233,10 +286,12 @@ export default function Inspector(props: Props) {
                   Border (pt)
                   <input type="number" min={0} step={0.5} value={el.borderWidth ?? 0} onChange={(e) => onChange({ borderWidth: Math.max(0, +e.target.value || 0) }, 'bw')} />
                 </label>
-                <label>
-                  Corner radius (mm)
-                  <input type="number" min={0} value={n(el.radius ?? 0)} onChange={(e) => onChange({ radius: Math.max(0, +e.target.value || 0) }, 'rad')} />
-                </label>
+                {(el.type !== 'shape' || el.shape === 'rect' || !el.shape) && (
+                  <label>
+                    Corner radius (mm)
+                    <input type="number" min={0} value={n(el.radius ?? 0)} onChange={(e) => onChange({ radius: Math.max(0, +e.target.value || 0) }, 'rad')} />
+                  </label>
+                )}
               </div>
               {!!el.borderWidth && (
                 <>

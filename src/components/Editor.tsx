@@ -3,7 +3,7 @@ import type { ChartSpec, ElementType, Poster, PosterElement } from '../types';
 import { MM_TO_PX, makeElement, uid } from '../model';
 import { usePosterHistory } from '../lib/usePoster';
 import { align, distribute, intersects, matchSize } from '../lib/arrange';
-import { exportPosterFile, fileToDataUrl, pickFile, savePoster } from '../lib/storage';
+import { deletePoster, exportPosterFile, fileToDataUrl, pickFile, savePoster } from '../lib/storage';
 import { ensurePosterFonts } from '../lib/fonts';
 import { copyImageToClipboard, effectiveDpi, exportPdf, exportPng, exportPptx, makeThumbnail } from '../lib/exporters';
 import { Canvas } from './Canvas';
@@ -13,6 +13,9 @@ import ChartDialog from './ChartDialog';
 import ViewMode from './ViewMode';
 import { chartCanvases } from './ChartView';
 import { Logo } from './Library';
+import CheckPanel from './CheckPanel';
+import ContextMenu, { type MenuItem } from './ContextMenu';
+import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 
 const CLIP_MIME = 'application/x-posterhub-element';
 let internalClipboard: PosterElement | null = null;
@@ -52,6 +55,10 @@ export default function Editor({ initial, onClose }: Props) {
   const [viewing, setViewing] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const [checkOpen, setCheckOpen] = useState(false);
+  const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
+  const [issues, setIssues] = useState<Issue[]>([]);
   const [dpi, setDpi] = useState(200);
   const [toast, setToast] = useState('');
   const [saved, setSaved] = useState(true);
@@ -334,7 +341,16 @@ export default function Editor({ initial, onClose }: Props) {
               el.y += dy;
             }
         }, 'nudge');
-      } else if (!mod && e.key === '0' && e.shiftKey) fit();
+      } else if ((!mod && e.key === '0' && e.shiftKey) || (mod && e.key === '0')) {
+        e.preventDefault();
+        fit();
+      } else if (mod && (e.key === '=' || e.key === '+')) {
+        e.preventDefault();
+        setZoom((z) => Math.min(4, z * 1.25));
+      } else if (mod && e.key === '-') {
+        e.preventDefault();
+        setZoom((z) => Math.max(0.02, z / 1.25));
+      }
     };
     const onCopy = (e: ClipboardEvent) => {
       if (isTyping(e.target) || isTyping(document.activeElement) || !selectedId) return;
@@ -443,6 +459,76 @@ export default function Editor({ initial, onClose }: Props) {
     }
   }
 
+  function runCheck() {
+    const images = new Map<string, ImageInfo>();
+    const overflowing = new Set<string>();
+    posterNode.current?.querySelectorAll<HTMLElement>(':scope > .el').forEach((n) => {
+      const id = n.dataset.id!;
+      const img = n.querySelector('img');
+      if (img?.naturalWidth) images.set(id, { width: img.naturalWidth });
+      if (n.dataset.overflow === 'true') overflowing.add(id);
+    });
+    const found = checkPoster(posterRef.current, images, overflowing);
+    setIssues(found);
+    return found;
+  }
+
+  // Keep the list current while it is open (and for the export menu hint).
+  useEffect(() => {
+    const t = setTimeout(runCheck, 300);
+    return () => clearTimeout(t);
+  }, [poster]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function duplicatePoster() {
+    const p = posterRef.current;
+    const now = Date.now();
+    await savePoster({ ...structuredClone(p), id: uid(), name: p.name + ' (copy)', createdAt: now, updatedAt: now });
+    notify(`Saved “${p.name} (copy)” to My posters. You are still editing the original.`);
+  }
+
+  async function deleteThisPoster() {
+    if (!confirm(`Delete “${posterRef.current.name}”? This cannot be undone.`)) return;
+    await deletePoster(posterRef.current.id);
+    onClose();
+  }
+
+  function copyElement(el: PosterElement) {
+    internalClipboard = structuredClone(el);
+    const div = document.createElement('div');
+    div.innerHTML = el.html ?? '';
+    navigator.clipboard?.writeText(div.innerText || div.textContent || '').catch(() => {});
+    notify('Copied. Press Ctrl/⌘ V on the poster to paste it.');
+  }
+
+  function menuItems(el: PosterElement): (MenuItem | '-')[] {
+    const many = selectedIds.length > 1;
+    const items: (MenuItem | '-')[] = [];
+    if (!many && el.style) items.push({ label: 'Edit text', shortcut: 'Enter', onClick: () => setEditingId(el.id) });
+    if (!many && el.type === 'image') items.push({ label: el.src ? 'Replace image…' : 'Choose image…', onClick: () => chooseImage(el.id) });
+    if (!many && el.type === 'chart') items.push({ label: 'Edit graph…', onClick: () => setChartDialog({ id: el.id, spec: el.chart }) });
+    if (items.length) items.push('-');
+    if (!many) items.push({ label: 'Copy', shortcut: '⌘/Ctrl C', onClick: () => copyElement(el) });
+    if (!many && internalClipboard) items.push({ label: 'Paste', shortcut: '⌘/Ctrl V', onClick: () => duplicate(internalClipboard!) });
+    items.push({ label: 'Duplicate', shortcut: '⌘/Ctrl D', onClick: () => duplicate() });
+    items.push('-');
+    if (!many) {
+      items.push({ label: 'Bring to front', onClick: () => layer('front') });
+      items.push({ label: 'Send to back', onClick: () => layer('back') });
+      items.push({ label: el.locked ? 'Unlock' : 'Lock position', onClick: () => updateElement(el.id, { locked: !el.locked }) });
+    } else {
+      items.push({ label: 'Align left edges', onClick: () => arrange((els, d) => align(els, 'left', { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin })) });
+      items.push({ label: 'Align top edges', onClick: () => arrange((els, d) => align(els, 'top', { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin })) });
+    }
+    items.push('-');
+    items.push({ label: many ? `Delete ${selectedIds.length} elements` : 'Delete', shortcut: 'Del', danger: true, onClick: removeSelected });
+    return items;
+  }
+
+  function pickIssue(id: string) {
+    setSelectedId(id);
+    posterNode.current?.querySelector(`[data-id="${id}"]`)?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+  }
+
   async function copyImage() {
     setSelectedId(null);
     setEditingId(null);
@@ -466,6 +552,17 @@ export default function Editor({ initial, onClose }: Props) {
           <Logo /> ‹ My posters
         </button>
         <input className="poster-name" value={poster.name} onChange={(e) => update((d) => void (d.name = e.target.value), 'name')} aria-label="Poster name" />
+        <button
+          className="icon-btn"
+          aria-label="Poster options"
+          title="Poster options"
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setPosterMenu({ x: r.left, y: r.bottom + 4 });
+          }}
+        >
+          ⋯
+        </button>
         <span className="muted small save-state">{saved ? 'Saved' : 'Saving…'}</span>
         <div className="spacer" />
         <button className="icon-btn" disabled={!canUndo} onClick={undo} title="Undo (Ctrl/⌘ Z)">↶</button>
@@ -482,12 +579,35 @@ export default function Editor({ initial, onClose }: Props) {
           <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap
         </label>
         <span className="sep" />
+        <button
+          className={'btn check-btn' + (checkOpen ? ' active' : '')}
+          onClick={() => {
+            runCheck();
+            setCheckOpen((o) => !o);
+          }}
+          title="Look for small text, low contrast, blurry images and leftover example text"
+        >
+          Check
+          {issues.filter((i) => i.severity !== 'tip').length > 0 && <span className="badge">{issues.filter((i) => i.severity !== 'tip').length}</span>}
+        </button>
         <button className="btn" onClick={() => setViewing(true)}>View</button>
         <button className="btn" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
         <div className="menu-wrap">
           <button className="btn primary" onClick={() => setExportOpen((o) => !o)}>Export ▾</button>
           {exportOpen && (
             <div className="menu" onMouseLeave={() => setExportOpen(false)}>
+              {issues.some((i) => i.severity === 'problem') && (
+                <button
+                  className="menu-warn"
+                  onClick={() => {
+                    setExportOpen(false);
+                    setCheckOpen(true);
+                  }}
+                >
+                  <strong>⛔ {issues.filter((i) => i.severity === 'problem').length} problem(s) found</strong>
+                  <span>Review them before printing</span>
+                </button>
+              )}
               <button onClick={() => runExport('pdf')}>
                 <strong>PDF</strong>
                 <span>For printing</span>
@@ -560,6 +680,7 @@ export default function Editor({ initial, onClose }: Props) {
               onEdit={setEditingId}
               onChange={(id, patch, key) => updateElement(id, patch, key)}
               onCommitText={(id, html) => updateElement(id, { html })}
+              onContextMenu={(el, x, y) => setMenu({ x, y, el })}
               onActivate={(el) => {
                 if (el.type === 'image') chooseImage(el.id);
                 if (el.type === 'chart') setChartDialog({ id: el.id, spec: el.chart });
@@ -586,6 +707,21 @@ export default function Editor({ initial, onClose }: Props) {
           onEditChart={() => selected && setChartDialog({ id: selected.id, spec: selected.chart })}
         />
       </div>
+      {posterMenu && (
+        <ContextMenu
+          x={posterMenu.x}
+          y={posterMenu.y}
+          onClose={() => setPosterMenu(null)}
+          items={[
+            { label: 'Duplicate this poster', onClick: duplicatePoster },
+            { label: 'Download project file', onClick: () => exportPosterFile(posterRef.current) },
+            '-',
+            { label: 'Delete this poster…', danger: true, onClick: deleteThisPoster },
+          ]}
+        />
+      )}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
+      {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
       {toast && <div className="toast">{toast}</div>}
       {marquee && (

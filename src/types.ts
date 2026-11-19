@@ -25,6 +25,8 @@ export interface CustomFont {
   dataUrl: string;
 }
 
+export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'triangle' | 'diamond' | 'arrow' | 'star';
+
 export type ElementType = 'title' | 'subtitle' | 'heading' | 'text' | 'image' | 'chart' | 'shape';
 
 export interface TextStyle {
@@ -76,7 +78,9 @@ export interface PosterElement {
   src?: string;
   fit?: 'contain' | 'cover' | 'fill';
   chart?: ChartSpec;
-  shape?: 'rect' | 'ellipse' | 'line';
+  shape?: ShapeKind;
+  /** which way an arrow points */
+  direction?: 'right' | 'left' | 'up' | 'down';
   locked?: boolean;
 }
 

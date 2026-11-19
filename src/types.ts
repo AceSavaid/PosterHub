@@ -74,6 +74,8 @@ export interface PosterElement {
   padding?: number; // mm
   /** image data URL */
   src?: string;
+  /** label shown on an empty image box, e.g. "Logo" or "QR code" */
+  placeholder?: string;
   fit?: 'contain' | 'cover' | 'fill';
   chart?: ChartSpec;
   shape?: 'rect' | 'ellipse' | 'line';

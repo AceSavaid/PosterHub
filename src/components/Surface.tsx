@@ -90,7 +90,7 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
         <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain' }} />
       ) : (
         <div className="img-placeholder ui-only">
-          <span>Image</span>
+          <span>{el.placeholder ?? 'Image'}</span>
           <small>Double-click to choose, or drop / paste an image</small>
         </div>
       );

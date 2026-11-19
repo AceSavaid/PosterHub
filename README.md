@@ -5,7 +5,7 @@ Make research and academic posters in your browser. No account, no install: ever
 ## What it does
 
 - **Any size, either way round**: A0–A4, common US sizes (36 × 48 in, 24 × 36 in, …) or any custom size in mm, cm or inches; portrait or landscape.
-- **Layouts and columns**: start from a layout (classic columns, central figure, key-finding banner, blank) with 1–6 columns. Elements snap to the column guides.
+- **Starter templates**: a gallery of ten designed layouts (classic columns, boxed sections, heading bars, clean minimal, sidebar, big takeaway, results showcase, framed panels, central figure, key-finding banner) plus blank. Each one adapts to any size, portrait or landscape, and 1–6 columns, and includes labelled spots for logos, figures and a QR code. Previews update with your size, columns and colours. Elements snap to the column guides.
 - **Colour palettes**: ten ready-made palettes or your own colours. Elements linked to a palette colour update when you switch palettes.
 - **Titles, headers, text, images, shapes and graphs**: double-click to type, paste text or images straight onto the poster, drag image files in.
 - **Graphs from CSV**: load a CSV (or paste cells from Excel / Sheets), pick the columns and rows to plot, and choose bar, line, scatter, pie or doughnut.
@@ -32,7 +32,8 @@ The app is a static site (Vite + React + TypeScript). `vite.config.ts` uses rela
 | Path | What lives there |
 | --- | --- |
 | `src/types.ts` | The poster document model (sizes in mm, fonts in pt) |
-| `src/model.ts` | Size presets, palettes, layouts, element defaults |
+| `src/model.ts` | Size presets, palettes, element defaults |
+| `src/templates.ts` | Starter templates: header, section, body and footer recipes |
 | `src/lib/` | Storage (IndexedDB), fonts, charts, exporters, PowerPoint import, undo history |
 | `src/components/` | Library, editor, canvas, panels and dialogs |
 | `tests/unit/` | Vitest unit tests |

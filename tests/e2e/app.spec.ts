@@ -73,6 +73,62 @@ test.describe('library', () => {
   });
 });
 
+test.describe('templates', () => {
+  test('shows a gallery of layouts whose previews follow the chosen size and palette', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: '+ New poster' }).first().click();
+    const cards = page.locator('.template-card');
+    expect(await cards.count()).toBeGreaterThanOrEqual(10);
+    const thumb = page.locator('[data-template="sidebar"] svg');
+    const portrait = (await thumb.boundingBox())!;
+    expect(portrait.height).toBeGreaterThan(portrait.width);
+    await page.getByRole('button', { name: 'Landscape' }).click();
+    const landscape = (await thumb.boundingBox())!;
+    expect(landscape.width).toBeGreaterThan(landscape.height);
+    await page.getByRole('button', { name: 'Crimson' }).click();
+    await expect(thumb.locator('rect[fill="#8b1e2d"]').first()).toBeAttached();
+    await page.locator('[data-template="sidebar"]').click();
+    await expect(page.locator('[data-template="sidebar"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-template="classic"]')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  for (const [id, expectText] of [
+    ['sidebar', 'At a glance'],
+    ['minimal', 'Introduction'],
+    ['showcase', 'Results'],
+    ['takeaway', 'main finding'],
+  ] as const) {
+    test(`creates a poster from the ${id} template with labelled logo and QR code areas`, async ({ page }) => {
+      await page.goto('/');
+      await page.getByRole('button', { name: '+ New poster' }).first().click();
+      await page.locator(`[data-template="${id}"]`).click();
+      await page.getByRole('button', { name: 'Create poster' }).click();
+      await expect(page.locator('.poster')).toBeVisible();
+      await expect(page.locator('.poster .el-body', { hasText: expectText }).first()).toBeVisible();
+      await expect(page.locator('.poster .el-image .img-placeholder', { hasText: 'QR code' }).first()).toBeVisible();
+      // nothing spills off the page
+      const out = await page.locator('.poster').evaluate((p) =>
+        Array.from(p.querySelectorAll(':scope > .el')).filter((e) => {
+          const el = e as HTMLElement;
+          return el.offsetLeft < -1 || el.offsetTop < -1 || el.offsetLeft + el.offsetWidth > (p as HTMLElement).offsetWidth + 1 || el.offsetTop + el.offsetHeight > (p as HTMLElement).offsetHeight + 1;
+        }).length,
+      );
+      expect(out).toBe(0);
+    });
+  }
+
+  test('rebuilds an existing poster with another layout', async ({ page }) => {
+    page.on('dialog', (d) => d.accept());
+    await newPoster(page);
+    await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Layout' }).click();
+    await page.getByRole('combobox', { name: 'Layout' }).selectOption('boxed');
+    await expect(page.getByText('Logos either side of the title')).toBeVisible();
+    await page.getByRole('button', { name: /^Apply to/ }).click();
+    await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(2);
+  });
+});
+
 test.describe('editing', () => {
   test('types into text, with undo and redo', async ({ page }) => {
     await newPoster(page);

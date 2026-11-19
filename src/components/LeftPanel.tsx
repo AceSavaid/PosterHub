@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ElementType, Poster, PosterElement } from '../types';
-import { PALETTE_ROLES, TEMPLATES, buildTemplate, typeScale, type TemplateId } from '../model';
+import { PALETTE_ROLES, TEMPLATES, buildTemplate, templateDef, typeScale, type TemplateId } from '../model';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
 import { FontSelect } from './FontSelect';
@@ -154,6 +154,7 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
             ))}
           </select>
         </label>
+        <p className="hint span2">{templateDef(template).description}</p>
         <button
           className="btn span2"
           onClick={() => {

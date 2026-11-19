@@ -1,9 +1,11 @@
+import AppearanceMenu from './AppearanceMenu';
 import { useEffect, useState } from 'react';
 import type { Poster } from '../types';
 import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFile, readPosterFile, savePoster, storageInfo } from '../lib/storage';
-import { importPptx } from '../lib/pptxImport';
+import { openPptx, posterFromImport, type PptxDeck } from '../lib/pptxImport';
 import { uid, PALETTES } from '../model';
 import NewPosterDialog from './NewPosterDialog';
+import SlidePicker from './SlidePicker';
 import { askConfirm, askText, tell } from '../lib/dialogs';
 
 const fmtSize = (p: Poster) => `${Math.round(p.width)} × ${Math.round(p.height)} mm · ${p.width > p.height ? 'landscape' : 'portrait'}`;
@@ -16,6 +18,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster) => void }) {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [where, setWhere] = useState<{ kind: 'browser' | 'folder'; location: string } | null>(null);
+  const [picking, setPicking] = useState<{ deck: PptxDeck; name: string; fileName: string } | null>(null);
 
   const refresh = () => listPosters().then(setPosters).catch((e) => setError(String(e)));
   useEffect(() => {
@@ -54,23 +57,24 @@ export default function Library({ onOpen }: { onOpen: (p: Poster) => void }) {
     if (!f) return;
     setBusy('Reading PowerPoint template…');
     try {
-      const r = await importPptx(f);
-      const short = Math.min(r.poster.width, r.poster.height);
-      const now = Date.now();
-      const p: Poster = {
-        ...r.poster,
-        id: uid(),
-        name: f.name.replace(/\.(pptx|potx)$/i, ''),
-        version: 1,
-        sizePreset: 'custom',
-        columns: r.poster.width > r.poster.height ? 4 : 3,
-        margin: Math.round(short * 0.03),
-        gutter: Math.round(short * 0.025),
-        customFonts: [],
-        googleFonts: [],
-        createdAt: now,
-        updatedAt: now,
-      };
+      const deck = await openPptx(f);
+      const name = f.name.replace(/\.(pptx|potx)$/i, '');
+      // With several slides (or layouts) let the user choose; otherwise import straight away.
+      if (deck.pages.length > 1) setPicking({ deck, name, fileName: f.name });
+      else await finishImport(deck, 0, name);
+    } catch (e) {
+      setError('Could not import that PowerPoint file: ' + (e as Error).message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function finishImport(deck: PptxDeck, index: number, name: string) {
+    setPicking(null);
+    setBusy('Importing…');
+    try {
+      const r = await deck.importPage(index);
+      const p = posterFromImport(r, name);
       await savePoster(p);
       if (r.warnings.length) await tell('Imported with notes', '• ' + r.warnings.join('\n• '));
       onOpen(p);
@@ -112,6 +116,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster) => void }) {
           <button className="btn" onClick={importTemplate}>Import PowerPoint template</button>
           <button className="btn" onClick={importProject}>Open project file</button>
           <button className="btn primary" onClick={() => setCreating(true)}>+ New poster</button>
+          <AppearanceMenu />
         </div>
       </header>
       <main className="lib-main">
@@ -168,6 +173,9 @@ export default function Library({ onOpen }: { onOpen: (p: Poster) => void }) {
           ))}
         </div>
       </main>
+      {picking && (
+        <SlidePicker deck={picking.deck} fileName={picking.fileName} onPick={(i) => finishImport(picking.deck, i, picking.name)} onCancel={() => setPicking(null)} />
+      )}
       {creating && <NewPosterDialog onCreate={create} onCancel={() => setCreating(false)} />}
     </div>
   );

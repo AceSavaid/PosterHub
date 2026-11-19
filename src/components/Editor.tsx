@@ -13,6 +13,8 @@ import ChartDialog from './ChartDialog';
 import ViewMode from './ViewMode';
 import { chartCanvases } from './ChartView';
 import { Logo } from './Library';
+import AppearanceMenu from './AppearanceMenu';
+import { useUiPrefs } from '../lib/uiPrefs';
 
 const CLIP_MIME = 'application/x-posterhub-element';
 let internalClipboard: PosterElement | null = null;
@@ -58,6 +60,7 @@ export default function Editor({ initial, onClose }: Props) {
   const posterNode = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<number>(undefined);
+  const [prefs, setPrefs] = useUiPrefs();
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
@@ -75,7 +78,7 @@ export default function Editor({ initial, onClose }: Props) {
   }, [posterRef]);
   useEffect(() => {
     fit();
-  }, [fit]);
+  }, [fit, prefs.showTools, prefs.showProperties]);
 
   // ---- fonts + autosave
   useEffect(() => {
@@ -294,6 +297,12 @@ export default function Editor({ initial, onClose }: Props) {
         saveWithThumbnail().then(() => notify('Saved to My posters.'));
         return;
       }
+      if (mod && e.key === '\\') {
+        e.preventDefault();
+        const anyShown = prefs.showTools || prefs.showProperties;
+        setPrefs({ showTools: !anyShown, showProperties: !anyShown });
+        return;
+      }
       if (isTyping(e.target)) return;
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -481,6 +490,7 @@ export default function Editor({ initial, onClose }: Props) {
         <label className="toggle" title="Snap to columns and other elements">
           <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap
         </label>
+        <AppearanceMenu panels />
         <span className="sep" />
         <button className="btn" onClick={() => setViewing(true)}>View</button>
         <button className="btn" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
@@ -518,15 +528,21 @@ export default function Editor({ initial, onClose }: Props) {
           )}
         </div>
       </header>
-      <div className="workspace">
-        <LeftPanel
-          poster={poster}
-          update={update}
-          onInsert={insert}
-          onInsertImage={() => chooseImage()}
-          onInsertChart={() => setChartDialog({})}
-          notify={notify}
-        />
+      <div className={`workspace${prefs.swapPanels ? ' swapped' : ''}`}>
+        {prefs.showTools ? (
+          <LeftPanel
+            poster={poster}
+            update={update}
+            onInsert={insert}
+            onInsertImage={() => chooseImage()}
+            onInsertChart={() => setChartDialog({})}
+            notify={notify}
+          />
+        ) : (
+          <button className="panel-reveal tools" title="Show tools panel" aria-label="Show tools panel" onClick={() => setPrefs({ showTools: true })}>
+            <span>Tools</span>
+          </button>
+        )}
         <div
           className="stage"
           ref={scroller}
@@ -567,24 +583,30 @@ export default function Editor({ initial, onClose }: Props) {
             />
           </div>
         </div>
-        <Inspector
-          poster={poster}
-          el={selectedIds.length > 1 ? null : selected}
-          multi={selectedIds.length}
-          overflow={overflow}
-          onShrinkText={shrinkToFit}
-          onGrowBox={growToFit}
-          onAlign={(mode) => arrange((els, d) => align(els, mode, { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin }))}
-          onDistribute={(axis) => arrange((els) => distribute(els, axis))}
-          onMatchSize={(dim) => arrange((els) => matchSize(els, dim))}
-          editing={!!editingId && editingId === selectedId}
-          onChange={(patch, key) => selected && updateElement(selected.id, patch, key)}
-          onDelete={removeSelected}
-          onDuplicate={() => duplicate()}
-          onLayer={layer}
-          onReplaceImage={() => selected && chooseImage(selected.id)}
-          onEditChart={() => selected && setChartDialog({ id: selected.id, spec: selected.chart })}
-        />
+        {prefs.showProperties ? (
+          <Inspector
+            poster={poster}
+            el={selectedIds.length > 1 ? null : selected}
+            multi={selectedIds.length}
+            overflow={overflow}
+            onShrinkText={shrinkToFit}
+            onGrowBox={growToFit}
+            onAlign={(mode) => arrange((els, d) => align(els, mode, { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin }))}
+            onDistribute={(axis) => arrange((els) => distribute(els, axis))}
+            onMatchSize={(dim) => arrange((els) => matchSize(els, dim))}
+            editing={!!editingId && editingId === selectedId}
+            onChange={(patch, key) => selected && updateElement(selected.id, patch, key)}
+            onDelete={removeSelected}
+            onDuplicate={() => duplicate()}
+            onLayer={layer}
+            onReplaceImage={() => selected && chooseImage(selected.id)}
+            onEditChart={() => selected && setChartDialog({ id: selected.id, spec: selected.chart })}
+          />
+        ) : (
+          <button className="panel-reveal props" title="Show properties panel" aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>
+            <span>Properties</span>
+          </button>
+        )}
       </div>
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
       {toast && <div className="toast">{toast}</div>}

@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import type { Poster, PosterElement, TextStyle } from '../types';
+import { QR_MAX_LENGTH, normaliseLink, qrDataUrl } from '../lib/qr';
 import { FontSelect } from './FontSelect';
 import { ColorInput } from './ColorInput';
+import type { AlignMode } from '../lib/arrange';
 
 interface Props {
   poster: Poster;
@@ -12,11 +15,74 @@ interface Props {
   onLayer: (dir: 'front' | 'back' | 'up' | 'down') => void;
   onReplaceImage: () => void;
   onEditChart: () => void;
+  multi: number;
+  overflow: boolean;
+  onShrinkText: () => void;
+  onGrowBox: () => void;
+  onAlign: (mode: AlignMode) => void;
+  onDistribute: (axis: 'x' | 'y') => void;
+  onMatchSize: (dim: 'w' | 'h') => void;
+}
+
+const ALIGN: { mode: AlignMode; label: string; icon: string }[] = [
+  { mode: 'left', label: 'Align left edges', icon: '⇤' },
+  { mode: 'hcenter', label: 'Align centres (horizontally)', icon: '↔' },
+  { mode: 'right', label: 'Align right edges', icon: '⇥' },
+  { mode: 'top', label: 'Align top edges', icon: '⤒' },
+  { mode: 'vcenter', label: 'Align middles (vertically)', icon: '↕' },
+  { mode: 'bottom', label: 'Align bottom edges', icon: '⤓' },
+];
+
+function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: number } & Pick<Props, 'onAlign' | 'onDistribute' | 'onMatchSize'>) {
+  return (
+    <section>
+      <h4>{count > 1 ? 'Line up' : 'Position on the poster'}</h4>
+      <div className="toolbar-row">
+        {ALIGN.map((a) => (
+          <button key={a.mode} className="fmt" title={count > 1 ? a.label : a.label.replace(/edges|centres|middles/, 'to the page')} aria-label={a.label} onClick={() => onAlign(a.mode)}>
+            {a.icon}
+          </button>
+        ))}
+      </div>
+      {count === 1 && <p className="hint">Lines up with the poster margins.</p>}
+      {count > 2 && (
+        <div className="toolbar-row">
+          <button className="btn small-btn" onClick={() => onDistribute('x')}>Space evenly across</button>
+          <button className="btn small-btn" onClick={() => onDistribute('y')}>Space evenly down</button>
+        </div>
+      )}
+      {count > 1 && (
+        <div className="toolbar-row">
+          <button className="btn small-btn" onClick={() => onMatchSize('w')}>Same width</button>
+          <button className="btn small-btn" onClick={() => onMatchSize('h')}>Same height</button>
+        </div>
+      )}
+      {count > 1 && <p className="hint">“Same width / height” copies the size of the first element you selected.</p>}
+    </section>
+  );
 }
 
 const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape' };
 
-export default function Inspector({ poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart }: Props) {
+export default function Inspector(props: Props) {
+  const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart, multi, overflow, onShrinkText, onGrowBox } = props;
+  if (multi > 1) {
+    return (
+      <aside className="panel right">
+        <div className="panel-body">
+          <div className="insp-head">
+            <h3>{multi} elements selected</h3>
+            <div className="icon-row">
+              <button className="icon-btn" title="Duplicate (Ctrl/⌘ D)" onClick={onDuplicate}>⧉</button>
+              <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
+            </div>
+          </div>
+          <ArrangeSection count={multi} {...props} />
+          <p className="hint">Drag any of them to move them together. Shift-click to add or remove one from the selection.</p>
+        </div>
+      </aside>
+    );
+  }
   if (!el) {
     return (
       <aside className="panel right">
@@ -29,6 +95,8 @@ export default function Inspector({ poster, el, editing, onChange, onDelete, onD
             <li><kbd>Ctrl/⌘ C / X / V</kbd> copy, cut, paste elements, text or images</li>
             <li><kbd>Ctrl/⌘ D</kbd> duplicate</li>
             <li><kbd>Delete</kbd> remove selected</li>
+            <li><kbd>Shift</kbd>-click or drag a box to select several</li>
+            <li><kbd>Ctrl/⌘ A</kbd> select everything</li>
             <li><kbd>Arrows</kbd> nudge (Shift = 10 mm)</li>
             <li><kbd>Ctrl/⌘ B / I / U</kbd> bold, italic, underline while typing</li>
             <li><kbd>Esc</kbd> stop editing / deselect</li>
@@ -59,6 +127,17 @@ export default function Inspector({ poster, el, editing, onChange, onDelete, onD
             <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
           </div>
         </div>
+
+        {st && overflow && (
+          <section className="warn-box" role="status">
+            <strong>Some text is hidden</strong>
+            <span>The text is longer than its box.</span>
+            <div className="toolbar-row">
+              <button className="btn small-btn" onClick={onShrinkText}>Shrink text to fit</button>
+              <button className="btn small-btn" onClick={onGrowBox}>Make box taller</button>
+            </div>
+          </section>
+        )}
 
         {st && (
           <section>
@@ -123,6 +202,8 @@ export default function Inspector({ poster, el, editing, onChange, onDelete, onD
           </section>
         )}
 
+        {el.type === 'image' && <QrSection key={el.id} el={el} onChange={onChange} />}
+
         {el.type === 'chart' && (
           <section>
             <h4>Graph</h4>
@@ -177,6 +258,8 @@ export default function Inspector({ poster, el, editing, onChange, onDelete, onD
           )}
         </section>
 
+        <ArrangeSection count={1} {...props} />
+
         <section>
           <h4>Position and size (mm)</h4>
           <div className="row4">
@@ -209,5 +292,53 @@ function AlignIcon({ a }: { a: string }) {
         return <rect key={i} x={x} y={1 + i * 3} width={ww} height={1.4} fill="currentColor" />;
       })}
     </svg>
+  );
+}
+
+/** Turns an image box into a QR code for a link (paper, data, lab page). Updates as you type. */
+function QrSection({ el, onChange }: { el: PosterElement; onChange: Props['onChange'] }) {
+  const [text, setText] = useState(el.qr ?? '');
+  const [error, setError] = useState('');
+  const isQrBox = el.qr != null || el.placeholder === 'QR code';
+
+  function apply(value: string) {
+    setText(value);
+    const link = normaliseLink(value);
+    if (!link) {
+      setError('');
+      if (el.qr != null) onChange((e) => { delete e.qr; delete e.src; }, 'qr');
+      return;
+    }
+    if (link.length > QR_MAX_LENGTH) return setError(`That is too long for a QR code (${link.length} of ${QR_MAX_LENGTH} characters). Try a shorter link.`);
+    try {
+      const src = qrDataUrl(link);
+      setError('');
+      onChange((e) => { e.qr = link; e.src = src; e.fit = 'contain'; }, 'qr');
+    } catch {
+      setError('That could not be turned into a QR code. Try a shorter link.');
+    }
+  }
+
+  return (
+    <section>
+      <h4>QR code</h4>
+      <label>
+        {isQrBox ? 'Link for the QR code' : 'Or make a QR code from a link'}
+        <input
+          id="qr-link"
+          value={text}
+          placeholder="e.g. doi.org/10.1234/abcd"
+          spellCheck={false}
+          onChange={(e) => apply(e.target.value)}
+        />
+      </label>
+      {error ? (
+        <p className="hint error" role="alert">{error}</p>
+      ) : el.qr ? (
+        <p className="hint">Scans to <b>{el.qr}</b>. Test it with your phone before printing.</p>
+      ) : (
+        <p className="hint">Paste a link to your paper, data, code or lab page. The QR code is made on your computer and updates as you type.</p>
+      )}
+    </section>
   );
 }

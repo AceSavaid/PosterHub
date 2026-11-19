@@ -87,10 +87,10 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
       break;
     case 'image':
       inner = el.src ? (
-        <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain' }} />
+        <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain', imageRendering: el.qr ? 'pixelated' : undefined }} />
       ) : (
         <div className="img-placeholder ui-only">
-          <span>Image</span>
+          <span>{el.placeholder ?? 'Image'}</span>
           <small>Double-click to choose, or drop / paste an image</small>
         </div>
       );
@@ -132,9 +132,19 @@ function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement
   const pal = poster.palette;
 
   // Content is managed imperatively so React never fights the caret while typing.
+  const filled = useRef(false);
   useLayoutEffect(() => {
-    if (ref.current && !editing && ref.current.innerHTML !== (el.html ?? '')) ref.current.innerHTML = el.html ?? '';
+    // Fill on first mount (even if it starts in editing mode), then only while not typing.
+    if (ref.current && (!editing || !filled.current) && ref.current.innerHTML !== (el.html ?? '')) ref.current.innerHTML = el.html ?? '';
+    filled.current = true;
   }, [el.html, editing]);
+
+  // Flag boxes whose text is cut off, so the editor can show a warning.
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    if (node.parentElement) node.parentElement.dataset.overflow = String(node.scrollHeight > node.clientHeight + 1);
+  });
 
   useEffect(() => {
     const node = ref.current;

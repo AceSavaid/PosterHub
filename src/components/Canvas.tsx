@@ -19,6 +19,7 @@ interface Props {
   onChange: (id: string, patch: Partial<PosterElement>, coalesce?: string) => void;
   onCommitText: (id: string, html: string) => void;
   onActivate: (el: PosterElement) => void; // double-click on image/chart
+  onContextMenu: (el: PosterElement, x: number, y: number) => void;
 }
 
 interface Guide {
@@ -27,7 +28,7 @@ interface Guide {
 }
 
 export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, ref) {
-  const { poster, zoom, showGrid, snap, selectedIds, editingId, onSelect, onMoveMany, onEdit, onChange, onCommitText, onActivate } = props;
+  const { poster, zoom, showGrid, snap, selectedIds, editingId, onSelect, onMoveMany, onEdit, onChange, onCommitText, onActivate, onContextMenu } = props;
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
   const [guides, setGuides] = useState<Guide[]>([]);
   const dragging = useRef(false);
@@ -203,6 +204,13 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
             className={(selectedIds.includes(el.id) ? 'selected ' : '') + (el.locked ? 'locked ' : '') + (isEditing ? 'editing' : '')}
             wrapperProps={{
               onPointerDown: isEditing ? (e) => e.stopPropagation() : (e) => startDrag(e, el),
+              onContextMenu: (e) => {
+                if (isEditing) return; // keep the browser's spelling / copy menu while typing
+                e.preventDefault();
+                e.stopPropagation();
+                if (!selectedIds.includes(el.id)) onSelect(el.id, false);
+                onContextMenu(el, e.clientX, e.clientY);
+              },
               onDoubleClick: (e) => {
                 e.stopPropagation();
                 if (isText) onEdit(el.id);
@@ -225,6 +233,10 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
                 className={'handle h-' + h}
                 style={{ width: hs, height: hs, margin: -hs / 2, borderWidth: 1.5 / zoom }}
                 onPointerDown={(e) => startDrag(e, selected, h)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  onContextMenu(selected, e.clientX, e.clientY);
+                }}
               />
             ))}
         </div>

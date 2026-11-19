@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useLayoutEffect, useRef, type CSSProperties, typ
 import type { Poster, PosterElement } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth, fontStack, resolveColor, resolveFont } from '../model';
 import ChartView from './ChartView';
+import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
 
 const px = (mm: number) => mm * MM_TO_PX;
 
@@ -74,17 +75,31 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
     height: px(el.h),
   };
   const deco: CSSProperties = {
-    background: el.type !== 'shape' || el.shape !== 'line' ? resolveColor(el.fill, pal) : undefined,
-    backgroundImage: el.gradient && el.shape !== 'line' ? el.gradient : undefined,
+    background: el.type === 'shape' && (el.shape === 'line' || isPolygon(el)) ? undefined : resolveColor(el.fill, pal),
+    backgroundImage: el.gradient && el.shape !== 'line' && !isPolygon(el) ? el.gradient : undefined,
     borderRadius: el.shape === 'ellipse' ? '50%' : el.radius ? px(el.radius) : undefined,
-    border: el.borderWidth ? `${el.borderWidth}pt solid ${resolveColor(el.borderColor ?? '@primary', pal)}` : undefined,
+    border: el.borderWidth && !isPolygon(el) ? `${el.borderWidth}pt solid ${resolveColor(el.borderColor ?? '@primary', pal)}` : undefined,
     padding: el.padding ? px(el.padding) : undefined,
   };
 
   let inner: ReactNode = null;
   switch (el.type) {
     case 'shape':
-      inner = el.shape === 'line' ? <div className="el-line" style={{ background: resolveColor(el.fill ?? '@primary', pal) }} /> : null;
+      if (el.shape === 'line') inner = <div className="el-line" style={{ background: resolveColor(el.fill ?? '@primary', pal) }} />;
+      else if (isPolygon(el))
+        inner = (
+          <svg className="el-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+            <polygon
+              points={POLYGONS[el.shape!]}
+              transform={el.shape === 'arrow' ? `rotate(${ARROW_ROTATION[el.direction ?? 'right']} 50 50)` : undefined}
+              fill={resolveColor(el.fill, pal)}
+              stroke={el.borderWidth ? resolveColor(el.borderColor ?? '@primary', pal) : 'none'}
+              strokeWidth={el.borderWidth ? (el.borderWidth * 96) / 72 : 0}
+              vectorEffect="non-scaling-stroke"
+              strokeLinejoin="round"
+            />
+          </svg>
+        );
       break;
     case 'image':
       inner = el.src ? (

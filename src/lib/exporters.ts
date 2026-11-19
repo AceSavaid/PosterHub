@@ -191,10 +191,20 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
     const line = e.borderWidth ? { color: col(e.borderColor ?? '@primary'), width: e.borderWidth * k } : undefined;
     switch (e.type) {
       case 'shape': {
-        const shapeType = e.shape === 'ellipse' ? pptx.ShapeType.ellipse : e.shape === 'line' ? pptx.ShapeType.line : e.radius ? pptx.ShapeType.roundRect : pptx.ShapeType.rect;
+        const ST = pptx.ShapeType;
+        const arrows = { right: ST.rightArrow, left: ST.leftArrow, up: ST.upArrow, down: ST.downArrow };
+        const shapeType =
+          e.shape === 'ellipse' ? ST.ellipse
+          : e.shape === 'line' ? ST.line
+          : e.shape === 'triangle' ? ST.triangle
+          : e.shape === 'diamond' ? ST.diamond
+          : e.shape === 'star' ? ST.star5
+          : e.shape === 'arrow' ? arrows[e.direction ?? 'right']
+          : e.radius ? ST.roundRect
+          : ST.rect;
         slide.addShape(shapeType, {
           ...box,
-          fill: e.shape === 'line' ? undefined : fill,
+          fill: e.shape === 'line' ? undefined : (fill ?? { type: 'none' }),
           line: e.shape === 'line' ? { color: col(e.fill ?? '@primary'), width: Math.max(1, (e.h * 72) / 25.4) * k } : line,
           rectRadius: e.radius ? Math.min(0.5, e.radius / Math.min(e.w, e.h)) : undefined,
         } as never);

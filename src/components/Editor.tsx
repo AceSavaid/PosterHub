@@ -155,6 +155,7 @@ export default function Editor({ initial, onClose }: Props) {
     if (replaceId) {
       updateElement(replaceId, (e) => {
         e.src = src;
+        delete e.qr;
         if (!e.src || e.fit !== 'cover') e.h = e.w / ratio;
       });
       return;
@@ -167,6 +168,18 @@ export default function Editor({ initial, onClose }: Props) {
       base.y = at.y - base.h / 2;
     }
     addElement(base, !at);
+  }
+
+  /** A square, empty QR code box; the link is typed in the inspector. */
+  function insertQr() {
+    const p = posterRef.current;
+    const size = Math.min(p.width, p.height) * 0.15;
+    addElement(makeElement('image', p, { w: size, h: size, placeholder: 'QR code', fill: '#ffffff', fit: 'contain' }));
+    focusQrLink();
+  }
+
+  function focusQrLink() {
+    setTimeout(() => document.getElementById('qr-link')?.focus(), 50);
   }
 
   async function chooseImage(replaceId?: string) {
@@ -525,6 +538,7 @@ export default function Editor({ initial, onClose }: Props) {
           onInsert={insert}
           onInsertImage={() => chooseImage()}
           onInsertChart={() => setChartDialog({})}
+          onInsertQr={insertQr}
           notify={notify}
         />
         <div
@@ -561,7 +575,8 @@ export default function Editor({ initial, onClose }: Props) {
               onChange={(id, patch, key) => updateElement(id, patch, key)}
               onCommitText={(id, html) => updateElement(id, { html })}
               onActivate={(el) => {
-                if (el.type === 'image') chooseImage(el.id);
+                if (el.type === 'image' && (el.qr || el.placeholder === 'QR code')) focusQrLink();
+                else if (el.type === 'image') chooseImage(el.id);
                 if (el.type === 'chart') setChartDialog({ id: el.id, spec: el.chart });
               }}
             />

@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import type { Orientation, Palette } from '../types';
-import { PALETTES, SIZE_PRESETS, TEMPLATES, createPoster, sizeFor, type TemplateId, POPULAR_GOOGLE_FONTS, SYSTEM_FONTS } from '../model';
+import { useMemo, useState } from 'react';
+import type { Orientation, Palette, PosterElement } from '../types';
+import { PALETTES, SIZE_PRESETS, TEMPLATES, columnLefts, columnWidth, createPoster, resolveColor, sizeFor, type TemplateId, POPULAR_GOOGLE_FONTS, SYSTEM_FONTS } from '../model';
 import type { Poster } from '../types';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
@@ -76,11 +76,11 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
             <PaletteSwatches value={palette.name} onPick={setPalette} />
           </div>
           <div className="span2">
-            <div className="field-label">Layout</div>
+            <div className="field-label">Layout <span className="muted">· previews update with your size, columns and colours</span></div>
             <div className="template-grid">
               {TEMPLATES.map((t) => (
-                <button type="button" key={t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => setTemplate(t.id)}>
-                  <TemplateThumb id={t.id} orientation={orientation} columns={columns} palette={palette} />
+                <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => setTemplate(t.id)}>
+                  <TemplateThumb id={t.id} width={size.width} height={size.height} columns={columns} palette={palette} />
                   <strong>{t.label}</strong>
                   <span>{t.description}</span>
                 </button>
@@ -98,41 +98,68 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
   );
 }
 
-function TemplateThumb({ id, orientation, columns, palette }: { id: TemplateId; orientation: Orientation; columns: number; palette: Palette }) {
-  const W = orientation === 'portrait' ? 60 : 84;
-  const H = orientation === 'portrait' ? 84 : 60;
-  const m = 4;
-  const g = 3;
-  const cw = (W - 2 * m - (columns - 1) * g) / columns;
-  const top = H * 0.17 + (id === 'banner' ? 9 : 4);
+/** A miniature of the real layout: the same elements createPoster() would make, drawn as simple shapes. */
+export function TemplateThumb({ id, width, height, columns, palette }: { id: TemplateId; width: number; height: number; columns: number; palette: Palette }) {
+  const poster = useMemo(
+    () => (width > 0 && height > 0) ? createPoster({ name: '', width, height, sizePreset: 'custom', columns, palette, template: id, headingFont: 'Arial', bodyFont: 'Arial' }) : null,
+    [id, width, height, columns, palette],
+  );
+  if (!poster) return null;
+  const box = 96;
+  const k = box / Math.max(width, height);
+  const W = width * k;
+  const H = height * k;
+  const col = (c?: string) => resolveColor(c, palette);
   return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden>
-      <rect width={W} height={H} fill={palette.background} stroke="#ccc" />
-      {id !== 'blank' && <rect width={W} height={H * 0.15} fill={palette.primary} />}
-      {id === 'banner' && <rect x={m} y={H * 0.15 + 2} width={W - 2 * m} height={5} fill={palette.accent} />}
-      {id !== 'blank' &&
-        Array.from({ length: columns }, (_, i) => {
-          const x = m + i * (cw + g);
-          const central = id === 'central' && columns >= 3 && i === Math.floor(columns / 2);
-          return central ? (
-            <rect key={i} x={x} y={top} width={cw} height={H * 0.5} fill={palette.surface} stroke={palette.secondary} strokeWidth={0.5} />
-          ) : (
-            <g key={i}>
-              <rect x={x} y={top} width={cw * 0.7} height={2.5} fill={palette.primary} />
-              {[0, 1, 2, 3, 4, 5].map((k) => (
-                <rect key={k} x={x} y={top + 5 + k * 3.2} width={cw} height={1.4} fill="#bbb" />
-              ))}
-              <rect x={x} y={top + 26} width={cw * 0.7} height={2.5} fill={palette.primary} />
-              {[0, 1, 2, 3].map((k) => (
-                <rect key={k} x={x} y={top + 31 + k * 3.2} width={cw} height={1.4} fill="#bbb" />
-              ))}
-            </g>
-          );
-        })}
+    <svg className="template-thumb" width={W} height={H} viewBox={`0 0 ${width} ${height}`} aria-hidden>
+      <rect width={width} height={height} fill={palette.background} stroke="#c3c9d2" strokeWidth={1 / k} />
       {id === 'blank' &&
-        Array.from({ length: columns }, (_, i) => (
-          <rect key={i} x={m + i * (cw + g)} y={m} width={cw} height={H - 2 * m} fill="none" stroke="#9ab" strokeDasharray="2 2" strokeWidth={0.5} />
+        columnLefts(poster).map((x, i) => (
+          <rect key={i} x={x} y={poster.margin} width={columnWidth(poster)} height={height - 2 * poster.margin} fill="none" stroke="#9ab" strokeDasharray={`${2 / k} ${2 / k}`} strokeWidth={0.6 / k} />
         ))}
+      {poster.elements.map((e) => <ThumbElement key={e.id} el={e} col={col} k={k} />)}
     </svg>
+  );
+}
+
+function ThumbElement({ el: e, col, k }: { el: PosterElement; col: (c?: string) => string; k: number }) {
+  const r = e.shape === 'ellipse' ? Math.min(e.w, e.h) / 2 : e.radius ?? 0;
+  const frame =
+    e.fill || e.borderWidth ? (
+      <rect x={e.x} y={e.y} width={e.w} height={e.h} rx={r} fill={e.fill ? col(e.fill) : 'none'} stroke={e.borderWidth ? col(e.borderColor ?? '@primary') : 'none'} strokeWidth={0.8 / k} />
+    ) : null;
+  if (e.type === 'shape') return frame;
+  if (e.type === 'image' || e.type === 'chart') {
+    const qr = e.placeholder === 'QR code';
+    const s = Math.min(e.w, e.h);
+    return (
+      <g>
+        <rect x={e.x} y={e.y} width={e.w} height={e.h} rx={r} fill={e.fill ? col(e.fill) : 'none'} stroke="#9aa6b8" strokeWidth={0.6 / k} strokeDasharray={qr ? undefined : `${1.5 / k} ${1 / k}`} />
+        {qr &&
+          [[0, 0], [0.62, 0], [0, 0.62]].map(([dx, dy], i) => (
+            <rect key={i} x={e.x + s * (0.08 + dx * 0.86)} y={e.y + s * (0.08 + dy * 0.86)} width={s * 0.26} height={s * 0.26} fill="#2a2f38" />
+          ))}
+      </g>
+    );
+  }
+  // Text-like: draw lines of "text" in the element's colour.
+  const pad = e.padding ?? 0;
+  const st = e.style!;
+  const lineH = Math.max(st.fontSize * 0.3528 * st.lineHeight, 1 / k);
+  const barH = st.fontSize * 0.3528 * (e.type === 'title' || e.type === 'heading' ? 0.75 : 0.45);
+  const innerW = e.w - 2 * pad;
+  const lines = e.type === 'title' || e.type === 'subtitle' || e.type === 'heading' ? 1 : Math.max(1, Math.min(8, Math.floor((e.h - 2 * pad) / lineH)));
+  const fill = e.type === 'text' && !e.fill ? '#b9bfc8' : col(st.color);
+  const lens = [1, 0.92, 0.97, 0.85, 0.95, 0.9, 0.98, 0.7];
+  return (
+    <g>
+      {frame}
+      {Array.from({ length: lines }, (_, i) => {
+        const w = innerW * (e.type === 'heading' ? Math.min(0.7, (e.html?.length ?? 8) * 0.06 + 0.15) : e.type === 'title' ? 0.8 : lines > 1 && i === lines - 1 ? 0.6 : lens[i]);
+        const x = st.align === 'center' ? e.x + pad + (innerW - w) / 2 : st.align === 'right' ? e.x + e.w - pad - w : e.x + pad;
+        const y = e.type === 'heading' && e.fill ? e.y + (e.h - barH) / 2 : e.y + pad + i * lineH + (lineH - barH) / 2;
+        return <rect key={i} x={x} y={y} width={Math.max(w, 0)} height={barH} rx={barH / 3} fill={fill} />;
+      })}
+    </g>
   );
 }

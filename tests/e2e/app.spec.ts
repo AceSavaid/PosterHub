@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import JSZip from 'jszip';
 import PptxGenJS from 'pptxgenjs';
+import { inspectPdf, localFontsource, pdfText } from '../helpers/pdf';
 import jsQR from 'jsqr';
 
 const FIXTURES = path.join(import.meta.dirname, '..', 'fixtures');
@@ -19,6 +20,16 @@ async function newPoster(page: Page, opts: { name?: string; landscape?: boolean;
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
 }
+
+// The PDF exporter fetches static font files from Fontsource; serve them from
+// node_modules so tests are fast and work offline.
+test.beforeEach(async ({ page }) => {
+  await page.route('https://cdn.jsdelivr.net/npm/@fontsource/**', async (route) => {
+    const body = localFontsource(route.request().url());
+    if (!body) return route.fulfill({ status: 404, body: '' });
+    return route.fulfill({ body: Buffer.from(body), headers: { 'access-control-allow-origin': '*', 'content-type': 'font/woff' } });
+  });
+});
 
 const elements = (page: Page) => page.locator('.poster > .el');
 
@@ -410,6 +421,7 @@ test.describe('export, import and sharing', () => {
     const pdf = await download(page, /^PDF/);
     expect(pdf.name).toBe('Export-test.pdf');
     expect(pdf.data.subarray(0, 4).toString()).toBe('%PDF');
+    expect(await pdfText(pdf.data)).toContain('Your Poster Title Goes Here');
 
     const png = await download(page, /^PNG image/);
     expect(png.name).toBe('Export-test.png');
@@ -437,6 +449,57 @@ test.describe('export, import and sharing', () => {
     await (await chooser).setFiles(proj.file);
     await expect(page.getByLabel('Poster name')).toHaveValue('Export test');
     await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
+  });
+
+  test('PDF is vector: real text, embedded fonts, vector charts, true page size', async ({ page }) => {
+    await newPoster(page, { name: 'Vector', size: 'A3' });
+    // custom font for headings
+    await page.getByRole('button', { name: 'Design' }).click();
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: /Upload your own font/ }).click();
+    await (await chooser).setFiles(path.join(FIXTURES, 'Italiana-Regular.ttf'));
+    await page.getByLabel('Headings').selectOption('Italiana');
+    // rich text with symbols, sub/superscripts and a list
+    await page.locator('.poster .el-text .el-body').first().evaluate((el) => {
+      el.innerHTML = 'Mean <b>reaction time</b> fell, <i>p</i> &lt; 0.05, H<sub>2</sub>O, αβγ ± 2.<ul><li>First finding</li><li>Second finding</li></ul>';
+    });
+    await paste(page, { 'text/plain': 'Group\tScore\nControl\t1\nDrug\t3' });
+    await page.getByRole('button', { name: 'Add graph to poster' }).click();
+
+    const pdf = await download(page, /^PDF/);
+    const text = await pdfText(pdf.data);
+    for (const s of ['Your Poster Title Goes Here', 'Introduction', 'reaction time', 'αβγ', 'First finding', 'Control', 'Drug', 'Score'])
+      expect(text).toContain(s);
+    const info = await inspectPdf(pdf.data);
+    expect(info.images).toHaveLength(0); // no rasterised poster or chart
+    expect(info.fonts.every((f) => f.embedded)).toBe(true);
+    const names = info.fonts.map((f) => f.name).join(' ');
+    expect(names).toMatch(/Italiana/);
+    expect(names).toMatch(/OpenSans-Bold/);
+    // A3 = 297 × 420 mm = 841.9 × 1190.6 pt
+    expect(info.pageSize[0]).toBeCloseTo(841.89, 0);
+    expect(info.pageSize[1]).toBeCloseTo(1190.55, 0);
+    await expect(page.locator('.toast')).toContainText('Export finished');
+  });
+
+  test('PDF keeps photos at full resolution', async ({ page }) => {
+    await newPoster(page, { name: 'Photo', size: 'A4', template: 'Blank' });
+    const png = await page.evaluate(() => {
+      const c = document.createElement('canvas');
+      c.width = 1600;
+      c.height = 1200;
+      const g = c.getContext('2d')!;
+      g.fillStyle = '#c33';
+      g.fillRect(0, 0, 1600, 1200);
+      return c.toDataURL('image/png').split(',')[1];
+    });
+    const chooser = page.waitForEvent('filechooser');
+    await page.getByRole('button', { name: 'Image…' }).click();
+    await (await chooser).setFiles({ name: 'photo.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
+    await expect(page.locator('.poster .el-image img')).toBeVisible();
+    const pdf = await download(page, /^PDF/);
+    const info = await inspectPdf(pdf.data);
+    expect(info.images).toContainEqual({ width: 1600, height: 1200 });
   });
 
   test('imports a PowerPoint template', async ({ page }) => {

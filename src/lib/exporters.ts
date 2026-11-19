@@ -59,7 +59,25 @@ export async function exportPng(node: HTMLElement, p: Poster, dpi: number) {
   downloadBlob(await renderPng(node, p, dpi), safeFileName(p.name) + '.png');
 }
 
-export async function exportPdf(node: HTMLElement, p: Poster, dpi: number) {
+/**
+ * Print-quality PDF: real text with embedded fonts, vector shapes and charts,
+ * full-resolution images. Falls back to the image-based PDF if anything fails.
+ */
+export async function exportPdf(node: HTMLElement, p: Poster, dpi: number, chartImage?: (id: string) => string | undefined): Promise<{ vector: boolean; warnings: string[] }> {
+  try {
+    const { buildVectorPdf } = await import('./pdf/vectorPdf');
+    const { bytes, warnings } = await withExportMode(node, () => buildVectorPdf(node, p, { chartImage }));
+    downloadBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), safeFileName(p.name) + '.pdf');
+    return { vector: true, warnings };
+  } catch (err) {
+    console.warn('Vector PDF export failed; using an image-based PDF instead.', err);
+    await exportPdfRaster(node, p, dpi);
+    return { vector: false, warnings: [] };
+  }
+}
+
+/** The previous PDF export: one high-resolution picture of the poster. */
+export async function exportPdfRaster(node: HTMLElement, p: Poster, dpi: number) {
   const { jsPDF } = await import('jspdf');
   const css = await fontEmbedCss();
   const canvas = await withExportMode(node, () => toCanvas(node, captureOptions(p, pixelRatioFor(p, dpi), css)));

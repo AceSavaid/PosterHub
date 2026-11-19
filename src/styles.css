@@ -264,3 +264,4 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
   .span2 { grid-column: auto; }
   .poster-name { width: 150px; }
 }
+.hint.error { color: #b42318; }

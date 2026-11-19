@@ -76,6 +76,8 @@ export interface PosterElement {
   src?: string;
   /** label shown on an empty image box, e.g. "Logo" or "QR code" */
   placeholder?: string;
+  /** the link or text encoded when this image is a generated QR code */
+  qr?: string;
   fit?: 'contain' | 'cover' | 'fill';
   chart?: ChartSpec;
   shape?: 'rect' | 'ellipse' | 'line';

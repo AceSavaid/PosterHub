@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import JSZip from 'jszip';
 import PptxGenJS from 'pptxgenjs';
+import jsQR from 'jsqr';
 
 const FIXTURES = path.join(import.meta.dirname, '..', 'fixtures');
 
@@ -116,6 +117,45 @@ test.describe('templates', () => {
       expect(out).toBe(0);
     });
   }
+
+  test('makes a QR code from a pasted link that scans back to the link', async ({ page }) => {
+    await newPoster(page, { template: 'Blank' });
+    await page.getByRole('button', { name: 'QR code' }).click();
+    const box = page.locator('.poster .el-image');
+    await expect(box.locator('.img-placeholder')).toContainText('QR code');
+    const link = page.getByLabel('Link for the QR code');
+    await expect(link).toBeFocused();
+    await link.fill('doi.org/10.1234/poster.2026');
+    await expect(page.getByText('Scans to https://doi.org/10.1234/poster.2026')).toBeVisible();
+    const img = box.locator('img');
+    await expect(img).toHaveAttribute('src', /^data:image\/gif;base64,/);
+    const pixels = await img.evaluate(async (el: HTMLImageElement) => {
+      await el.decode();
+      const c = document.createElement('canvas');
+      c.width = el.naturalWidth;
+      c.height = el.naturalHeight;
+      const ctx = c.getContext('2d')!;
+      ctx.drawImage(el, 0, 0);
+      return { w: c.width, h: c.height, data: Array.from(ctx.getImageData(0, 0, c.width, c.height).data) };
+    });
+    expect(jsQR(Uint8ClampedArray.from(pixels.data), pixels.w, pixels.h)?.data).toBe('https://doi.org/10.1234/poster.2026');
+
+    // the link is kept with the poster and can be edited later
+    await page.locator('.poster').click({ position: { x: 5, y: 5 } });
+    await box.dblclick();
+    await expect(page.getByLabel('Link for the QR code')).toBeFocused();
+    await expect(page.getByLabel('Link for the QR code')).toHaveValue('https://doi.org/10.1234/poster.2026');
+    await page.getByLabel('Link for the QR code').fill('x'.repeat(3000));
+    await expect(page.getByRole('alert')).toContainText('too long');
+  });
+
+  test('fills a template QR code spot from a link', async ({ page }) => {
+    await newPoster(page, { template: 'Clean minimal' });
+    const spot = page.locator('.poster .el-image', { has: page.locator('.img-placeholder', { hasText: 'QR code' }) }).first();
+    await spot.click();
+    await page.getByLabel('Link for the QR code').fill('https://example.org/paper');
+    await expect(page.locator('.poster .el-image img[src^="data:image/gif"]')).toHaveCount(1);
+  });
 
   test('rebuilds an existing poster with another layout', async ({ page }) => {
     page.on('dialog', (d) => d.accept());

@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import type { Poster, PosterElement, TextStyle } from '../types';
+import { QR_MAX_LENGTH, normaliseLink, qrDataUrl } from '../lib/qr';
 import { FontSelect } from './FontSelect';
 import { ColorInput } from './ColorInput';
 
@@ -123,6 +125,8 @@ export default function Inspector({ poster, el, editing, onChange, onDelete, onD
           </section>
         )}
 
+        {el.type === 'image' && <QrSection key={el.id} el={el} onChange={onChange} />}
+
         {el.type === 'chart' && (
           <section>
             <h4>Graph</h4>
@@ -209,5 +213,53 @@ function AlignIcon({ a }: { a: string }) {
         return <rect key={i} x={x} y={1 + i * 3} width={ww} height={1.4} fill="currentColor" />;
       })}
     </svg>
+  );
+}
+
+/** Turns an image box into a QR code for a link (paper, data, lab page). Updates as you type. */
+function QrSection({ el, onChange }: { el: PosterElement; onChange: Props['onChange'] }) {
+  const [text, setText] = useState(el.qr ?? '');
+  const [error, setError] = useState('');
+  const isQrBox = el.qr != null || el.placeholder === 'QR code';
+
+  function apply(value: string) {
+    setText(value);
+    const link = normaliseLink(value);
+    if (!link) {
+      setError('');
+      if (el.qr != null) onChange((e) => { delete e.qr; delete e.src; }, 'qr');
+      return;
+    }
+    if (link.length > QR_MAX_LENGTH) return setError(`That is too long for a QR code (${link.length} of ${QR_MAX_LENGTH} characters). Try a shorter link.`);
+    try {
+      const src = qrDataUrl(link);
+      setError('');
+      onChange((e) => { e.qr = link; e.src = src; e.fit = 'contain'; }, 'qr');
+    } catch {
+      setError('That could not be turned into a QR code. Try a shorter link.');
+    }
+  }
+
+  return (
+    <section>
+      <h4>QR code</h4>
+      <label>
+        {isQrBox ? 'Link for the QR code' : 'Or make a QR code from a link'}
+        <input
+          id="qr-link"
+          value={text}
+          placeholder="e.g. doi.org/10.1234/abcd"
+          spellCheck={false}
+          onChange={(e) => apply(e.target.value)}
+        />
+      </label>
+      {error ? (
+        <p className="hint error" role="alert">{error}</p>
+      ) : el.qr ? (
+        <p className="hint">Scans to <b>{el.qr}</b>. Test it with your phone before printing.</p>
+      ) : (
+        <p className="hint">Paste a link to your paper, data, code or lab page. The QR code is made on your computer and updates as you type.</p>
+      )}
+    </section>
   );
 }

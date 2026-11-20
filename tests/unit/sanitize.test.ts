@@ -15,6 +15,11 @@ describe('cleaning text-box HTML', () => {
     expect(cleanHtml(html)).toBe(html);
   });
 
+  it('keeps citation markers and reference entries', () => {
+    const html = 'Shown before <span class="cite" data-cite="id1,id2" contenteditable="false">[1, 2]</span>.<div class="ref-entry">Smith J. (2020) Title.</div>';
+    expect(cleanHtml(html)).toBe(html);
+  });
+
   it('removes scripts, event handlers and anything that loads from the web', () => {
     const evil = [
       '<img src=x onerror="alert(1)">',

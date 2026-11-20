@@ -10,7 +10,9 @@ const TAGS = [
   'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'small', 'big', 'blockquote',
   'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'colgroup', 'col', 'caption',
 ];
-const ATTRS = ['style', 'colspan', 'rowspan', 'align', 'color', 'face', 'size', 'dir'];
+// class / data-cite / contenteditable: citation markers (<span class="cite" data-cite="…" contenteditable="false">)
+// and reference-list entries (<div class="ref-entry">).
+const ATTRS = ['style', 'colspan', 'rowspan', 'align', 'color', 'face', 'size', 'dir', 'class', 'data-cite', 'contenteditable'];
 
 // Inline styles may not load anything (e.g. background:url(https://…)): drop such declarations.
 DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {

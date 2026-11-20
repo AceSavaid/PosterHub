@@ -5,6 +5,7 @@
 // The only outside servers PosterHub talks to:
 // - fonts.googleapis.com / fonts.gstatic.com: Google Fonts
 // - cdn.jsdelivr.net: Fontsource font files, embedded into vector PDFs
+// - api.crossref.org / api.datacite.org: looking up references by DOI
 // ipc: / ipc.localhost are how the desktop app (Tauri) talks to its native side.
 const directives: Record<string, string[]> = {
   'default-src': ["'self'"],
@@ -12,7 +13,7 @@ const directives: Record<string, string[]> = {
   'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
   'font-src': ["'self'", 'data:', 'blob:', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net'],
   'img-src': ["'self'", 'data:', 'blob:'],
-  'connect-src': ["'self'", 'data:', 'blob:', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net', 'ipc:', 'http://ipc.localhost'],
+  'connect-src': ["'self'", 'data:', 'blob:', 'https://fonts.googleapis.com', 'https://fonts.gstatic.com', 'https://cdn.jsdelivr.net', 'https://api.crossref.org', 'https://api.datacite.org', 'ipc:', 'http://ipc.localhost'],
   'worker-src': ["'self'", 'blob:'],
   'object-src': ["'none'"],
   'frame-src': ["'none'"],

@@ -5,11 +5,13 @@ const ICON = { problem: '⛔', warning: '⚠️', tip: '💡' };
 interface Props {
   issues: Issue[];
   onPick: (elementId: string) => void;
+  /** Applies an issue's one-click fix (e.g. swap a colour for a printable one). */
+  onFix?: (issue: Issue) => void;
   onClose: () => void;
 }
 
 /** List of poster problems; clicking one selects the element it is about. */
-export default function CheckPanel({ issues, onPick, onClose }: Props) {
+export default function CheckPanel({ issues, onPick, onFix, onClose }: Props) {
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const warnings = issues.filter((i) => i.severity === 'warning').length;
   return (
@@ -42,6 +44,12 @@ export default function CheckPanel({ issues, onPick, onClose }: Props) {
                     <span className="issue-detail">{i.detail}</span>
                   </span>
                 </button>
+                {i.fix && onFix && (
+                  <button className="issue-fix" onClick={() => onFix(i)}>
+                    <span className="swatch" style={{ background: i.fix.from }} aria-hidden />→<span className="swatch" style={{ background: i.fix.to }} aria-hidden />
+                    {i.fix.label}
+                  </button>
+                )}
               </li>
             ))}
           </ul>

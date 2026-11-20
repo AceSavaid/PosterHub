@@ -18,6 +18,8 @@ import ContextMenu, { type MenuItem } from './ContextMenu';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import AppearanceMenu from './AppearanceMenu';
 import { useUiPrefs } from '../lib/uiPrefs';
+import { replaceColor } from '../lib/printColor';
+import { BLEED_CHOICES } from '../lib/print';
 
 const CLIP_MIME = 'application/x-posterhub-element';
 let internalClipboard: PosterElement | null = null;
@@ -464,7 +466,10 @@ export default function Editor({ initial, onClose }: Props) {
       if (kind === 'project') return exportPosterFile(p);
       notify(kind === 'pptx' ? 'Building PowerPoint…' : kind === 'pdf' ? 'Building print-quality PDF…' : `Rendering at ${effectiveDpi(p, dpi)} dpi… large posters can take a few seconds.`);
       if (kind === 'pdf') {
-        const res = await exportPdf(posterNode.current!, p, dpi, (id) => chartCanvases.get(id)?.toDataURL('image/png'));
+        const res = await exportPdf(posterNode.current!, p, dpi, (id) => chartCanvases.get(id)?.toDataURL('image/png'), {
+          bleedMm: prefs.pdfBleedMm,
+          cropMarks: prefs.pdfCropMarks,
+        });
         if (!res.vector) {
           notify(`Exported the PDF as a ${effectiveDpi(p, dpi)} dpi image because the sharp version could not be built. Check your downloads.`);
           return;
@@ -556,6 +561,13 @@ export default function Editor({ initial, onClose }: Props) {
     return items;
   }
 
+  function fixIssue(issue: Issue) {
+    const fix = issue.fix;
+    if (!fix) return;
+    update((d) => void Object.assign(d, replaceColor(d, fix.from, fix.to)));
+    notify(`Changed ${fix.from.toUpperCase()} to ${fix.to.toUpperCase()} everywhere. Undo with Ctrl+Z if you prefer the old colour.`);
+  }
+
   function pickIssue(id: string) {
     setSelectedId(id);
     posterNode.current?.querySelector(`[data-id="${id}"]`)?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
@@ -641,9 +653,25 @@ export default function Editor({ initial, onClose }: Props) {
                   <span>Review them before printing</span>
                 </button>
               )}
+              {issues.some((i) => i.id.startsWith('cmyk-')) && (
+                <button
+                  className="menu-note"
+                  onClick={() => {
+                    setExportOpen(false);
+                    setCheckOpen(true);
+                  }}
+                >
+                  <strong>🎨 {issues.filter((i) => i.id.startsWith('cmyk-')).length} colour(s) will print duller</strong>
+                  <span>See printable alternatives</span>
+                </button>
+              )}
               <button onClick={() => runExport('pdf')}>
                 <strong>PDF</strong>
-                <span>For printing: sharp text and graphics at any size</span>
+                <span>
+                  For printing: sharp text and graphics at any size
+                  {(prefs.pdfBleedMm > 0 || prefs.pdfCropMarks) &&
+                    ` · with ${[prefs.pdfBleedMm > 0 && 'bleed', prefs.pdfCropMarks && 'crop marks'].filter(Boolean).join(' and ')}`}
+                </span>
               </button>
               <button onClick={() => runExport('pptx')}>
                 <strong>PowerPoint (.pptx)</strong>
@@ -657,6 +685,21 @@ export default function Editor({ initial, onClose }: Props) {
                 <strong>Project file (.poster.json)</strong>
                 <span>Back up, or open on another computer</span>
               </button>
+              <div className="menu-print">
+                <strong>For the print shop (PDF)</strong>
+                <label>
+                  Bleed
+                  <select aria-label="Bleed" value={prefs.pdfBleedMm} onChange={(e) => setPrefs({ pdfBleedMm: +e.target.value })}>
+                    {BLEED_CHOICES.map((b) => (
+                      <option key={b.mm} value={b.mm}>{b.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="check">
+                  <input type="checkbox" checked={prefs.pdfCropMarks} onChange={(e) => setPrefs({ pdfCropMarks: e.target.checked })} /> Crop marks
+                </label>
+                <small>Only if your printer asks. Bleed extends edge-to-edge colours and photos past the edge so nothing white shows after trimming; crop marks show where to cut.</small>
+              </div>
               <label className="menu-dpi">
                 Image quality for PNG
                 <select value={dpi} onChange={(e) => setDpi(+e.target.value)}>
@@ -768,7 +811,7 @@ export default function Editor({ initial, onClose }: Props) {
         />
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
-      {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
+      {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onFix={fixIssue} onClose={() => setCheckOpen(false)} />}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
       {toast && <div className="toast">{toast}</div>}
       {marquee && (

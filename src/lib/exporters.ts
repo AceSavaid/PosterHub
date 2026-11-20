@@ -4,6 +4,7 @@ import { MM_TO_IN, MM_TO_PX, resolveColor, resolveFont } from '../model';
 import { fontEmbedCss } from './fonts';
 import { downloadBlob, safeFileName } from './storage';
 import { seriesData } from './chart';
+import { cropMarkLines, MARK_WIDTH_PT, printGeometry, type PrintOptions } from './print';
 
 const MAX_SIDE = 16000;
 const MAX_AREA = 120_000_000;
@@ -63,27 +64,45 @@ export async function exportPng(node: HTMLElement, p: Poster, dpi: number) {
  * Print-quality PDF: real text with embedded fonts, vector shapes and charts,
  * full-resolution images. Falls back to the image-based PDF if anything fails.
  */
-export async function exportPdf(node: HTMLElement, p: Poster, dpi: number, chartImage?: (id: string) => string | undefined): Promise<{ vector: boolean; warnings: string[] }> {
+export async function exportPdf(
+  node: HTMLElement,
+  p: Poster,
+  dpi: number,
+  chartImage?: (id: string) => string | undefined,
+  print?: Partial<PrintOptions>,
+): Promise<{ vector: boolean; warnings: string[] }> {
   try {
     const { buildVectorPdf } = await import('./pdf/vectorPdf');
-    const { bytes, warnings } = await withExportMode(node, () => buildVectorPdf(node, p, { chartImage }));
+    const { bytes, warnings } = await withExportMode(node, () => buildVectorPdf(node, p, { chartImage, print }));
     downloadBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), safeFileName(p.name) + '.pdf');
     return { vector: true, warnings };
   } catch (err) {
     console.warn('Vector PDF export failed; using an image-based PDF instead.', err);
-    await exportPdfRaster(node, p, dpi);
+    await exportPdfRaster(node, p, dpi, print);
     return { vector: false, warnings: [] };
   }
 }
 
 /** The previous PDF export: one high-resolution picture of the poster. */
-export async function exportPdfRaster(node: HTMLElement, p: Poster, dpi: number) {
+export async function exportPdfRaster(node: HTMLElement, p: Poster, dpi: number, print?: Partial<PrintOptions>) {
   const { jsPDF } = await import('jspdf');
   const css = await fontEmbedCss();
   const canvas = await withExportMode(node, () => toCanvas(node, captureOptions(p, pixelRatioFor(p, dpi), css)));
-  const pdf = new jsPDF({ unit: 'mm', format: [p.width, p.height], orientation: p.width > p.height ? 'landscape' : 'portrait', compress: true });
+  const g = printGeometry(p, print);
+  const m = g.marginMm;
+  const pdf = new jsPDF({ unit: 'mm', format: [g.pageWidthMm, g.pageHeightMm], orientation: g.pageWidthMm > g.pageHeightMm ? 'landscape' : 'portrait', compress: true });
   pdf.setProperties({ title: p.name, creator: 'PosterHub' });
-  pdf.addImage(canvas, 'PNG', 0, 0, p.width, p.height, undefined, 'FAST');
+  if (g.bleedMm > 0) {
+    // A picture can't be stretched sensibly, so the bleed is the background colour.
+    pdf.setFillColor(resolveColor('@background', p.palette));
+    pdf.rect(m - g.bleedMm, m - g.bleedMm, p.width + 2 * g.bleedMm, p.height + 2 * g.bleedMm, 'F');
+  }
+  pdf.addImage(canvas, 'PNG', m, m, p.width, p.height, undefined, 'FAST');
+  if (print?.cropMarks) {
+    pdf.setDrawColor(0);
+    pdf.setLineWidth(MARK_WIDTH_PT * (25.4 / 72));
+    for (const l of cropMarkLines(p, g.bleedMm)) pdf.line(l.x1 + m, l.y1 + m, l.x2 + m, l.y2 + m);
+  }
   pdf.save(safeFileName(p.name) + '.pdf');
 }
 

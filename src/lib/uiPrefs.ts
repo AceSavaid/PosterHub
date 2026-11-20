@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { sanitizePrintOptions } from './print';
 
 /**
  * Per-person editor appearance: colour theme and which side panels are shown where.
@@ -13,9 +14,13 @@ export interface UiPrefs {
   swapPanels: boolean;
   showTools: boolean;
   showProperties: boolean;
+  /** PDF bleed in mm (0 = none). Kept per person: it depends on their print shop, not the poster. */
+  pdfBleedMm: number;
+  /** Add crop marks to PDFs. */
+  pdfCropMarks: boolean;
 }
 
-export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true };
+export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false };
 export const PREFS_KEY = 'posterhub.ui';
 
 /** Fills in defaults and drops anything malformed (old versions, hand-edited storage). */
@@ -27,6 +32,8 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     swapPanels: bool(r.swapPanels, DEFAULT_PREFS.swapPanels),
     showTools: bool(r.showTools, DEFAULT_PREFS.showTools),
     showProperties: bool(r.showProperties, DEFAULT_PREFS.showProperties),
+    pdfBleedMm: sanitizePrintOptions({ bleedMm: r.pdfBleedMm as number }).bleedMm,
+    pdfCropMarks: bool(r.pdfCropMarks, DEFAULT_PREFS.pdfCropMarks),
   };
 }
 

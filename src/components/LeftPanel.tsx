@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ElementType, Poster, PosterElement } from '../types';
-import { PALETTE_ROLES, TEMPLATES, buildTemplate, templateDef, typeScale, type TemplateId } from '../model';
+import { applyLayout, describeReport } from '../lib/relayout';
+import { PALETTE_ROLES, TEMPLATES, templateDef, typeScale, type TemplateId } from '../model';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
 import { FontSelect } from './FontSelect';
@@ -35,7 +36,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
       </div>
       <div className="panel-body">
         {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} />}
-        {tab === 'layout' && <LayoutTab poster={poster} update={update} />}
+        {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
       </div>
     </aside>
@@ -88,7 +89,7 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<
   );
 }
 
-function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
+function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' | 'notify'>) {
   const [scaleContent, setScaleContent] = useState(true);
   const [template, setTemplate] = useState<TemplateId>('classic');
 
@@ -157,12 +158,14 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
             ))}
           </select>
         </label>
-        <p className="hint span2">{templateDef(template).description}</p>
+        <p className="hint span2">{templateDef(template).description} Your text, figures and logos carry over.</p>
         <button
           className="btn span2"
           onClick={async () => {
-            if (!(await askConfirm('Apply this layout?', 'This replaces everything on the poster with the layout. You can undo afterwards.', 'Apply layout'))) return;
-            update((d) => void (d.elements = buildTemplate(template, d)));
+            if (!(await askConfirm('Switch to this layout?', 'Your title, authors, section text, figures, logos and QR codes move into the matching places. You can undo afterwards.', 'Apply layout'))) return;
+            const { elements, report } = applyLayout(poster, template);
+            update((d) => void (d.elements = elements));
+            notify(describeReport(report));
           }}
         >
           Apply to {poster.columns} column{poster.columns > 1 ? 's' : ''}

@@ -88,7 +88,18 @@ export interface PosterElement {
   /** which way an arrow points */
   direction?: 'right' | 'left' | 'up' | 'down';
   locked?: boolean;
+  /**
+   * What this element is for in a starter layout (title, section body, logo, …).
+   * Lets "Apply layout" move content into the matching place in another layout.
+   */
+  role?: ElementRole;
+  /** Elements of one section (its heading, text and figure) share a group id. */
+  group?: string;
 }
+
+export type ElementRole =
+  | 'title' | 'subtitle' | 'heading' | 'number' | 'body' | 'figure' | 'caption'
+  | 'logo' | 'qr' | 'qrCaption' | 'references' | 'summary' | 'summaryHeading' | 'keyFinding' | 'decor';
 
 export interface Poster {
   id: string;

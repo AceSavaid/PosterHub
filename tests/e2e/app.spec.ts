@@ -214,6 +214,51 @@ test.describe('templates', () => {
   });
 });
 
+test.describe('switching layouts', () => {
+  test('keeps the title and section text when switching to another layout', async ({ page }) => {
+    await newPoster(page);
+    const typeInto = async (locator: ReturnType<Page['locator']>, text: string) => {
+      await locator.dblclick();
+      await page.keyboard.press('ControlOrMeta+a');
+      await page.keyboard.type(text);
+      await page.keyboard.press('Escape');
+      await expect(locator).toHaveText(text);
+    };
+    await typeInto(page.locator('.poster .el-title .el-body'), 'Sleep and memory');
+    // the text box just below the "Methods" heading
+    const bodyIndex = await page.locator('.poster').evaluate((poster) => {
+      const els = Array.from(poster.querySelectorAll<HTMLElement>(':scope > .el'));
+      const h = els.find((e) => e.classList.contains('el-heading') && e.textContent === 'Methods')!;
+      const texts = els.filter((e) => e.classList.contains('el-text'));
+      const below = texts.filter((t) => Math.abs(t.offsetLeft - h.offsetLeft) < 1 && t.offsetTop > h.offsetTop).sort((x, y) => x.offsetTop - y.offsetTop)[0];
+      return texts.indexOf(below);
+    });
+    const methodsBody = page.locator('.poster .el-text .el-body').nth(bodyIndex);
+    await typeInto(methodsBody, 'Forty-two adults slept in the lab.');
+
+    await page.getByRole('button', { name: 'Layout' }).click();
+    await page.getByRole('combobox', { name: 'Layout' }).selectOption('sidebar');
+    await page.getByRole('button', { name: /^Apply to/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
+    await expect(page.locator('.toast')).toContainText('Moved your 1 section');
+
+    await expect(page.locator('.poster .el-title .el-body')).toHaveText('Sleep and memory');
+    await expect(page.locator('.poster .el-body', { hasText: 'At a glance' })).toBeVisible(); // the new layout is in place
+    const moved = page.locator('.poster .el-text .el-body', { hasText: 'Forty-two adults slept in the lab.' });
+    await expect(moved).toHaveCount(1);
+    // it sits under the Methods heading in the new layout
+    const [h, b] = await Promise.all([
+      page.locator('.poster .el-heading', { hasText: /^Methods$/ }).boundingBox(),
+      moved.locator('..').boundingBox(),
+    ]);
+    expect(b!.y).toBeGreaterThan(h!.y);
+    expect(Math.abs(b!.x - h!.x)).toBeLessThan(2);
+
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.locator('.poster .el-body', { hasText: 'At a glance' })).toHaveCount(0);
+  });
+});
+
 test.describe('editing', () => {
   test('applies a layout after asking first', async ({ page }) => {
     await newPoster(page);

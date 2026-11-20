@@ -5,6 +5,8 @@ import type { Poster } from '../types';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
 import { useDialog } from '../lib/useDialog';
+import MyTemplates from './MyTemplates';
+import { posterFromTemplate, type UserTemplate } from '../lib/userTemplates';
 
 interface Props {
   onCreate: (p: Poster) => void;
@@ -21,6 +23,8 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
   const [template, setTemplate] = useState<TemplateId>('classic');
   const [headingFont, setHeadingFont] = useState('Montserrat');
   const [bodyFont, setBodyFont] = useState('Open Sans');
+  /** A saved template from My templates; when set it supplies size, colours and fonts. */
+  const [mine, setMine] = useState<UserTemplate | null>(null);
 
   const fonts = [...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS];
   const dialog = useDialog<HTMLFormElement>(onCancel, 'new-poster-title');
@@ -34,6 +38,7 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
         aria-label="New poster"
         onSubmit={(e) => {
           e.preventDefault();
+          if (mine) return onCreate(posterFromTemplate(mine, name || 'Untitled poster'));
           onCreate(createPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }));
         }}
       >
@@ -43,11 +48,18 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
             Name
             <input autoFocus value={name} placeholder="e.g. Conference 2026 – Sleep and memory" onChange={(e) => setName(e.target.value)} />
           </label>
+          <MyTemplates selected={mine?.id ?? null} onSelect={setMine} />
+          {mine && (
+            <p className="span2 hint mine-note" role="status">
+              Using your template “{mine.name}” with its own size, colours and fonts. <button type="button" className="link" onClick={() => setMine(null)}>Pick a built-in layout instead</button>
+            </p>
+          )}
+          {!mine && <>
           <div className="span2">
             <div className="field-label">Layout <span className="muted">· previews follow the colours, size and columns you pick below</span></div>
             <div className="template-grid">
               {TEMPLATES.map((t) => (
-                <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => setTemplate(t.id)}>
+                <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => { setTemplate(t.id); setMine(null); }}>
                   <TemplateThumb id={t.id} width={size.width} height={size.height} columns={columns} palette={palette} />
                   <strong>{t.label}</strong>
                   <span>{t.description}</span>
@@ -92,8 +104,9 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
               {fonts.map((f) => <option key={f}>{f}</option>)}
             </select>
           </label>
+          </>}
         </div>
-        <p className="hint">Sizes available: {SIZE_PRESETS.length} presets or any custom size. You can change everything here later.</p>
+        {!mine && <p className="hint">Sizes available: {SIZE_PRESETS.length} presets or any custom size. You can change everything here later.</p>}
         <div className="modal-actions sticky-actions">
           <button type="button" className="btn" onClick={onCancel}>Cancel</button>
           <button type="submit" className="btn primary">Create poster</button>
@@ -110,7 +123,12 @@ export function TemplateThumb({ id, width, height, columns, palette }: { id: Tem
     [id, width, height, columns, palette],
   );
   if (!poster) return null;
-  const box = 96;
+  return <PosterThumb poster={poster} grid={id === 'blank'} />;
+}
+
+/** A miniature of any poster, drawn as simple shapes (pictures are drawn as they are). */
+export function PosterThumb({ poster, grid = false, box = 96 }: { poster: Poster; grid?: boolean; box?: number }) {
+  const { width, height, palette } = poster;
   const k = box / Math.max(width, height);
   const W = width * k;
   const H = height * k;
@@ -118,7 +136,8 @@ export function TemplateThumb({ id, width, height, columns, palette }: { id: Tem
   return (
     <svg className="template-thumb" width={W} height={H} viewBox={`0 0 ${width} ${height}`} aria-hidden>
       <rect width={width} height={height} fill={palette.background} stroke="#c3c9d2" strokeWidth={1 / k} />
-      {id === 'blank' &&
+      {poster.backgroundImage && <image href={poster.backgroundImage} width={width} height={height} preserveAspectRatio="xMidYMid slice" />}
+      {grid &&
         columnLefts(poster).map((x, i) => (
           <rect key={i} x={x} y={poster.margin} width={columnWidth(poster)} height={height - 2 * poster.margin} fill="none" stroke="#9ab" strokeDasharray={`${2 / k} ${2 / k}`} strokeWidth={0.6 / k} />
         ))}
@@ -134,7 +153,10 @@ function ThumbElement({ el: e, col, k }: { el: PosterElement; col: (c?: string) 
       <rect x={e.x} y={e.y} width={e.w} height={e.h} rx={r} fill={e.fill ? col(e.fill) : 'none'} stroke={e.borderWidth ? col(e.borderColor ?? '@primary') : 'none'} strokeWidth={0.8 / k} />
     ) : null;
   if (e.type === 'shape') return frame;
-  if (e.type === 'image' || e.type === 'chart') {
+  if (e.type === 'image' && e.src && !e.crop && !e.rotation) {
+    return <image href={e.src} x={e.x} y={e.y} width={e.w} height={e.h} preserveAspectRatio={e.fit === 'fill' ? 'none' : e.fit === 'cover' ? 'xMidYMid slice' : 'xMidYMid meet'} />;
+  }
+  if (e.type === 'image' || e.type === 'chart' || e.type === 'table' || e.type === 'equation') {
     const qr = e.placeholder === 'QR code';
     const s = Math.min(e.w, e.h);
     return (

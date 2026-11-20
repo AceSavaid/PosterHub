@@ -122,11 +122,47 @@ export interface PosterElement {
   authors?: AuthorList;
   /** elements sharing a group id move, resize, copy and select together */
   groupId?: string;
+  /** This text box is the poster's reference list; its text is generated from `Poster.references`. */
+  refList?: boolean;
+  /** Heading shown above the reference list ("" for none). */
+  refTitle?: string;
 }
 
 export type ElementRole =
   | 'title' | 'subtitle' | 'heading' | 'number' | 'body' | 'figure' | 'caption'
   | 'logo' | 'qr' | 'qrCaption' | 'references' | 'summary' | 'summaryHeading' | 'keyFinding' | 'decor';
+
+export type RefKind = 'article' | 'book' | 'chapter' | 'conference' | 'thesis' | 'report' | 'web' | 'other';
+
+/** A person or organisation. Organisations have only `family`. */
+export interface RefName {
+  family: string;
+  given?: string;
+}
+
+/** One entry in the poster's reference library. Every field is plain text (never HTML). */
+export interface Reference {
+  id: string;
+  kind: RefKind;
+  authors: RefName[];
+  editors?: RefName[];
+  title: string;
+  /** journal, book title (for a chapter), proceedings or website name */
+  container?: string;
+  year?: string;
+  volume?: string;
+  issue?: string;
+  pages?: string;
+  publisher?: string;
+  place?: string;
+  edition?: string;
+  doi?: string;
+  url?: string;
+  /** BibTeX key, kept so re-importing the same file doesn't create duplicates */
+  key?: string;
+}
+
+export type CitationStyle = 'apa' | 'harvard' | 'chicago' | 'vancouver' | 'ieee' | 'nature';
 
 export interface Poster {
   id: string;
@@ -144,6 +180,9 @@ export interface Poster {
   margin: number; // mm
   gutter: number; // mm
   backgroundImage?: string;
+  /** Reference library; cited in text with numbered or author–year markers. */
+  references?: Reference[];
+  citationStyle?: CitationStyle;
   elements: PosterElement[];
   /** words the spelling check should accept on this poster (names, jargon) */
   ignoredWords?: string[];

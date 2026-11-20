@@ -21,10 +21,11 @@ interface Props {
   onInsertChart: () => void;
   onInsertQr: () => void;
   onInsertAuthors: () => void;
+  onInsertReferences: () => void;
   notify: (msg: string) => void;
 }
 
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, notify }: Props) {
+export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
     <aside className="panel left">
@@ -36,7 +37,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
         ))}
       </div>
       <div className="panel-body">
-        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} />}
+        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} onInsertReferences={onInsertReferences} />}
         {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
       </div>
@@ -44,7 +45,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
   );
 }
 
-function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors'>) {
+function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors' | 'onInsertReferences'>) {
   return (
     <>
       <h3>Text</h3>
@@ -63,6 +64,9 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
         </button>
         <button className="insert-btn" onClick={() => onInsert('text')}>
           <span aria-hidden className="ib-icon t-body">¶</span>Text box
+        </button>
+        <button className="insert-btn" onClick={onInsertReferences}>
+          <span aria-hidden className="ib-icon">[1]</span>References / citations…
         </button>
       </div>
       <h3>Media and data</h3>

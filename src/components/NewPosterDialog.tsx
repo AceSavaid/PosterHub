@@ -1,23 +1,26 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Orientation, Palette, PosterElement } from '../types';
 import { PALETTES, SIZE_PRESETS, TEMPLATES, columnLefts, columnWidth, createPoster, resolveColor, sizeFor, type TemplateId, POPULAR_GOOGLE_FONTS, SYSTEM_FONTS } from '../model';
 import type { Poster } from '../types';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
 import { useDialog } from '../lib/useDialog';
-import { addKitFonts, fillLogoSpots, kitPalette, useBrandKit, type BrandKit } from '../lib/brandKit';
-import { kitFontChoices } from './BrandKitDialog';
+import MyTemplates from './MyTemplates';
+import { posterFromTemplate, type UserTemplate } from '../lib/userTemplates';
+import { addKitFonts, fillLogoSpots, kitPalette, type BrandKit } from '../lib/brandKit';
+import { BRAND_KITS, brandKitById } from '../brandKits';
+import { useUiPrefs } from '../lib/uiPrefs';
+import { loadGoogleFont } from '../lib/fonts';
 
 interface Props {
   onCreate: (p: Poster) => void;
   onCancel: () => void;
-  /** opens the brand kit editor (shown when no kit is set up yet) */
-  onSetUpKit?: () => void;
 }
 
 const DEFAULT_LOOK = { palette: PALETTES[0], headingFont: 'Montserrat', bodyFont: 'Open Sans' };
+const kitLook = (kit: BrandKit | null) => (kit ? { palette: kitPalette(kit), headingFont: kit.headingFont, bodyFont: kit.bodyFont } : DEFAULT_LOOK);
 
-/** Builds the poster the dialog describes, starting it with the brand kit's fonts and logos when one is used. */
+/** Builds the poster the dialog describes, adding the brand kit's fonts and logos when one is chosen. */
 export function buildNewPoster(o: Parameters<typeof createPoster>[0], kit: BrandKit | null) {
   const p = createPoster(o);
   if (kit) {
@@ -27,34 +30,34 @@ export function buildNewPoster(o: Parameters<typeof createPoster>[0], kit: Brand
   return p;
 }
 
-export default function NewPosterDialog({ onCreate, onCancel, onSetUpKit }: Props) {
-  const [kit] = useBrandKit();
-  const [useKit, setUseKit] = useState(false);
+export default function NewPosterDialog({ onCreate, onCancel }: Props) {
+  // The last brand kit picked is remembered, so it only has to be chosen once.
+  const [prefs, changePrefs] = useUiPrefs();
+  const [kit, setKit] = useState<BrandKit | null>(() => brandKitById(prefs.brandKit));
   const [name, setName] = useState('');
   const [orientation, setOrientation] = useState<Orientation>('portrait');
   const [preset, setPreset] = useState('A0');
   const [size, setSize] = useState(sizeFor('A0', 'portrait'));
   const [columns, setColumns] = useState(3);
-  const [palette, setPalette] = useState<Palette>(PALETTES[0]);
+  const [palette, setPalette] = useState<Palette>(() => kitLook(kit).palette);
   const [template, setTemplate] = useState<TemplateId>('classic');
-  const [headingFont, setHeadingFont] = useState('Montserrat');
-  const [bodyFont, setBodyFont] = useState('Open Sans');
+  const [headingFont, setHeadingFont] = useState(() => kitLook(kit).headingFont);
+  const [bodyFont, setBodyFont] = useState(() => kitLook(kit).bodyFont);
+  /** A saved template from My templates; when set it supplies size, colours and fonts. */
+  const [mine, setMine] = useState<UserTemplate | null>(null);
 
-  // When a kit has been set up, new posters start with it.
-  useEffect(() => {
-    if (kit) applyLook(true);
-  }, [kit]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function applyLook(on: boolean) {
-    setUseKit(on);
-    const look = on && kit ? { palette: kitPalette(kit), headingFont: kit.headingFont, bodyFont: kit.bodyFont } : DEFAULT_LOOK;
+  function pickKit(id: string) {
+    const k = brandKitById(id);
+    setKit(k);
+    changePrefs({ brandKit: k?.id ?? '' });
+    const look = kitLook(k);
     setPalette(look.palette);
     setHeadingFont(look.headingFont);
     setBodyFont(look.bodyFont);
+    if (k) [k.headingFont, k.bodyFont].forEach((f) => loadGoogleFont(f));
   }
 
-  const fonts = kit ? kitFontChoices(kit) : [...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS];
-  const activeKit = useKit && kit ? kit : null;
+  const fonts = [...new Set([...(kit ? [kit.headingFont, kit.bodyFont, ...(kit.googleFonts ?? [])] : []), ...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS])];
   const dialog = useDialog<HTMLFormElement>(onCancel, 'new-poster-title');
 
   return (
@@ -66,7 +69,13 @@ export default function NewPosterDialog({ onCreate, onCancel, onSetUpKit }: Prop
         aria-label="New poster"
         onSubmit={(e) => {
           e.preventDefault();
-          onCreate(buildNewPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }, activeKit));
+          if (mine) {
+            // A saved template keeps its own look; the kit only fills logo spots it left empty.
+            const p = posterFromTemplate(mine, name || 'Untitled poster');
+            if (kit) fillLogoSpots(p, kit);
+            return onCreate(p);
+          }
+          onCreate(buildNewPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }, kit));
         }}
       >
         <h2 id="new-poster-title">New poster</h2>
@@ -75,32 +84,28 @@ export default function NewPosterDialog({ onCreate, onCancel, onSetUpKit }: Prop
             Name
             <input autoFocus value={name} placeholder="e.g. Conference 2026 – Sleep and memory" onChange={(e) => setName(e.target.value)} />
           </label>
-          {kit && (
-            <div className="span2 kit-choice">
-              <div className="kit-logo-row">
-                {kit.logos.slice(0, 3).map((l) => <img key={l.id} src={l.src} alt="" />)}
-              </div>
-              <div className="kit-text">
-                <label className="check">
-                  <input type="checkbox" checked={useKit} onChange={(e) => applyLook(e.target.checked)} /> Start with my brand kit{kit.name ? ` (${kit.name})` : ''}
-                </label>
-                <span className="hint">
-                  Colours, fonts{kit.logos.length ? ` and ${kit.logos.length} logo${kit.logos.length > 1 ? 's' : ''}` : ''}. You can still change anything below.
-                </span>
-              </div>
-            </div>
+          {BRAND_KITS.length > 0 && (
+            <label className="span2">
+              Brand kit
+              <select value={kit?.id ?? ''} onChange={(e) => pickKit(e.target.value)}>
+                <option value="">None</option>
+                {BRAND_KITS.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+              </select>
+              {kit && <span className="hint">{kit.name} colours and fonts{kit.logos.length ? `, with ${kit.logos.length > 1 ? 'its logos' : 'its logo'} in the layout’s logo spots` : ''}. You can still change anything below.</span>}
+            </label>
           )}
-          {kit === null && onSetUpKit && (
-            <p className="span2 hint">
-              Always use the same university colours and logos?{' '}
-              <button type="button" className="link" onClick={onSetUpKit}>Set up a brand kit</button>
+          <MyTemplates selected={mine?.id ?? null} onSelect={setMine} />
+          {mine && (
+            <p className="span2 hint mine-note" role="status">
+              Using your template “{mine.name}” with its own size, colours and fonts. <button type="button" className="link" onClick={() => setMine(null)}>Pick a built-in layout instead</button>
             </p>
           )}
+          {!mine && <>
           <div className="span2">
             <div className="field-label">Layout <span className="muted">· previews follow the colours, size and columns you pick below</span></div>
             <div className="template-grid">
               {TEMPLATES.map((t) => (
-                <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => setTemplate(t.id)}>
+                <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => { setTemplate(t.id); setMine(null); }}>
                   <TemplateThumb id={t.id} width={size.width} height={size.height} columns={columns} palette={palette} />
                   <strong>{t.label}</strong>
                   <span>{t.description}</span>
@@ -145,8 +150,9 @@ export default function NewPosterDialog({ onCreate, onCancel, onSetUpKit }: Prop
               {fonts.map((f) => <option key={f}>{f}</option>)}
             </select>
           </label>
+          </>}
         </div>
-        <p className="hint">Sizes available: {SIZE_PRESETS.length} presets or any custom size. You can change everything here later.</p>
+        {!mine && <p className="hint">Sizes available: {SIZE_PRESETS.length} presets or any custom size. You can change everything here later.</p>}
         <div className="modal-actions sticky-actions">
           <button type="button" className="btn" onClick={onCancel}>Cancel</button>
           <button type="submit" className="btn primary">Create poster</button>
@@ -163,7 +169,12 @@ export function TemplateThumb({ id, width, height, columns, palette }: { id: Tem
     [id, width, height, columns, palette],
   );
   if (!poster) return null;
-  const box = 96;
+  return <PosterThumb poster={poster} grid={id === 'blank'} />;
+}
+
+/** A miniature of any poster, drawn as simple shapes (pictures are drawn as they are). */
+export function PosterThumb({ poster, grid = false, box = 96 }: { poster: Poster; grid?: boolean; box?: number }) {
+  const { width, height, palette } = poster;
   const k = box / Math.max(width, height);
   const W = width * k;
   const H = height * k;
@@ -171,7 +182,8 @@ export function TemplateThumb({ id, width, height, columns, palette }: { id: Tem
   return (
     <svg className="template-thumb" width={W} height={H} viewBox={`0 0 ${width} ${height}`} aria-hidden>
       <rect width={width} height={height} fill={palette.background} stroke="#c3c9d2" strokeWidth={1 / k} />
-      {id === 'blank' &&
+      {poster.backgroundImage && <image href={poster.backgroundImage} width={width} height={height} preserveAspectRatio="xMidYMid slice" />}
+      {grid &&
         columnLefts(poster).map((x, i) => (
           <rect key={i} x={x} y={poster.margin} width={columnWidth(poster)} height={height - 2 * poster.margin} fill="none" stroke="#9ab" strokeDasharray={`${2 / k} ${2 / k}`} strokeWidth={0.6 / k} />
         ))}
@@ -187,7 +199,10 @@ function ThumbElement({ el: e, col, k }: { el: PosterElement; col: (c?: string) 
       <rect x={e.x} y={e.y} width={e.w} height={e.h} rx={r} fill={e.fill ? col(e.fill) : 'none'} stroke={e.borderWidth ? col(e.borderColor ?? '@primary') : 'none'} strokeWidth={0.8 / k} />
     ) : null;
   if (e.type === 'shape') return frame;
-  if (e.type === 'image' || e.type === 'chart') {
+  if (e.type === 'image' && e.src && !e.crop && !e.rotation) {
+    return <image href={e.src} x={e.x} y={e.y} width={e.w} height={e.h} preserveAspectRatio={e.fit === 'fill' ? 'none' : e.fit === 'cover' ? 'xMidYMid slice' : 'xMidYMid meet'} />;
+  }
+  if (e.type === 'image' || e.type === 'chart' || e.type === 'table' || e.type === 'equation') {
     const qr = e.placeholder === 'QR code';
     const s = Math.min(e.w, e.h);
     return (

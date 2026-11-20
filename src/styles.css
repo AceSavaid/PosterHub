@@ -594,17 +594,17 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 
-/* Brand kit */
-.kit-roles { margin: 10px 0 8px; }
-.kit-roles .hex { width: 76px; font-family: ui-monospace, monospace; font-size: 12px; padding: 3px 6px; }
-.kit-logos { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 6px; }
-.kit-logos li { display: flex; align-items: center; gap: 6px; }
-.kit-logos img { width: 64px; height: 40px; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 6px; flex: none; }
-.kit-actions { flex-wrap: wrap; }
-.btn.ghost.danger { background: transparent; border-color: transparent; color: var(--danger); font-weight: 400; }
-.btn.ghost.danger:hover { background: var(--bg3); }
-.kit-choice { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg2); }
-.kit-choice .kit-logo-row { display: flex; gap: 4px; }
-.kit-choice .kit-logo-row img { height: 26px; max-width: 70px; object-fit: contain; background: #fff; border-radius: 4px; }
-.kit-choice .kit-text { flex: 1; min-width: 0; }
+/* ---- My templates (saved from posters) */
+.my-templates-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.template-card.mine { padding: 0 0 8px; cursor: default; }
+.template-card.mine .mine-pick { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; padding: 12px 10px 4px; background: none; border: 0; border-radius: 8px; cursor: pointer; color: inherit; font: inherit; }
+.template-card.mine .card-actions { display: flex; gap: 10px; justify-content: center; font-size: 12px; }
+.template-card.mine .card-rename { width: calc(100% - 20px); }
+.mine-note { margin: 0; }
+.keep-pictures { border: 1px solid var(--line); border-radius: 8px; margin: 14px 0 0; padding: 8px 12px 4px; }
+.keep-pictures legend { font-size: 12.5px; color: var(--muted); padding: 0 4px; }
+.keep-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.keep-pic { flex-direction: row; align-items: center; gap: 6px; padding: 4px 6px; border: 1.5px solid var(--line); border-radius: 6px; cursor: pointer; }
+.keep-pic.on { border-color: var(--accent); background: var(--accent-soft); }
+.keep-pic img { width: 56px; height: 40px; object-fit: contain; background: #fff; border-radius: 3px; }
 .inline.wrap { flex-wrap: wrap; }

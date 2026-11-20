@@ -5,7 +5,6 @@ import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFil
 import { openPptx, posterFromImport, type PptxDeck } from '../lib/pptxImport';
 import { uid, PALETTES } from '../model';
 import NewPosterDialog from './NewPosterDialog';
-import BrandKitDialog from './BrandKitDialog';
 import SlidePicker from './SlidePicker';
 import ConfirmDialog from './ConfirmDialog';
 
@@ -15,7 +14,6 @@ const fmtDate = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle
 export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: string) => void }) {
   const [posters, setPosters] = useState<Poster[] | null>(null);
   const [creating, setCreating] = useState(false);
-  const [editingKit, setEditingKit] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
@@ -121,7 +119,6 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
         <div className="lib-actions">
           <button className="btn" onClick={importTemplate}>Import PowerPoint template</button>
           <button className="btn" onClick={importProject}>Open project file</button>
-          <button className="btn" onClick={() => setEditingKit(true)} title="Your university or lab colours, fonts and logos">Brand kit</button>
           <button className="btn primary" onClick={() => setCreating(true)}>+ New poster</button>
           <AppearanceMenu />
         </div>
@@ -211,8 +208,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
           onCancel={() => setDeleting(null)}
         />
       )}
-      {creating && <NewPosterDialog onCreate={create} onCancel={() => setCreating(false)} onSetUpKit={() => setEditingKit(true)} />}
-      {editingKit && <BrandKitDialog onClose={() => setEditingKit(false)} />}
+      {creating && <NewPosterDialog onCreate={create} onCancel={() => setCreating(false)} />}
     </div>
   );
 }

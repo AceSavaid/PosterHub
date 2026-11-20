@@ -48,7 +48,7 @@ export function safeFontDataUrl(url: unknown): string | undefined {
 }
 
 /** Font names are used in CSS, so keep them to characters a font name needs. */
-export const fontName = (f: unknown) => (typeof f === 'string' ? f.replace(/["'\\<>;{}()]/g, '') : '');
+const fontName = (f: unknown) => (typeof f === 'string' ? f.replace(/["'\\<>;{}()]/g, '') : '');
 
 /** Cleans one element in place and returns it. */
 export function sanitizeElement(el: PosterElement): PosterElement {

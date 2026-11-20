@@ -20,9 +20,11 @@ export interface UiPrefs {
   pdfCropMarks: boolean;
   /** draw review-note pins on the poster while editing */
   showNotes: boolean;
+  /** id of the brand kit new posters start with ('' = none) */
+  brandKit: string;
 }
 
-export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false, showNotes: true };
+export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false, showNotes: true, brandKit: '' };
 export const PREFS_KEY = 'posterhub.ui';
 
 /** Fills in defaults and drops anything malformed (old versions, hand-edited storage). */
@@ -37,6 +39,7 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     pdfBleedMm: sanitizePrintOptions({ bleedMm: r.pdfBleedMm as number }).bleedMm,
     pdfCropMarks: bool(r.pdfCropMarks, DEFAULT_PREFS.pdfCropMarks),
     showNotes: bool(r.showNotes, DEFAULT_PREFS.showNotes),
+    brandKit: typeof r.brandKit === 'string' && /^[a-z0-9-]{1,40}$/.test(r.brandKit) ? r.brandKit : DEFAULT_PREFS.brandKit,
   };
 }
 

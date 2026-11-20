@@ -10,7 +10,8 @@ import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fon
 import { importPptx } from '../lib/pptxImport';
 import { askConfirm } from '../lib/dialogs';
 import { SHAPE_CHOICES } from '../lib/shapes';
-import { applyBrandKit, brandKitFromPoster, emptyLogoSpots, useBrandKit } from '../lib/brandKit';
+import { applyBrandKit } from '../lib/brandKit';
+import { BRAND_KITS, brandKitById } from '../brandKits';
 
 type Tab = 'insert' | 'layout' | 'design';
 
@@ -220,28 +221,15 @@ function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
 
 function DesignTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' | 'notify'>) {
   const [gfont, setGfont] = useState('');
-  const [kit, saveKit] = useBrandKit();
+  const [kitId, setKitId] = useState(BRAND_KITS[0]?.id ?? '');
 
   function applyKit() {
+    const kit = brandKitById(kitId);
     if (!kit) return;
-    const spots = emptyLogoSpots(poster).length;
-    kit.customFonts.forEach(registerCustomFont);
-    update((d) => void applyBrandKit(d, kit));
-    const filled = Math.min(spots, kit.logos.length);
-    notify(`Applied your brand kit${filled ? ` and filled ${filled} logo spot${filled > 1 ? 's' : ''}` : ''}. Press Undo to go back.`);
-  }
-
-  async function saveAsKit() {
-    if (kit && !(await askConfirm('Replace your brand kit?', `Your brand kit will take this poster's colours, fonts and any logos in its logo spots. New posters will start with them.`, 'Replace kit'))) return;
-    try {
-      const next = brandKitFromPoster(poster, kit?.name ?? '');
-      // A poster with empty logo spots shouldn't wipe the kit's logos.
-      if (!next.logos.length && kit) next.logos = kit.logos;
-      await saveKit(next);
-      notify('Saved as your brand kit. New posters can now start with this look.');
-    } catch (e) {
-      notify('Could not save the brand kit: ' + String(e));
-    }
+    [kit.headingFont, kit.bodyFont].forEach((f) => loadGoogleFont(f));
+    let filled = 0;
+    update((d) => void (filled = applyBrandKit(d, kit)));
+    notify(`Applied the ${kit.name} brand kit${filled ? ` and filled ${filled} logo spot${filled > 1 ? 's' : ''}` : ''}. Press Undo to go back.`);
   }
 
   async function addGoogle() {
@@ -351,18 +339,18 @@ function DesignTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
         </div>
       </div>
 
-      <h3>Brand kit</h3>
-      <div className="inline wrap">
-        {kit && (
-          <button className="btn" onClick={applyKit}>
-            Apply my brand kit
-          </button>
-        )}
-        <button className="btn" onClick={saveAsKit}>
-          {kit ? 'Update kit from this poster' : 'Save this look as my brand kit'}
-        </button>
-      </div>
-      <p className="hint">{kit ? `Your kit${kit.name ? ` “${kit.name}”` : ''}: colours, fonts and ${kit.logos.length} logo${kit.logos.length === 1 ? '' : 's'}. Set it up from My posters → Brand kit.` : 'Keep your university colours, fonts and logos for every new poster.'}</p>
+      {BRAND_KITS.length > 0 && (
+        <>
+          <h3>Brand kit</h3>
+          <div className="inline">
+            <select aria-label="Brand kit" value={kitId} onChange={(e) => setKitId(e.target.value)}>
+              {BRAND_KITS.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+            </select>
+            <button className="btn" onClick={applyKit}>Apply</button>
+          </div>
+          <p className="hint">Uses the kit’s colours and fonts, and puts its logos in empty logo spots.</p>
+        </>
+      )}
 
       <h3>Background</h3>
       <div className="inline">

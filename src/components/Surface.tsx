@@ -5,6 +5,8 @@ import ChartView from './ChartView';
 import TableView from './TableView';
 import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
 import { cleanHtml } from '../lib/sanitize';
+import { PT_TO_PX, layoutEquation, mathSvg, svgDataUrl, typesetLatex } from '../lib/math';
+import { useMathReady } from '../lib/useMath';
 
 const px = (mm: number) => mm * MM_TO_PX;
 
@@ -141,6 +143,11 @@ export function ElementView({ el, poster, editing, onCommitText, onCommitTable, 
     case 'table':
       inner = <TableView el={el} poster={poster} editing={!!editing} onCommit={onCommitTable} onDone={onEditDone} onActiveCell={onActiveCell} />;
       break;
+    case 'equation': {
+      const inset = 2 * px(el.padding ?? 0) + (el.borderWidth ? ((el.borderWidth * 96) / 72) * 2 : 0);
+      inner = <EquationBody el={el} poster={poster} widthPx={px(el.w) - inset} heightPx={px(el.h) - inset} />;
+      break;
+    }
     default:
       inner = <TextBody el={el} poster={poster} editing={!!editing} onCommit={onCommitText} onDone={onEditDone} />;
   }
@@ -148,6 +155,37 @@ export function ElementView({ el, poster, editing, onCommitText, onCommitTable, 
   return (
     <div {...wrapperProps} className={`el el-${el.type} ${className ?? ''}`} style={{ ...box, ...deco }} data-id={el.id}>
       {inner}
+    </div>
+  );
+}
+
+/** A typeset equation, drawn as a crisp SVG picture laid out exactly like the PDF export. */
+export function EquationBody({ el, poster, widthPx, heightPx }: { el: PosterElement; poster: Poster; widthPx: number; heightPx: number }) {
+  const ready = useMathReady();
+  const eq = el.equation;
+  if (!eq) return null;
+  if (!ready) return <div className="el-math-loading ui-only">Loading equation…</div>;
+  const res = typesetLatex(eq.latex);
+  if (!res.ok) {
+    return (
+      <div className="el-math-error ui-only" role="alert">
+        <strong>Equation needs fixing</strong>
+        <span>{res.error}</span>
+      </div>
+    );
+  }
+  const r = res.render;
+  const at = layoutEquation(r, eq.fontSize * PT_TO_PX, { x: 0, y: 0, w: Math.max(0, widthPx), h: Math.max(0, heightPx) }, eq.align);
+  const color = resolveColor(eq.color, poster.palette);
+  return (
+    <div className="el-math" data-scale={at.scale.toFixed(3)}>
+      <img
+        src={svgDataUrl(mathSvg(r, color, at.w, at.h))}
+        alt={eq.latex}
+        title={eq.latex}
+        draggable={false}
+        style={{ left: at.x, top: at.y, width: at.w, height: at.h }}
+      />
     </div>
   );
 }

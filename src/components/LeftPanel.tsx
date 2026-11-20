@@ -23,10 +23,11 @@ interface Props {
   onInsertAuthors: () => void;
   onInsertReferences: () => void;
   onInsertTable: () => void;
+  onInsertEquation: () => void;
   notify: (msg: string) => void;
 }
 
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, notify }: Props) {
+export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
     <aside className="panel left">
@@ -38,7 +39,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
         ))}
       </div>
       <div className="panel-body">
-        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} onInsertReferences={onInsertReferences} onInsertTable={onInsertTable} />}
+        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} onInsertReferences={onInsertReferences} onInsertTable={onInsertTable} onInsertEquation={onInsertEquation} />}
         {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
       </div>
@@ -46,7 +47,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
   );
 }
 
-function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors' | 'onInsertReferences' | 'onInsertTable'>) {
+function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors' | 'onInsertReferences' | 'onInsertTable' | 'onInsertEquation'>) {
   return (
     <>
       <h3>Text</h3>
@@ -68,6 +69,9 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
         </button>
         <button className="insert-btn" onClick={onInsertReferences}>
           <span aria-hidden className="ib-icon">[1]</span>References / citations…
+        </button>
+        <button className="insert-btn" onClick={onInsertEquation}>
+          <span aria-hidden className="ib-icon t-eq">∑</span>Equation (LaTeX)…
         </button>
       </div>
       <h3>Media and data</h3>
@@ -119,6 +123,7 @@ function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
           if (e.style) e.style.fontSize = Math.max(4, Math.round(e.style.fontSize * fs * 10) / 10);
           if (e.chart) e.chart.fontSize = Math.max(4, Math.round(e.chart.fontSize * fs));
           if (e.table) e.table.fontSize = Math.max(4, Math.round(e.table.fontSize * fs * 10) / 10);
+          if (e.equation) e.equation.fontSize = Math.max(4, Math.round(e.equation.fontSize * fs * 10) / 10);
         }
         d.margin *= Math.min(sx, sy);
         d.gutter *= Math.min(sx, sy);

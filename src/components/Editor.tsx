@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChartSpec, ElementType, Poster, PosterElement, ReviewNote, TableSpec } from '../types';
+import type { ChartSpec, ElementType, EquationSpec, Poster, PosterElement, ReviewNote, TableSpec } from '../types';
 import { MM_TO_PX, makeElement, tableHeightMm, uid } from '../model';
 import { cellsFromClipboard, deleteColumn, deleteRow, insertColumn, insertRow, normalizeTable, tableFromHtml, tableToCsv, tableToTsv } from '../lib/table';
 import { usePosterHistory } from '../lib/usePoster';
@@ -12,6 +12,8 @@ import { Canvas } from './Canvas';
 import LeftPanel from './LeftPanel';
 import Inspector from './Inspector';
 import ChartDialog from './ChartDialog';
+import EquationDialog from './EquationDialog';
+import { equationBoxSize, typesetLatex } from '../lib/math';
 import ViewMode from './ViewMode';
 import { chartCanvases } from './ChartView';
 import { Logo } from './Library';
@@ -46,6 +48,7 @@ let internalClipboard: PosterElement | null = null;
 /** The plain text an element puts on the clipboard: its words, or tab-separated cells for a table. */
 function plainTextOf(el: PosterElement) {
   if (el.type === 'table') return tableToTsv(normalizeTable(el.table));
+  if (el.equation) return el.equation.latex;
   const div = document.createElement('div');
   div.innerHTML = el.html ?? '';
   return div.innerText || div.textContent || '';
@@ -91,6 +94,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [viewing, setViewing] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
+  const [eqDialog, setEqDialog] = useState<{ id?: string; spec: EquationSpec } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   /** open authors dialog; `id` is the text box it fills (none = add a new one) */
   const [authorsDialog, setAuthorsDialog] = useState<{ id?: string; initial?: AuthorList; replacing?: boolean } | null>(null);
@@ -412,6 +416,42 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     }, 50);
   }
 
+  function openEquation(el?: PosterElement) {
+    if (el?.equation) setEqDialog({ id: el.id, spec: el.equation });
+    else setEqDialog({ spec: makeElement('equation', posterRef.current).equation! });
+  }
+
+  /** Inserts a new equation, or updates one, growing its box so the maths fits at the chosen size. */
+  function saveEquation(spec: EquationSpec) {
+    const id = eqDialog?.id;
+    setEqDialog(null);
+    const res = typesetLatex(spec.latex);
+    const p = posterRef.current;
+    const maxW = p.width - 2 * p.margin;
+    if (id) {
+      updateElement(id, (e) => {
+        e.equation = spec;
+        if (!res.ok) return;
+        const need = equationBoxSize(res.render, spec.fontSize, e.padding ?? 0, e.borderWidth ?? 0);
+        if (need.w > e.w) {
+          const grow = Math.min(need.w, Math.max(e.w, maxW)) - e.w;
+          e.x = Math.max(0, e.x - (spec.align === 'center' ? grow / 2 : spec.align === 'right' ? grow : 0));
+          e.w += grow;
+        }
+        if (need.h > e.h) e.h = need.h;
+      });
+      return;
+    }
+    const el = makeElement('equation', p);
+    el.equation = spec;
+    if (res.ok) {
+      const need = equationBoxSize(res.render, spec.fontSize, 0, 0);
+      el.w = Math.min(Math.max(el.w, need.w * 1.1), Math.max(el.w, maxW));
+      el.h = need.h * 1.25;
+    }
+    addElement(el);
+  }
+
   function removeSelected() {
     if (!selectedIds.length) return;
     const ids = new Set(selectedIds);
@@ -536,7 +576,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   useEffect(() => {
     const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     const onKey = (e: KeyboardEvent) => {
-      if (viewing || chartDialog || authorsDialog || confirmDelete) return;
+      if (viewing || chartDialog || authorsDialog || confirmDelete || eqDialog) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -590,6 +630,9 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         } else if (el?.style || el?.type === 'table') {
           e.preventDefault();
           setEditingId(el.id);
+        } else if (el?.type === 'equation') {
+          e.preventDefault();
+          openEquation(el);
         }
       } else if (e.key.startsWith('Arrow') && selectedId) {
         e.preventDefault();
@@ -626,7 +669,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       if (e.type === 'cut') removeSelected();
     };
     const onPaste = (e: ClipboardEvent) => {
-      if (isTyping(e.target) || isTyping(document.activeElement) || viewing || chartDialog || authorsDialog) return;
+      if (isTyping(e.target) || isTyping(document.activeElement) || viewing || chartDialog || authorsDialog || eqDialog) return;
       const dt = e.clipboardData;
       if (!dt) return;
       const json = dt.getData(CLIP_MIME);
@@ -853,6 +896,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       items.push({ label: 'Make a graph from this table…', onClick: () => tableToGraph(el) });
     }
     if (!many && el.style && el.html?.includes('<table')) items.push({ label: 'Convert to editable table', onClick: () => convertToTable(el) });
+    if (!many && el.type === 'equation') items.push({ label: 'Edit equation…', shortcut: 'Enter', onClick: () => openEquation(el) });
     if (items.length) items.push('-');
     if (!many) items.push({ label: 'Copy', shortcut: '⌘/Ctrl C', onClick: () => copyElement(el) });
     if (!many && internalClipboard) items.push({ label: 'Paste', shortcut: '⌘/Ctrl V', onClick: () => duplicate(internalClipboard!) });
@@ -1160,6 +1204,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             onInsertAuthors={() => openAuthors()}
             onInsertReferences={() => setRefsOpen(true)}
             onInsertTable={() => insert('table')}
+            onInsertEquation={() => openEquation()}
             notify={notify}
           />
         ) : (
@@ -1228,6 +1273,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
                 if (el.type === 'image' && (el.qr || el.placeholder === 'QR code')) focusQrLink();
                 else if (el.type === 'image') chooseImage(el.id);
                 if (el.type === 'chart') setChartDialog({ id: el.id, spec: el.chart });
+                if (el.type === 'equation') openEquation(el);
               }}
             />
           </div>
@@ -1262,6 +1308,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             onTableGraph={() => selected && tableToGraph(selected)}
             onEditTable={() => selected && setEditingId(selected.id)}
             onConvertTable={() => selected && convertToTable(selected)}
+            onEditEquation={() => selected && openEquation(selected)}
           />
         ) : (
           <button className="panel-reveal props" title="Show properties panel" aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>
@@ -1350,6 +1397,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       )}
       <VisionFilters />
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
+      {eqDialog && <EquationDialog poster={poster} initial={eqDialog.spec} isNew={!eqDialog.id} onSave={saveEquation} onCancel={() => setEqDialog(null)} />}
       {authorsDialog && <AuthorsDialog initial={authorsDialog.initial} replacing={authorsDialog.replacing} onSave={saveAuthors} onCancel={() => setAuthorsDialog(null)} />}
       {confirmDelete && (
         <ConfirmDialog

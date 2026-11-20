@@ -55,7 +55,7 @@ test('the browser Back button returns to My posters and Forward reopens the post
   // the My posters button also leaves a clean history
   await page.getByRole('button', { name: /My posters/ }).click();
   await expect(page.getByRole('heading', { name: 'My posters' })).toBeVisible();
-  expect(page.url()).not.toContain('#/poster/');
+  await expect(page).not.toHaveURL(/#\/poster\//);
 });
 
 test('a new text box goes into free space, not over the layout’s text', async ({ page }) => {

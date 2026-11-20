@@ -27,7 +27,7 @@ export interface CustomFont {
 
 export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'triangle' | 'diamond' | 'arrow' | 'star';
 
-export type ElementType = 'title' | 'subtitle' | 'heading' | 'text' | 'image' | 'chart' | 'shape' | 'table';
+export type ElementType = 'title' | 'subtitle' | 'heading' | 'text' | 'image' | 'chart' | 'shape' | 'table' | 'equation';
 
 export interface TextStyle {
   fontFamily: string; // "@heading" | "@body" | a concrete family
@@ -97,6 +97,15 @@ export interface TableSpec {
   colWidths?: number[];
 }
 
+/** A typeset maths equation written in LaTeX. */
+export interface EquationSpec {
+  /** LaTeX source, without surrounding $ signs, e.g. "E = mc^2". */
+  latex: string;
+  fontSize: number; // pt; 1 em of the maths
+  color: ColorValue;
+  align: 'left' | 'center' | 'right';
+}
+
 export interface PosterElement {
   id: string;
   type: ElementType;
@@ -123,6 +132,7 @@ export interface PosterElement {
   fit?: 'contain' | 'cover' | 'fill';
   chart?: ChartSpec;
   table?: TableSpec;
+  equation?: EquationSpec;
   shape?: ShapeKind;
   /** which way an arrow points */
   direction?: 'right' | 'left' | 'up' | 'down';

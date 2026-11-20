@@ -15,6 +15,7 @@ import { chartCanvases } from './ChartView';
 import { Logo } from './Library';
 import CheckPanel from './CheckPanel';
 import ContextMenu, { type MenuItem } from './ContextMenu';
+import CropDialog from './CropDialog';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import AppearanceMenu from './AppearanceMenu';
 import { useUiPrefs } from '../lib/uiPrefs';
@@ -56,6 +57,7 @@ export default function Editor({ initial, onClose }: Props) {
   const [snap, setSnap] = useState(true);
   const [viewing, setViewing] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
+  const [cropFor, setCropFor] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [checkOpen, setCheckOpen] = useState(false);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
@@ -537,6 +539,7 @@ export default function Editor({ initial, onClose }: Props) {
     const items: (MenuItem | '-')[] = [];
     if (!many && el.style) items.push({ label: 'Edit text', shortcut: 'Enter', onClick: () => setEditingId(el.id) });
     if (!many && el.type === 'image') items.push({ label: el.src ? 'Replace image…' : 'Choose image…', onClick: () => chooseImage(el.id) });
+    if (!many && el.type === 'image' && el.src && !el.qr) items.push({ label: 'Crop image…', onClick: () => setCropFor(el.id) });
     if (!many && el.type === 'chart') items.push({ label: 'Edit graph…', onClick: () => setChartDialog({ id: el.id, spec: el.chart }) });
     if (items.length) items.push('-');
     if (!many) items.push({ label: 'Copy', shortcut: '⌘/Ctrl C', onClick: () => copyElement(el) });
@@ -574,6 +577,7 @@ export default function Editor({ initial, onClose }: Props) {
   }
 
   const selected = poster.elements.find((e) => e.id === selectedId) ?? null;
+  const cropEl = cropFor ? poster.elements.find((e) => e.id === cropFor && e.src) ?? null : null;
 
   if (viewing) return <ViewMode poster={poster} onClose={() => setViewing(false)} />;
 
@@ -746,6 +750,7 @@ export default function Editor({ initial, onClose }: Props) {
             onDuplicate={() => duplicate()}
             onLayer={layer}
             onReplaceImage={() => selected && chooseImage(selected.id)}
+            onCrop={() => selected && setCropFor(selected.id)}
             onEditChart={() => selected && setChartDialog({ id: selected.id, spec: selected.chart })}
           />
         ) : (
@@ -770,6 +775,19 @@ export default function Editor({ initial, onClose }: Props) {
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
+      {cropEl && (
+        <CropDialog
+          el={cropEl}
+          onCancel={() => setCropFor(null)}
+          onApply={(crop, resizeBox, ratio) => {
+            updateElement(cropEl.id, (e) => {
+              e.crop = crop;
+              if (resizeBox && ratio > 0) e.h = Math.round((e.w / ratio) * 10) / 10;
+            });
+            setCropFor(null);
+          }}
+        />
+      )}
       {toast && <div className="toast">{toast}</div>}
       {marquee && (
         <div

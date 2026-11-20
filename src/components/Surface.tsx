@@ -1,7 +1,8 @@
-import { forwardRef, useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { forwardRef, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { Poster, PosterElement } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth, fontStack, resolveColor, resolveFont } from '../model';
 import ChartView from './ChartView';
+import { isCropped, placeImage } from '../lib/geometry';
 import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
 
 const px = (mm: number) => mm * MM_TO_PX;
@@ -73,6 +74,7 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
     top: px(el.y),
     width: px(el.w),
     height: px(el.h),
+    transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
   };
   const deco: CSSProperties = {
     background: el.type === 'shape' && (el.shape === 'line' || isPolygon(el)) ? undefined : resolveColor(el.fill, pal),
@@ -103,7 +105,11 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
       break;
     case 'image':
       inner = el.src ? (
-        <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain', imageRendering: el.qr ? 'pixelated' : undefined }} />
+        isCropped(el.crop) ? (
+          <CroppedImage el={el} />
+        ) : (
+          <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain', imageRendering: el.qr ? 'pixelated' : undefined }} />
+        )
       ) : (
         <div className="img-placeholder ui-only">
           <span>{el.placeholder ?? 'Image'}</span>
@@ -214,5 +220,26 @@ function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement
         document.execCommand('insertText', false, text);
       }}
     />
+  );
+}
+
+/** An image showing only its crop region, placed in the box by its fit setting. */
+function CroppedImage({ el }: { el: PosterElement }) {
+  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
+  const pad = (el.padding ?? 0) * MM_TO_PX;
+  const inset = 2 * (pad + ((el.borderWidth ?? 0) * 96) / 72);
+  const boxW = Math.max(1, px(el.w) - inset);
+  const boxH = Math.max(1, px(el.h) - inset);
+  const { region, image } = natural ? placeImage(boxW, boxH, natural.w, natural.h, el.fit ?? 'contain', el.crop) : { region: { x: 0, y: 0, w: boxW, h: boxH }, image: { x: 0, y: 0, w: boxW, h: boxH } };
+  return (
+    <div className="crop-box" style={{ left: pad + region.x, top: pad + region.y, width: region.w, height: region.h }}>
+      <img
+        src={el.src}
+        alt=""
+        draggable={false}
+        onLoad={(e) => setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
+        style={{ position: 'absolute', left: image.x - region.x, top: image.y - region.y, width: image.w, height: image.h, maxWidth: 'none', visibility: natural ? 'visible' : 'hidden' }}
+      />
+    </div>
   );
 }

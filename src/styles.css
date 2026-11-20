@@ -361,3 +361,22 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
   .panel-reveal { width: 100%; height: 26px; border: none !important; border-bottom: 1px solid var(--line) !important; }
   .panel-reveal span { writing-mode: horizontal-tb; transform: none; }
 }
+.crop-box { position: absolute; overflow: hidden; }
+.rotate-stem { position: absolute; left: 50%; background: var(--accent); transform: translateX(-50%); pointer-events: none; }
+.rotate-handle { position: absolute; left: 50%; border-radius: 50%; background: #fff; border: 1.5px solid var(--accent); pointer-events: auto; cursor: grab; }
+.rotate-handle:active { cursor: grabbing; }
+.angle-tip { position: fixed; z-index: 70; background: #1d2330; color: #fff; font-size: 12px; padding: 2px 6px; border-radius: 4px; pointer-events: none; }
+.rotate-row { display: flex; align-items: flex-end; gap: 4px; } .rotate-row label { flex: 1; }
+
+/* ---------------- Crop dialog */
+.crop-shapes { flex-wrap: wrap; margin-bottom: 12px; }
+.crop-stage-wrap { display: flex; justify-content: center; align-items: center; background: #1d2129; border-radius: 8px; padding: 16px; min-height: 200px; overflow: hidden; }
+.crop-stage { position: relative; user-select: none; touch-action: none; }
+.crop-stage img { display: block; max-width: none; pointer-events: none; }
+.crop-frame { position: absolute; border: 2px solid #fff; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55); cursor: move; box-sizing: border-box; }
+.crop-stage { overflow: hidden; }
+.crop-thirds { position: absolute; inset: 0; pointer-events: none;
+  background-image: linear-gradient(to right, transparent calc(33.33% - 0.5px), rgba(255,255,255,.45) calc(33.33% - 0.5px), rgba(255,255,255,.45) calc(33.33% + 0.5px), transparent calc(33.33% + 0.5px), transparent calc(66.66% - 0.5px), rgba(255,255,255,.45) calc(66.66% - 0.5px), rgba(255,255,255,.45) calc(66.66% + 0.5px), transparent calc(66.66% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(33.33% - 0.5px), rgba(255,255,255,.45) calc(33.33% - 0.5px), rgba(255,255,255,.45) calc(33.33% + 0.5px), transparent calc(33.33% + 0.5px), transparent calc(66.66% - 0.5px), rgba(255,255,255,.45) calc(66.66% - 0.5px), rgba(255,255,255,.45) calc(66.66% + 0.5px), transparent calc(66.66% + 0.5px)); }
+.crop-frame .handle { width: 12px; height: 12px; margin: -6px 0 0 -6px; }
+.crop-dialog .check { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; }

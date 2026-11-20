@@ -1,9 +1,10 @@
 import { toBlob, toCanvas, toJpeg } from 'html-to-image';
-import type { Poster, PosterElement } from '../types';
+import type { CropRect, Poster, PosterElement } from '../types';
 import { MM_TO_IN, MM_TO_PX, resolveColor, resolveFont } from '../model';
 import { fontEmbedCss } from './fonts';
 import { downloadBlob, safeFileName } from './storage';
 import { seriesData } from './chart';
+import { isCropped } from './geometry';
 
 const MAX_SIDE = 16000;
 const MAX_AREA = 120_000_000;
@@ -167,6 +168,26 @@ function cssColorToHex(c: string): string | undefined {
 
 const PPT_MAX_IN = 56;
 
+/** The cropped part of a picture as a PNG/JPEG data URL, at the picture's own resolution. */
+export async function cropImageData(src: string, crop: CropRect): Promise<string> {
+  try {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const sx = Math.round(crop.x * img.naturalWidth);
+    const sy = Math.round(crop.y * img.naturalHeight);
+    const sw = Math.max(1, Math.round(crop.w * img.naturalWidth));
+    const sh = Math.max(1, Math.round(crop.h * img.naturalHeight));
+    const c = document.createElement('canvas');
+    c.width = sw;
+    c.height = sh;
+    c.getContext('2d')!.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+    return c.toDataURL(/^data:image\/jpe?g/.test(src) ? 'image/jpeg' : 'image/png', 0.92);
+  } catch {
+    return src;
+  }
+}
+
 export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
   const { default: PptxGenJS } = await import('pptxgenjs');
   const pptx = new PptxGenJS();
@@ -182,7 +203,7 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
   const slide = pptx.addSlide();
   const pal = p.palette;
   const col = (c?: string) => hex(resolveColor(c, pal));
-  const pos = (e: PosterElement) => ({ x: e.x * MM_TO_IN * k, y: e.y * MM_TO_IN * k, w: e.w * MM_TO_IN * k, h: e.h * MM_TO_IN * k });
+  const pos = (e: PosterElement) => ({ x: e.x * MM_TO_IN * k, y: e.y * MM_TO_IN * k, w: e.w * MM_TO_IN * k, h: e.h * MM_TO_IN * k, rotate: e.rotation ? ((e.rotation % 360) + 360) % 360 : undefined });
   slide.background = p.backgroundImage ? { data: p.backgroundImage } : { color: col('@background') };
 
   for (const e of p.elements) {
@@ -213,7 +234,8 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
       case 'image':
         if (e.src) {
           const fit = e.fit ?? 'contain';
-          slide.addImage({ data: e.src, ...box, sizing: fit === 'fill' ? undefined : { type: fit, w: box.w, h: box.h } } as never);
+          const data = isCropped(e.crop) ? await cropImageData(e.src, e.crop!) : e.src;
+          slide.addImage({ data, ...box, sizing: fit === 'fill' ? undefined : { type: fit, w: box.w, h: box.h } } as never);
         }
         break;
       case 'chart': {

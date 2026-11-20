@@ -11,6 +11,9 @@ import { FontRegistry, fontkit, type Fetcher } from './fonts';
 import { Painter } from './painter';
 import { PdfCanvasContext, RecordingPath2D } from './canvas2d';
 import { extractText, frameOf, type TextPiece } from './domText';
+import { multiply, rotate, translate } from './matrix';
+import { isCropped, placeImage, rad } from '../geometry';
+import { ARROW_ROTATION, POLYGONS, isPolygon } from '../shapes';
 
 Chart.register(...registerables);
 
@@ -59,8 +62,14 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
   const textByEl = new Map<string, TextPiece[]>();
   for (const e of p.elements) {
     if (!isTextType(e)) continue;
-    const body = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"] .el-body`);
-    if (body) textByEl.set(e.id, extractText(body, frame));
+    const box = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"]`);
+    const body = box?.querySelector<HTMLElement>('.el-body');
+    if (!box || !body) continue;
+    // Measure rotated boxes upright; the rotation is applied again when painting.
+    const turned = box.style.transform;
+    if (turned) box.style.transform = '';
+    textByEl.set(e.id, extractText(body, frame));
+    if (turned) box.style.transform = turned;
   }
 
   // 2. Load the fonts that text needs.
@@ -101,13 +110,24 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
     const y = e.y * MM_TO_PX;
     const w = e.w * MM_TO_PX;
     const h = e.h * MM_TO_PX;
+    painter.save();
+    if (e.rotation) painter.transform(multiply(translate(x + w / 2, y + h / 2), multiply(rotate(rad(e.rotation)), translate(-x - w / 2, -y - h / 2))));
+    await paintElement(e, x, y, w, h);
+    painter.restore();
+  }
+
+  async function paintElement(e: PosterElement, x: number, y: number, w: number, h: number) {
     if (e.type === 'shape' && e.shape === 'line') {
       const c = parseColor(resolveColor(e.fill ?? '@primary', pal));
       if (c) {
         painter.rect(x, y, w, h);
         painter.fill(c);
       }
-      continue;
+      return;
+    }
+    if (isPolygon(e)) {
+      drawPolygon(painter, e, x, y, w, h, pal);
+      return;
     }
     const bw = ((e.borderWidth ?? 0) * 96) / 72;
     const ellipse = e.type === 'shape' && e.shape === 'ellipse';
@@ -132,12 +152,19 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
     const ch = Math.max(0, h - 2 * (bw + pad));
 
     if (e.type === 'image' && e.src) {
-      const img = await images.get(e.src, cw, ch);
+      const crop = isCropped(e.crop) ? e.crop! : undefined;
+      const img = await images.get(e.src, crop ? cw / crop.w : cw, crop ? ch / crop.h : ch);
       if (img) {
         painter.save();
         painter.rect(cx, cy, cw, ch);
         painter.clip();
-        drawImageFit(painter, img, cx, cy, cw, ch, e.fit ?? 'contain');
+        if (crop) {
+          // Show only the chosen part: clip to it, then place the whole picture around it.
+          const { region, image } = placeImage(cw, ch, img.width, img.height, e.fit ?? 'contain', crop);
+          painter.rect(cx + region.x, cy + region.y, region.w, region.h);
+          painter.clip();
+          painter.image(img, cx + image.x, cy + image.y, image.w, image.h);
+        } else drawImageFit(painter, img, cx, cy, cw, ch, e.fit ?? 'contain');
         painter.restore();
       } else warnings.push('An image could not be read.');
     } else if (e.type === 'chart' && e.chart) {
@@ -169,6 +196,43 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
   painter.flush();
   const bytes = await doc.save({ useObjectStreams: true });
   return { bytes, warnings };
+}
+
+// ---------------------------------------------------------------- shapes
+
+/** Polygon points in poster px: the 100 × 100 SVG outline stretched to the box, arrows turned first. */
+export function polygonPoints(e: PosterElement, x: number, y: number, w: number, h: number): [number, number][] {
+  const turn = e.shape === 'arrow' ? rad(ARROW_ROTATION[e.direction ?? 'right']) : 0;
+  const cos = Math.cos(turn);
+  const sin = Math.sin(turn);
+  return (POLYGONS[e.shape!] ?? '').split(' ').map((pt) => {
+    const [px, py] = pt.split(',').map(Number);
+    const dx = px - 50;
+    const dy = py - 50;
+    const rx = 50 + dx * cos - dy * sin;
+    const ry = 50 + dx * sin + dy * cos;
+    return [x + (rx / 100) * w, y + (ry / 100) * h];
+  });
+}
+
+function drawPolygon(painter: Painter, e: PosterElement, x: number, y: number, w: number, h: number, pal: Poster['palette']) {
+  const pts = polygonPoints(e, x, y, w, h);
+  if (!pts.length) return;
+  const trace = () => {
+    pts.forEach(([px, py], i) => (i ? painter.lineTo(px, py) : painter.moveTo(px, py)));
+    painter.closePath();
+  };
+  const fill = parseColor(resolveColor(e.fill, pal));
+  if (fill) {
+    trace();
+    painter.fill(fill);
+  }
+  const bw = ((e.borderWidth ?? 0) * 96) / 72;
+  const stroke = bw ? parseColor(resolveColor(e.borderColor ?? '@primary', pal)) : null;
+  if (stroke) {
+    trace();
+    painter.stroke(stroke, { width: bw, join: 'round' });
+  }
 }
 
 // ---------------------------------------------------------------- text

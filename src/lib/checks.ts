@@ -4,6 +4,7 @@
 import type { Poster, PosterElement } from '../types';
 import { resolveColor, typeScale } from '../model';
 import { boundsOf, intersects } from './arrange';
+import { outerBounds } from './geometry';
 
 export type Severity = 'problem' | 'warning' | 'tip';
 
@@ -91,13 +92,14 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
 
   for (const el of p.elements) {
     const name = label(el);
-    // ---- off the page
-    const inside = el.x >= -1 && el.y >= -1 && el.x + el.w <= p.width + 1 && el.y + el.h <= p.height + 1;
-    if (!intersects(el, page)) {
+    // ---- off the page (rotated elements by the area they actually cover)
+    const b = el.rotation ? outerBounds(el) : el;
+    const inside = b.x >= -1 && b.y >= -1 && b.x + b.w <= p.width + 1 && b.y + b.h <= p.height + 1;
+    if (!intersects(b, page)) {
       issues.push({ id: 'off-' + el.id, elementId: el.id, severity: 'problem', title: `${name} is off the poster`, detail: 'It will not be printed. Move it back onto the page or delete it.' });
     } else if (!inside && el.type !== 'shape') {
       issues.push({ id: 'edge-' + el.id, elementId: el.id, severity: 'warning', title: `${name} is cut off at the edge`, detail: 'Part of it hangs over the edge of the poster and will be trimmed.' });
-    } else if (el.style && (el.x < 5 || el.y < 5 || el.x + el.w > p.width - 5 || el.y + el.h > p.height - 5)) {
+    } else if (el.style && (b.x < 5 || b.y < 5 || b.x + b.w > p.width - 5 || b.y + b.h > p.height - 5)) {
       issues.push({ id: 'edge-' + el.id, elementId: el.id, severity: 'tip', title: `${name} is very close to the edge`, detail: 'Printers often trim a few millimetres; keep text at least 5 mm from the edge.' });
     }
 
@@ -140,7 +142,7 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
       } else {
         const info = images.get(el.id);
         if (info) {
-          const dpi = info.width / (el.w / 25.4);
+          const dpi = (info.width * (el.crop?.w ?? 1)) / (el.w / 25.4);
           if (dpi < 150) {
             issues.push({
               id: 'dpi-' + el.id, elementId: el.id, severity: dpi < 90 ? 'problem' : 'warning',

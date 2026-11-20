@@ -63,7 +63,7 @@ export function backgroundBehind(p: Poster, el: PosterElement): string | null {
 
 const plain = (html = '') => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
-const NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape' };
+const NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', equation: 'Equation' };
 function label(el: PosterElement) {
   const t = plain(el.html);
   return t ? `${NAMES[el.type]} “${t.length > 32 ? t.slice(0, 30) + '…' : t}”` : NAMES[el.type];
@@ -150,6 +150,9 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
           }
         }
       }
+    }
+    if (el.type === 'equation' && el.equation && el.equation.fontSize < minPt) {
+      issues.push({ id: 'eqfont-' + el.id, elementId: el.id, severity: 'warning', title: 'An equation may be too small to read', detail: `It is ${el.equation.fontSize} pt; aim for at least ${minPt} pt (Size in the side panel).` });
     }
     if (el.type === 'chart' && el.chart && el.chart.fontSize < minPt * 0.75) {
       issues.push({ id: 'chartfont-' + el.id, elementId: el.id, severity: 'warning', title: 'Graph labels may be too small', detail: `They are ${el.chart.fontSize} pt; try at least ${Math.round(minPt * 0.75)} pt (Label size in the side panel).` });

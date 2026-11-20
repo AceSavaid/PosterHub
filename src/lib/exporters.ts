@@ -4,6 +4,7 @@ import { MM_TO_IN, MM_TO_PX, resolveColor, resolveFont } from '../model';
 import { fontEmbedCss } from './fonts';
 import { downloadBlob, safeFileName } from './storage';
 import { seriesData } from './chart';
+import { PT_TO_PX, layoutEquation, loadMath, mathSvg, typesetLatex } from './math';
 
 const MAX_SIDE = 16000;
 const MAX_AREA = 120_000_000;
@@ -184,6 +185,7 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
   const col = (c?: string) => hex(resolveColor(c, pal));
   const pos = (e: PosterElement) => ({ x: e.x * MM_TO_IN * k, y: e.y * MM_TO_IN * k, w: e.w * MM_TO_IN * k, h: e.h * MM_TO_IN * k });
   slide.background = p.backgroundImage ? { data: p.backgroundImage } : { color: col('@background') };
+  if (p.elements.some((e) => e.type === 'equation')) await loadMath();
 
   for (const e of p.elements) {
     const box = pos(e);
@@ -216,6 +218,12 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
           slide.addImage({ data: e.src, ...box, sizing: fit === 'fill' ? undefined : { type: fit, w: box.w, h: box.h } } as never);
         }
         break;
+      case 'equation': {
+        if (fill || line) slide.addShape(e.radius ? pptx.ShapeType.roundRect : pptx.ShapeType.rect, { ...box, fill: fill ?? { type: 'none' }, line, rectRadius: e.radius ? Math.min(0.5, e.radius / Math.min(e.w, e.h)) : undefined } as never);
+        const img = equationImage(e, p);
+        if (img) slide.addImage({ data: img.data, x: img.x * k, y: img.y * k, w: img.w * k, h: img.h * k, altText: e.equation!.latex } as never);
+        break;
+      }
       case 'chart': {
         if (!e.chart) break;
         if (fill) slide.addShape(pptx.ShapeType.rect, { ...box, fill, line } as never);
@@ -254,6 +262,28 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
   }
   await pptx.writeFile({ fileName: safeFileName(p.name) + '.pptx' });
   return k;
+}
+
+/**
+ * An equation as an SVG picture placed where it sits on the poster (inches).
+ * PowerPoint draws the SVG as vectors; PptxGenJS adds a PNG copy for old
+ * versions, made from the SVG's pixel size, so that is set to about 300 dpi.
+ */
+export function equationImage(e: PosterElement, p: Poster): { data: string; x: number; y: number; w: number; h: number } | null {
+  const eq = e.equation;
+  if (!eq) return null;
+  const res = typesetLatex(eq.latex);
+  if (!res.ok) return null;
+  const bw = ((e.borderWidth ?? 0) * 96) / 72;
+  const inset = (e.padding ?? 0) * MM_TO_PX + bw;
+  const box = { x: e.x * MM_TO_PX + inset, y: e.y * MM_TO_PX + inset, w: e.w * MM_TO_PX - 2 * inset, h: e.h * MM_TO_PX - 2 * inset };
+  const at = layoutEquation(res.render, eq.fontSize * PT_TO_PX, box, eq.align);
+  if (at.w <= 0 || at.h <= 0) return null;
+  const px = Math.min(300 / 96, 4000 / Math.max(at.w, at.h));
+  const svg = mathSvg(res.render, resolveColor(eq.color, p.palette), at.w * px, at.h * px);
+  const data = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+  const toIn = 1 / 96;
+  return { data, x: at.x * toIn, y: at.y * toIn, w: at.w * toIn, h: at.h * toIn };
 }
 
 /** Exports a text element holding an HTML table (e.g. imported from PowerPoint) as a real PowerPoint table. */

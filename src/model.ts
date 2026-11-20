@@ -109,6 +109,9 @@ export function makeElement(type: ElementType, poster: Poster, at?: Partial<Post
     case 'shape':
       Object.assign(base, { h: 60 * s, fill: '@surface', shape: 'rect', radius: 0 });
       break;
+    case 'equation':
+      Object.assign(base, { h: 40 * s, equation: { latex: 'E = mc^2', fontSize: Math.max(6, Math.round(40 * s)), color: '@text', align: 'center' } });
+      break;
   }
   return { ...base, ...at };
 }

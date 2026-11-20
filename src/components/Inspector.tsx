@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import type { Poster, PosterElement, TextStyle } from '../types';
+import type { EquationSpec, Poster, PosterElement, TextStyle } from '../types';
+import { typesetLatex } from '../lib/math';
+import { useMathReady } from '../lib/useMath';
 import { QR_MAX_LENGTH, normaliseLink, qrDataUrl } from '../lib/qr';
 import { FontSelect } from './FontSelect';
 import { ColorInput } from './ColorInput';
@@ -18,6 +20,7 @@ interface Props {
   onLayer: (dir: 'front' | 'back' | 'up' | 'down') => void;
   onReplaceImage: () => void;
   onEditChart: () => void;
+  onEditEquation: () => void;
   multi: number;
   overflow: boolean;
   onShrinkText: () => void;
@@ -65,10 +68,10 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: 
   );
 }
 
-const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape' };
+const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', equation: 'Equation' };
 
 export default function Inspector(props: Props) {
-  const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart, multi, overflow, onShrinkText, onGrowBox } = props;
+  const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart, onEditEquation, multi, overflow, onShrinkText, onGrowBox } = props;
   if (multi > 1) {
     return (
       <aside className="panel right">
@@ -242,6 +245,8 @@ export default function Inspector(props: Props) {
           </section>
         )}
 
+        {el.type === 'equation' && el.equation && <EquationSection key={el.id} poster={poster} el={el} onChange={onChange} onEdit={onEditEquation} />}
+
         {el.type === 'shape' && el.shape !== 'line' && (
           <section>
             <h4>Shape</h4>
@@ -402,6 +407,38 @@ function QrSection({ el, onChange }: { el: PosterElement; onChange: Props['onCha
       ) : (
         <p className="hint">Paste a link to your paper, data, code or lab page. The QR code is made on your computer and updates as you type.</p>
       )}
+    </section>
+  );
+}
+
+function EquationSection({ poster, el, onChange, onEdit }: { poster: Poster; el: PosterElement; onChange: Props['onChange']; onEdit: () => void }) {
+  const eq = el.equation!;
+  const ready = useMathReady();
+  const res = ready ? typesetLatex(eq.latex) : null;
+  const set = (patch: Partial<EquationSpec>, key?: string) => onChange((e) => void Object.assign(e.equation!, patch), key);
+  return (
+    <section>
+      <h4>Equation</h4>
+      <button className="btn primary" onClick={onEdit}>Edit equation…</button>
+      <label>
+        LaTeX
+        <textarea className="insp-latex" rows={3} spellCheck={false} value={eq.latex} onChange={(e) => set({ latex: e.target.value }, 'latex')} />
+      </label>
+      {res && !res.ok && <div className="insp-eq-error" role="alert">{res.error}</div>}
+      <label>
+        Size (pt)
+        <input type="number" min={4} max={600} value={eq.fontSize} onChange={(e) => set({ fontSize: Math.max(4, +e.target.value || 4) }, 'eqfs')} />
+      </label>
+      <div className="toolbar-row">
+        {(['left', 'center', 'right'] as const).map((a) => (
+          <button key={a} className={'fmt' + (eq.align === a ? ' on' : '')} onClick={() => set({ align: a })} title={'Align ' + a} aria-label={'Align equation ' + a}>
+            <AlignIcon a={a} />
+          </button>
+        ))}
+      </div>
+      <div className="field-label">Colour</div>
+      <ColorInput value={eq.color} palette={poster.palette} onChange={(c) => set({ color: c ?? '@text' })} />
+      <p className="hint">If the box is too small the equation shrinks to fit; drag a corner to make it bigger.</p>
     </section>
   );
 }

@@ -18,10 +18,11 @@ interface Props {
   onInsertImage: () => void;
   onInsertChart: () => void;
   onInsertQr: () => void;
+  onInsertEquation: () => void;
   notify: (msg: string) => void;
 }
 
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, notify }: Props) {
+export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertEquation, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
     <aside className="panel left">
@@ -33,7 +34,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
         ))}
       </div>
       <div className="panel-body">
-        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} />}
+        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertEquation={onInsertEquation} />}
         {tab === 'layout' && <LayoutTab poster={poster} update={update} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
       </div>
@@ -41,7 +42,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
   );
 }
 
-function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr'>) {
+function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertEquation }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertEquation'>) {
   return (
     <>
       <h3>Text</h3>
@@ -57,6 +58,9 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<
         </button>
         <button className="insert-btn" onClick={() => onInsert('text')}>
           <span aria-hidden className="ib-icon t-body">¶</span>Text box
+        </button>
+        <button className="insert-btn" onClick={onInsertEquation}>
+          <span aria-hidden className="ib-icon t-eq">∑</span>Equation (LaTeX)…
         </button>
       </div>
       <h3>Media and data</h3>
@@ -104,6 +108,7 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
           e.h *= sy;
           if (e.style) e.style.fontSize = Math.max(4, Math.round(e.style.fontSize * fs * 10) / 10);
           if (e.chart) e.chart.fontSize = Math.max(4, Math.round(e.chart.fontSize * fs));
+          if (e.equation) e.equation.fontSize = Math.max(4, Math.round(e.equation.fontSize * fs * 10) / 10);
         }
         d.margin *= Math.min(sx, sy);
         d.gutter *= Math.min(sx, sy);

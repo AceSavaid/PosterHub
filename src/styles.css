@@ -212,6 +212,10 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .el.editing { cursor: text; overflow: visible; outline: 2px dashed var(--accent); }
 .el.editing .el-body { cursor: text; }
 .el-image img { width: 100%; height: 100%; display: block; pointer-events: none; }
+.el-math { position: relative; width: 100%; height: 100%; }
+.el-math img { position: absolute; display: block; pointer-events: none; max-width: none; }
+.el-math-loading, .el-math-error { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.2em; text-align: center; font: 24px/1.3 system-ui, sans-serif; padding: 0.3em; color: #666; overflow: hidden; }
+.el-math-error { color: #9b1c1c; background: #fdecec; border: 1px dashed #d77; }
 .el-line { position: absolute; left: 0; right: 0; top: 0; bottom: 0; }
 .img-placeholder { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.3em; border: 3px dashed #9aa6b8; color: #66748a; background: rgba(160, 175, 195, 0.12); font-size: 32px; text-align: center; padding: 1em; }
 .img-placeholder small { font-size: 0.6em; }
@@ -361,3 +365,19 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
   .panel-reveal { width: 100%; height: 26px; border: none !important; border-bottom: 1px solid var(--line) !important; }
   .panel-reveal span { writing-mode: horizontal-tb; transform: none; }
 }
+
+/* ---------------- Equation dialog */
+.equation-dialog .eq-field { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
+.equation-dialog textarea { font: 15px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; width: 100%; resize: vertical; padding: 8px; }
+.eq-snippets { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.eq-snippets .fmt { min-width: 34px; }
+.eq-preview { min-height: 110px; display: flex; align-items: center; justify-content: center; border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow: hidden; }
+.eq-preview img { display: block; max-width: 100%; }
+.eq-error { color: #9b1c1c; background: #fdecec; border-radius: 6px; padding: 6px 10px; font-size: 14px; }
+.eq-examples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.eq-actions { align-items: center; }
+.eq-actions .spacer { flex: 1; }
+.eq-size { display: flex; align-items: center; gap: 6px; }
+.eq-size input { width: 80px; }
+.insp-latex { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; width: 100%; resize: vertical; }
+.insp-eq-error { color: #9b1c1c; font-size: 12px; }

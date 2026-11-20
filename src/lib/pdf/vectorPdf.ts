@@ -11,6 +11,8 @@ import { FontRegistry, fontkit, type Fetcher } from './fonts';
 import { Painter } from './painter';
 import { PdfCanvasContext, RecordingPath2D } from './canvas2d';
 import { extractText, frameOf, type TextPiece } from './domText';
+import { drawSvgMarkup } from './svgDraw';
+import { PT_TO_PX, layoutEquation, loadMath, mathSvg, svgDataUrl, typesetLatex } from '../math';
 
 Chart.register(...registerables);
 
@@ -82,6 +84,9 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
   }
   for (const r of requests.values()) await fonts.prepare(r.family, r.weight, r.italic, r.text);
 
+  // Equations are typeset again here (same engine and layout as the editor) and drawn as paths.
+  if (p.elements.some((e) => e.type === 'equation' && e.equation)) await loadMath();
+
   // 3. Paint.
   const pal = p.palette;
   const bg = parseColor(resolveColor('@background', pal));
@@ -152,6 +157,25 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
         if (img) drawImageFit(painter, img, cx, cy, cw, ch, 'fill');
         warnings.push('A chart was exported as an image.');
       }
+    } else if (e.type === 'equation' && e.equation) {
+      const eq = e.equation;
+      const res = typesetLatex(eq.latex);
+      const colorCss = resolveColor(eq.color, pal);
+      const color = parseColor(colorCss) ?? { r: 0, g: 0, b: 0, a: 1 };
+      if (res.ok) {
+        const r = res.render;
+        const at = layoutEquation(r, eq.fontSize * PT_TO_PX, { x: cx, y: cy, w: cw, h: ch }, eq.align);
+        const k = r.width > 0 ? at.w / r.viewBox[2] : 0;
+        const mark = painter.ops.length;
+        const ok = !r.hasText && k > 0 && drawSvgMarkup(painter, r.inner, [k, 0, 0, k, at.x - r.viewBox[0] * k, at.y - r.viewBox[1] * k], color).complete;
+        if (!ok && k > 0) {
+          // Rare symbols drawn with a font: keep them as a sharp 300 dpi picture instead.
+          painter.ops.length = mark;
+          const img = await images.get(svgDataUrl(mathSvg(r, colorCss, at.w, at.h)), at.w, at.h);
+          if (img) painter.image(img, at.x, at.y, at.w, at.h);
+          warnings.push('An equation uses a symbol that was exported as a picture.');
+        }
+      } else warnings.push('An equation has a LaTeX mistake and was left out: ' + res.error);
     } else if (isTextType(e)) {
       drawText(painter, fonts, textByEl.get(e.id) ?? []);
     }

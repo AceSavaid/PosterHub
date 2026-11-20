@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChartSpec, ElementType, Poster, PosterElement } from '../types';
+import type { ChartSpec, ElementType, EquationSpec, Poster, PosterElement } from '../types';
 import { MM_TO_PX, makeElement, uid } from '../model';
 import { usePosterHistory } from '../lib/usePoster';
 import { align, distribute, intersects, matchSize } from '../lib/arrange';
@@ -10,6 +10,8 @@ import { Canvas } from './Canvas';
 import LeftPanel from './LeftPanel';
 import Inspector from './Inspector';
 import ChartDialog from './ChartDialog';
+import EquationDialog from './EquationDialog';
+import { equationBoxSize, typesetLatex } from '../lib/math';
 import ViewMode from './ViewMode';
 import { chartCanvases } from './ChartView';
 import { Logo } from './Library';
@@ -56,6 +58,7 @@ export default function Editor({ initial, onClose }: Props) {
   const [snap, setSnap] = useState(true);
   const [viewing, setViewing] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
+  const [eqDialog, setEqDialog] = useState<{ id?: string; spec: EquationSpec } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [checkOpen, setCheckOpen] = useState(false);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
@@ -208,6 +211,42 @@ export default function Editor({ initial, onClose }: Props) {
     setChartDialog(null);
   }
 
+  function openEquation(el?: PosterElement) {
+    if (el?.equation) setEqDialog({ id: el.id, spec: el.equation });
+    else setEqDialog({ spec: makeElement('equation', posterRef.current).equation! });
+  }
+
+  /** Inserts a new equation, or updates one, growing its box so the maths fits at the chosen size. */
+  function saveEquation(spec: EquationSpec) {
+    const id = eqDialog?.id;
+    setEqDialog(null);
+    const res = typesetLatex(spec.latex);
+    const p = posterRef.current;
+    const maxW = p.width - 2 * p.margin;
+    if (id) {
+      updateElement(id, (e) => {
+        e.equation = spec;
+        if (!res.ok) return;
+        const need = equationBoxSize(res.render, spec.fontSize, e.padding ?? 0, e.borderWidth ?? 0);
+        if (need.w > e.w) {
+          const grow = Math.min(need.w, Math.max(e.w, maxW)) - e.w;
+          e.x = Math.max(0, e.x - (spec.align === 'center' ? grow / 2 : spec.align === 'right' ? grow : 0));
+          e.w += grow;
+        }
+        if (need.h > e.h) e.h = need.h;
+      });
+      return;
+    }
+    const el = makeElement('equation', p);
+    el.equation = spec;
+    if (res.ok) {
+      const need = equationBoxSize(res.render, spec.fontSize, 0, 0);
+      el.w = Math.min(Math.max(el.w, need.w * 1.1), Math.max(el.w, maxW));
+      el.h = need.h * 1.25;
+    }
+    addElement(el);
+  }
+
   function removeSelected() {
     if (!selectedIds.length) return;
     const ids = new Set(selectedIds);
@@ -310,7 +349,7 @@ export default function Editor({ initial, onClose }: Props) {
   useEffect(() => {
     const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     const onKey = (e: KeyboardEvent) => {
-      if (viewing || chartDialog) return;
+      if (viewing || chartDialog || eqDialog) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -349,6 +388,9 @@ export default function Editor({ initial, onClose }: Props) {
         if (el?.style) {
           e.preventDefault();
           setEditingId(el.id);
+        } else if (el?.type === 'equation') {
+          e.preventDefault();
+          openEquation(el);
         }
       } else if (e.key.startsWith('Arrow') && selectedId) {
         e.preventDefault();
@@ -382,12 +424,12 @@ export default function Editor({ initial, onClose }: Props) {
       internalClipboard = structuredClone(el);
       const div = document.createElement('div');
       div.innerHTML = el.html ?? '';
-      e.clipboardData?.setData('text/plain', div.innerText || div.textContent || '');
+      e.clipboardData?.setData('text/plain', el.equation?.latex ?? (div.innerText || div.textContent || ''));
       e.clipboardData?.setData(CLIP_MIME, JSON.stringify(el));
       if (e.type === 'cut') removeSelected();
     };
     const onPaste = (e: ClipboardEvent) => {
-      if (isTyping(e.target) || isTyping(document.activeElement) || viewing || chartDialog) return;
+      if (isTyping(e.target) || isTyping(document.activeElement) || viewing || chartDialog || eqDialog) return;
       const dt = e.clipboardData;
       if (!dt) return;
       const json = dt.getData(CLIP_MIME);
@@ -528,7 +570,7 @@ export default function Editor({ initial, onClose }: Props) {
     internalClipboard = structuredClone(el);
     const div = document.createElement('div');
     div.innerHTML = el.html ?? '';
-    navigator.clipboard?.writeText(div.innerText || div.textContent || '').catch(() => {});
+    navigator.clipboard?.writeText(el.equation?.latex ?? (div.innerText || div.textContent || '')).catch(() => {});
     notify('Copied. Press Ctrl/⌘ V on the poster to paste it.');
   }
 
@@ -538,6 +580,7 @@ export default function Editor({ initial, onClose }: Props) {
     if (!many && el.style) items.push({ label: 'Edit text', shortcut: 'Enter', onClick: () => setEditingId(el.id) });
     if (!many && el.type === 'image') items.push({ label: el.src ? 'Replace image…' : 'Choose image…', onClick: () => chooseImage(el.id) });
     if (!many && el.type === 'chart') items.push({ label: 'Edit graph…', onClick: () => setChartDialog({ id: el.id, spec: el.chart }) });
+    if (!many && el.type === 'equation') items.push({ label: 'Edit equation…', shortcut: 'Enter', onClick: () => openEquation(el) });
     if (items.length) items.push('-');
     if (!many) items.push({ label: 'Copy', shortcut: '⌘/Ctrl C', onClick: () => copyElement(el) });
     if (!many && internalClipboard) items.push({ label: 'Paste', shortcut: '⌘/Ctrl V', onClick: () => duplicate(internalClipboard!) });
@@ -680,6 +723,7 @@ export default function Editor({ initial, onClose }: Props) {
             onInsertImage={() => chooseImage()}
             onInsertChart={() => setChartDialog({})}
             onInsertQr={insertQr}
+            onInsertEquation={() => openEquation()}
             notify={notify}
           />
         ) : (
@@ -725,6 +769,7 @@ export default function Editor({ initial, onClose }: Props) {
                 if (el.type === 'image' && (el.qr || el.placeholder === 'QR code')) focusQrLink();
                 else if (el.type === 'image') chooseImage(el.id);
                 if (el.type === 'chart') setChartDialog({ id: el.id, spec: el.chart });
+                if (el.type === 'equation') openEquation(el);
               }}
             />
           </div>
@@ -747,6 +792,7 @@ export default function Editor({ initial, onClose }: Props) {
             onLayer={layer}
             onReplaceImage={() => selected && chooseImage(selected.id)}
             onEditChart={() => selected && setChartDialog({ id: selected.id, spec: selected.chart })}
+            onEditEquation={() => selected && openEquation(selected)}
           />
         ) : (
           <button className="panel-reveal props" title="Show properties panel" aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>
@@ -770,6 +816,7 @@ export default function Editor({ initial, onClose }: Props) {
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
+      {eqDialog && <EquationDialog poster={poster} initial={eqDialog.spec} isNew={!eqDialog.id} onSave={saveEquation} onCancel={() => setEqDialog(null)} />}
       {toast && <div className="toast">{toast}</div>}
       {marquee && (
         <div

@@ -90,6 +90,25 @@ export interface PosterElement {
   locked?: boolean;
 }
 
+/**
+ * A sticky note left by a supervisor or co-author. Notes live beside the
+ * elements (never inside them), so they travel with the .poster.json file
+ * but are never drawn into a PDF, PowerPoint, PNG or copied image.
+ * `text` is plain text and must always be rendered as text, never as HTML.
+ */
+export interface ReviewNote {
+  id: string;
+  /** position of the note's pin, in mm from the poster's top-left corner */
+  x: number;
+  y: number;
+  text: string;
+  author: string;
+  createdAt: number;
+  resolved: boolean;
+  /** the element the note was left on, if any */
+  elementId?: string;
+}
+
 export interface Poster {
   id: string;
   name: string;
@@ -107,6 +126,8 @@ export interface Poster {
   gutter: number; // mm
   backgroundImage?: string;
   elements: PosterElement[];
+  /** review notes; optional so older files load unchanged */
+  notes?: ReviewNote[];
   createdAt: number;
   updatedAt: number;
   thumbnail?: string;

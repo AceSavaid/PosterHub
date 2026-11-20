@@ -4,11 +4,12 @@ const ICON = { problem: '⛔', warning: '⚠️', tip: '💡' };
 
 interface Props {
   issues: Issue[];
-  onPick: (elementId: string) => void;
+  /** called with the clicked issue; issues about an element or a note can be picked */
+  onPick: (issue: Issue) => void;
   onClose: () => void;
 }
 
-/** List of poster problems; clicking one selects the element it is about. */
+/** List of poster problems; clicking one selects the element (or opens the review note) it is about. */
 export default function CheckPanel({ issues, onPick, onClose }: Props) {
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const warnings = issues.filter((i) => i.severity === 'warning').length;
@@ -35,7 +36,7 @@ export default function CheckPanel({ issues, onPick, onClose }: Props) {
           <ul className="issue-list">
             {issues.map((i) => (
               <li key={i.id} className={'issue ' + i.severity}>
-                <button disabled={!i.elementId} onClick={() => i.elementId && onPick(i.elementId)}>
+                <button disabled={!i.elementId && !i.noteId} onClick={() => (i.elementId || i.noteId) && onPick(i)}>
                   <span className="issue-icon" aria-hidden>{ICON[i.severity]}</span>
                   <span>
                     <strong>{i.title}</strong>

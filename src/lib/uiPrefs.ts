@@ -13,9 +13,11 @@ export interface UiPrefs {
   swapPanels: boolean;
   showTools: boolean;
   showProperties: boolean;
+  /** draw review-note pins on the poster while editing */
+  showNotes: boolean;
 }
 
-export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true };
+export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, showNotes: true };
 export const PREFS_KEY = 'posterhub.ui';
 
 /** Fills in defaults and drops anything malformed (old versions, hand-edited storage). */
@@ -27,6 +29,7 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     swapPanels: bool(r.swapPanels, DEFAULT_PREFS.swapPanels),
     showTools: bool(r.showTools, DEFAULT_PREFS.showTools),
     showProperties: bool(r.showProperties, DEFAULT_PREFS.showProperties),
+    showNotes: bool(r.showNotes, DEFAULT_PREFS.showNotes),
   };
 }
 

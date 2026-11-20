@@ -11,11 +11,13 @@ interface SurfaceProps {
   zoom: number;
   showGrid?: boolean;
   children?: ReactNode; // overlay (selection handles, guides)
+  /** screen-space layer drawn next to (not inside) the poster node, so it can never end up in an export */
+  outside?: ReactNode;
   renderElement: (el: PosterElement, index: number) => ReactNode;
 }
 
 /** The poster page at true size (1 mm = 3.78 px), scaled visually by `zoom`. */
-export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface({ poster, zoom, showGrid, children, renderElement }, ref) {
+export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface({ poster, zoom, showGrid, children, outside, renderElement }, ref) {
   const pal = poster.palette;
   const style: CSSProperties = {
     width: px(poster.width),
@@ -35,6 +37,7 @@ export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface
         {poster.elements.map((el, i) => renderElement(el, i))}
         {children}
       </div>
+      {outside}
     </div>
   );
 });

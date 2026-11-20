@@ -8,6 +8,7 @@ import { fileToDataUrl, pickFile } from '../lib/storage';
 import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fonts';
 import { importPptx } from '../lib/pptxImport';
 import { SHAPE_CHOICES } from '../lib/shapes';
+import ConfirmDialog from './ConfirmDialog';
 
 type Tab = 'insert' | 'layout' | 'design';
 
@@ -90,6 +91,7 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<
 function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
   const [scaleContent, setScaleContent] = useState(true);
   const [template, setTemplate] = useState<TemplateId>('classic');
+  const [confirming, setConfirming] = useState(false);
 
   const resize = (o: string, preset: string, w: number, h: number) =>
     update((d) => {
@@ -145,8 +147,12 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
         {num('Margin', 'margin')}
         {num('Gap between columns', 'gutter')}
       </div>
-      <p className="hint">Columns show as blue guides; elements snap to them while you drag. Hold Alt to drag without snapping.</p>
-      <h3>Rebuild layout</h3>
+      <p className="hint">
+        Columns show as blue guides, and elements snap to them while you drag (hold Alt to skip). Changing the number of columns moves the guides only; your
+        content stays where it is.
+      </p>
+      <h3>Start over with a layout</h3>
+      <p className="hint">Rearranges the poster into a fresh layout with {poster.columns} column{poster.columns > 1 ? 's' : ''}. Everything on it now is replaced.</p>
       <div className="form-grid">
         <label className="span2">
           Layout
@@ -157,16 +163,23 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
           </select>
         </label>
         <p className="hint span2">{templateDef(template).description}</p>
-        <button
-          className="btn span2"
-          onClick={() => {
-            if (!confirm('Replace everything on the poster with this layout? You can undo afterwards.')) return;
-            update((d) => void (d.elements = buildTemplate(template, d)));
-          }}
-        >
-          Apply to {poster.columns} column{poster.columns > 1 ? 's' : ''}
+        <button className="btn span2" onClick={() => setConfirming(true)}>
+          Replace poster with this layout…
         </button>
       </div>
+      {confirming && (
+        <ConfirmDialog
+          title="Replace everything on the poster?"
+          message={`Your text, pictures and graphs will be swapped for the “${templateDef(template).label}” layout. You can press Ctrl/⌘ Z to undo.`}
+          confirmLabel="Replace poster"
+          danger
+          onConfirm={() => {
+            setConfirming(false);
+            update((d) => void (d.elements = buildTemplate(template, d)));
+          }}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
     </>
   );
 }

@@ -98,3 +98,46 @@ export function buildChartConfig(spec: ChartSpec, palette: Palette, fontFamily: 
     },
   };
 }
+
+/** The largest absolute value in a column, over the rows the graph uses. */
+function columnPeak(spec: Pick<ChartSpec, 'rows' | 'rowStart' | 'rowEnd'>, col: number): number {
+  let peak = 0;
+  for (const r of chartRows(spec as ChartSpec)) {
+    const n = toNumber(r[col]);
+    if (n != null) peak = Math.max(peak, Math.abs(n));
+  }
+  return peak;
+}
+
+/** How far apart columns must be (largest ÷ smallest) before the small one looks flat on a shared axis. */
+export const SCALE_GAP = 10;
+
+/**
+ * Columns plotted together whose sizes differ so much that the smaller ones
+ * would barely show on a shared axis (e.g. accuracy 0–1 next to times of 400 ms).
+ * Returns the names of the smallest and largest column, or null when they fit together.
+ */
+export function scaleMismatch(spec: Pick<ChartSpec, 'kind' | 'columns' | 'rows' | 'rowStart' | 'rowEnd' | 'yColumns'>): { small: string; large: string } | null {
+  if (spec.kind === 'pie' || spec.kind === 'doughnut' || spec.yColumns.length < 2) return null;
+  const peaks = spec.yColumns.map((c) => ({ c, peak: columnPeak(spec, c) })).filter((p) => p.peak > 0);
+  if (peaks.length < 2) return null;
+  peaks.sort((a, b) => a.peak - b.peak);
+  const lo = peaks[0];
+  const hi = peaks[peaks.length - 1];
+  return hi.peak / lo.peak >= SCALE_GAP ? { small: spec.columns[lo.c], large: spec.columns[hi.c] } : null;
+}
+
+/**
+ * Of the numeric columns, the ones to tick by default: the first, plus any
+ * others of a similar size, so a new graph never hides a column by squashing it flat.
+ */
+export function defaultYColumns(spec: Pick<ChartSpec, 'rows' | 'rowStart' | 'rowEnd'>, numeric: number[], max = 3): number[] {
+  if (!numeric.length) return [];
+  const first = columnPeak(spec, numeric[0]);
+  const fits = (c: number) => {
+    const p = columnPeak(spec, c);
+    if (!first || !p) return true;
+    return Math.max(p, first) / Math.min(p, first) < SCALE_GAP;
+  };
+  return [numeric[0], ...numeric.slice(1).filter(fits)].slice(0, max);
+}

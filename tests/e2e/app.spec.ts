@@ -75,12 +75,17 @@ test.describe('library', () => {
   });
 
   test('duplicates and deletes posters', async ({ page }) => {
-    page.on('dialog', (d) => d.accept());
     await newPoster(page, { name: 'Original' });
     await backToLibrary(page);
     await page.locator('.poster-card', { hasText: 'Original' }).getByRole('button', { name: 'Duplicate' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
     await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
+    // an in-app "are you sure?" box, where Cancel keeps the poster
+    const confirm = page.getByRole('alertdialog', { name: 'Delete “Original (copy)”?' });
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
+    await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
+    await confirm.getByRole('button', { name: 'Delete poster' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toHaveCount(0);
   });
 });
@@ -188,13 +193,13 @@ test.describe('templates', () => {
   });
 
   test('rebuilds an existing poster with another layout', async ({ page }) => {
-    page.on('dialog', (d) => d.accept());
     await newPoster(page);
     await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Layout' }).click();
     await page.getByRole('combobox', { name: 'Layout' }).selectOption('boxed');
     await expect(page.getByText('Logos either side of the title')).toBeVisible();
-    await page.getByRole('button', { name: /^Apply to/ }).click();
+    await page.getByRole('button', { name: 'Replace poster with this layout…' }).click();
+    await page.getByRole('alertdialog', { name: 'Replace everything on the poster?' }).getByRole('button', { name: 'Replace poster' }).click();
     await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(2);
   });
 });
@@ -541,7 +546,7 @@ test.describe('export, import and sharing', () => {
 
   test('view mode shows the poster read-only', async ({ page }) => {
     await newPoster(page);
-    await page.getByRole('button', { name: 'View' }).click();
+    await page.getByRole('button', { name: 'Preview', exact: true }).click();
     await expect(page.locator('.view-mode')).toBeVisible();
     await expect(page.locator('.view-mode .el-title')).toContainText('Your Poster Title');
     await expect(page.locator('.view-mode .sel-box, .view-mode .grid-col')).toHaveCount(0);

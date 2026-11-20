@@ -4,6 +4,7 @@ import { PALETTES, SIZE_PRESETS, TEMPLATES, columnLefts, columnWidth, createPost
 import type { Poster } from '../types';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
+import { useEscape } from '../lib/useEscape';
 
 interface Props {
   onCreate: (p: Poster) => void;
@@ -22,11 +23,14 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
   const [bodyFont, setBodyFont] = useState('Open Sans');
 
   const fonts = [...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS];
+  useEscape(onCancel);
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <form
         className="modal wide"
+        role="dialog"
+        aria-label="New poster"
         onSubmit={(e) => {
           e.preventDefault();
           onCreate(createPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }));
@@ -38,6 +42,22 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
             Name
             <input autoFocus value={name} placeholder="e.g. Conference 2026 – Sleep and memory" onChange={(e) => setName(e.target.value)} />
           </label>
+          <div className="span2">
+            <div className="field-label">Layout <span className="muted">· previews follow the colours, size and columns you pick below</span></div>
+            <div className="template-grid">
+              {TEMPLATES.map((t) => (
+                <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => setTemplate(t.id)}>
+                  <TemplateThumb id={t.id} width={size.width} height={size.height} columns={columns} palette={palette} />
+                  <strong>{t.label}</strong>
+                  <span>{t.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="span2">
+            <div className="field-label">Colour palette</div>
+            <PaletteSwatches value={palette.name} onPick={setPalette} />
+          </div>
           <SizeFields
             orientation={orientation}
             preset={preset}
@@ -71,28 +91,12 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
               {fonts.map((f) => <option key={f}>{f}</option>)}
             </select>
           </label>
-          <div className="span2">
-            <div className="field-label">Colour palette</div>
-            <PaletteSwatches value={palette.name} onPick={setPalette} />
-          </div>
-          <div className="span2">
-            <div className="field-label">Layout <span className="muted">· previews update with your size, columns and colours</span></div>
-            <div className="template-grid">
-              {TEMPLATES.map((t) => (
-                <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => setTemplate(t.id)}>
-                  <TemplateThumb id={t.id} width={size.width} height={size.height} columns={columns} palette={palette} />
-                  <strong>{t.label}</strong>
-                  <span>{t.description}</span>
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
-        <div className="modal-actions">
+        <p className="hint">Sizes available: {SIZE_PRESETS.length} presets or any custom size. You can change everything here later.</p>
+        <div className="modal-actions sticky-actions">
           <button type="button" className="btn" onClick={onCancel}>Cancel</button>
           <button type="submit" className="btn primary">Create poster</button>
         </div>
-        <p className="hint">Sizes available: {SIZE_PRESETS.length} presets or any custom size.</p>
       </form>
     </div>
   );

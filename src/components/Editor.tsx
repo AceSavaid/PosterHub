@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { ChartSpec, ElementType, Poster, PosterElement } from '../types';
 import { MM_TO_PX, makeElement, uid } from '../model';
 import { usePosterHistory } from '../lib/usePoster';
-import { align, distribute, intersects, matchSize } from '../lib/arrange';
+import { align, distribute, emptyFigureSlot, findFreeSpot, intersects, matchSize } from '../lib/arrange';
 import { deletePoster, exportPosterFile, fileToDataUrl, pickFile, savePoster } from '../lib/storage';
 import { ensurePosterFonts } from '../lib/fonts';
 import { copyImageToClipboard, effectiveDpi, exportPdf, exportPng, exportPptx, makeThumbnail } from '../lib/exporters';
@@ -17,6 +17,7 @@ import CheckPanel from './CheckPanel';
 import ContextMenu, { type MenuItem } from './ContextMenu';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import AppearanceMenu from './AppearanceMenu';
+import ConfirmDialog from './ConfirmDialog';
 import { useUiPrefs } from '../lib/uiPrefs';
 
 const CLIP_MIME = 'application/x-posterhub-element';
@@ -39,10 +40,13 @@ async function imageFileToDataUrl(file: Blob, maxSide = 4000): Promise<{ src: st
 
 interface Props {
   initial: Poster;
-  onClose: () => void;
+  /** A message to show when the poster opens, e.g. notes from a PowerPoint import. */
+  notice?: string;
+  /** Called once the poster is saved. `viaBack`: the browser's Back button was used. */
+  onClose: (viaBack?: boolean) => void;
 }
 
-export default function Editor({ initial, onClose }: Props) {
+export default function Editor({ initial, notice: initialNotice, onClose }: Props) {
   const { poster, update, updateElement, undo, redo, canUndo, canRedo, ref: posterRef } = usePosterHistory(initial);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   /** the primary (last clicked) selection */
@@ -63,6 +67,8 @@ export default function Editor({ initial, onClose }: Props) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [dpi, setDpi] = useState(200);
   const [toast, setToast] = useState('');
+  const [banner, setBanner] = useState(initialNotice);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [saved, setSaved] = useState(true);
   const posterNode = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
@@ -106,13 +112,25 @@ export default function Editor({ initial, onClose }: Props) {
     setSaved(true);
   }
 
-  async function close() {
+  const closing = useRef(false);
+  async function close(viaBack = false) {
+    if (closing.current) return;
+    closing.current = true;
     setSelectedId(null);
     setEditingId(null);
     await new Promise((r) => setTimeout(r, 30));
     await saveWithThumbnail();
-    onClose();
+    onClose(viaBack);
   }
+
+  // The browser's Back button returns to My posters (after saving), like the "My posters" button.
+  useEffect(() => {
+    const onPop = () => {
+      if (!location.hash.startsWith('#/poster/')) close(true);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  });
 
   // ---- element helpers
   function viewCenter() {
@@ -134,23 +152,51 @@ export default function Editor({ initial, onClose }: Props) {
     return el && el.type === 'image' && !el.src ? el : null;
   }
 
+  /** How far down a text box its words reach (mm), so the empty space under short text counts as free. */
+  function usedHeight(e: PosterElement) {
+    if (!e.style) return e.h;
+    const box = posterNode.current?.querySelector<HTMLElement>(`[data-id="${e.id}"]`);
+    const body = box?.querySelector<HTMLElement>('.el-body');
+    if (!box || !body || !body.textContent?.trim()) return e.h;
+    const range = document.createRange();
+    range.selectNodeContents(body);
+    const bottom = range.getBoundingClientRect().bottom;
+    return (bottom - box.getBoundingClientRect().top) / (zoom * MM_TO_PX) + (e.padding ?? 0);
+  }
+
+  function revealSoon(id: string) {
+    requestAnimationFrame(() => posterNode.current?.querySelector(`[data-id="${id}"]`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+  }
+
+  /**
+   * Adds an element where it won't cover anything: a graph or picture goes into the selected
+   * (or nearest) empty figure box, anything else into the free space closest to the middle of the screen.
+   */
   function addElement(el: PosterElement, center = true) {
-    const ph = selectedPlaceholder();
-    if (ph && (el.type === 'image' || el.type === 'chart')) {
+    const media = el.type === 'image' || el.type === 'chart';
+    const selectedSlot = selectedPlaceholder();
+    // (a new QR code box is a placeholder itself, so it never fills a figure box on its own)
+    const ph = media ? selectedSlot ?? (center && !el.placeholder ? emptyFigureSlot(posterRef.current, viewCenter()) : null) : null;
+    if (ph) {
       update((d) => {
         const i = d.elements.findIndex((e) => e.id === ph.id);
         d.elements[i] = { ...el, id: ph.id, x: ph.x, y: ph.y, w: ph.w, h: el.type === 'image' ? Math.min(ph.h, ph.w * (el.h / el.w)) : ph.h, fill: el.type === 'chart' ? el.fill : undefined };
       });
+      setSelectedId(ph.id);
+      revealSoon(ph.id);
+      if (!selectedSlot) notify(`Put the ${el.type === 'chart' ? 'graph' : 'picture'} in an empty figure box. Drag it anywhere, or press Ctrl/⌘ Z to undo.`);
       return el;
     }
     if (center) {
       const c = viewCenter();
       const p = posterRef.current;
-      el.x = Math.max(0, Math.min(p.width - el.w, c.x - el.w / 2));
-      el.y = Math.max(0, Math.min(p.height - el.h, c.y - el.h / 2));
+      const spot = findFreeSpot(p, el.w, el.h, c, usedHeight);
+      el.x = spot ? spot.x : Math.max(0, Math.min(p.width - el.w, c.x - el.w / 2));
+      el.y = spot ? spot.y : Math.max(0, Math.min(p.height - el.h, c.y - el.h / 2));
     }
     update((d) => void d.elements.push(el));
     setSelectedId(el.id);
+    revealSoon(el.id);
     return el;
   }
 
@@ -310,7 +356,7 @@ export default function Editor({ initial, onClose }: Props) {
   useEffect(() => {
     const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     const onKey = (e: KeyboardEvent) => {
-      if (viewing || chartDialog) return;
+      if (viewing || chartDialog || confirmDelete) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -519,7 +565,8 @@ export default function Editor({ initial, onClose }: Props) {
   }
 
   async function deleteThisPoster() {
-    if (!confirm(`Delete “${posterRef.current.name}”? This cannot be undone.`)) return;
+    setConfirmDelete(false);
+    closing.current = true;
     await deletePoster(posterRef.current.id);
     onClose();
   }
@@ -574,13 +621,18 @@ export default function Editor({ initial, onClose }: Props) {
   }
 
   const selected = poster.elements.find((e) => e.id === selectedId) ?? null;
+  // Leftover example text and empty figure boxes are a to-do list, not errors: they don't turn the
+  // Check badge red (a brand-new poster is full of them) but are pointed out again in the Export menu.
+  const leftovers = issues.filter((i) => i.leftover).length;
+  const problems = issues.filter((i) => i.severity === 'problem').length;
+  const badge = { count: problems || issues.filter((i) => i.severity === 'warning' && !i.leftover).length, urgent: problems > 0 };
 
   if (viewing) return <ViewMode poster={poster} onClose={() => setViewing(false)} />;
 
   return (
     <div className="editor" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <header className="topbar">
-        <button className="btn ghost" onClick={close} title="Back to My posters">
+        <button className="btn ghost" onClick={() => close()} title="Back to My posters">
           <Logo /> ‹ My posters
         </button>
         <input className="poster-name" value={poster.name} onChange={(e) => update((d) => void (d.name = e.target.value), 'name')} aria-label="Poster name" />
@@ -604,13 +656,15 @@ export default function Editor({ initial, onClose }: Props) {
         <button className="btn ghost zoom-label" onClick={fit} title="Fit to screen (Shift 0)">{Math.round(zoom * 100)}%</button>
         <button className="icon-btn" onClick={() => setZoom((z) => Math.min(4, z * 1.25))} title="Zoom in">+</button>
         <span className="sep" />
-        <label className="toggle" title="Show column guides">
-          <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Guides
-        </label>
-        <label className="toggle" title="Snap to columns and other elements">
-          <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap
-        </label>
-        <AppearanceMenu panels />
+        <AppearanceMenu panels label="View">
+          <div className="field-label">While editing</div>
+          <label className="check" title="Blue lines that show the columns">
+            <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Show column guides
+          </label>
+          <label className="check" title="Line up with columns and other elements while dragging (hold Alt to skip)">
+            <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap while dragging
+          </label>
+        </AppearanceMenu>
         <span className="sep" />
         <button
           className={'btn check-btn' + (checkOpen ? ' active' : '')}
@@ -621,9 +675,13 @@ export default function Editor({ initial, onClose }: Props) {
           title="Look for small text, low contrast, blurry images and leftover example text"
         >
           Check
-          {issues.filter((i) => i.severity !== 'tip').length > 0 && <span className="badge">{issues.filter((i) => i.severity !== 'tip').length}</span>}
+          {badge.count > 0 && (
+            <span className={'badge' + (badge.urgent ? '' : ' soft')} aria-label={`${badge.count} ${badge.urgent ? 'problems' : 'things'} to look at`}>
+              {badge.count}
+            </span>
+          )}
         </button>
-        <button className="btn" onClick={() => setViewing(true)}>View</button>
+        <button className="btn" onClick={() => setViewing(true)} title="See the poster full screen, without editing tools">Preview</button>
         <button className="btn" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
         <div className="menu-wrap">
           <button className="btn primary" onClick={() => setExportOpen((o) => !o)}>Export ▾</button>
@@ -639,6 +697,20 @@ export default function Editor({ initial, onClose }: Props) {
                 >
                   <strong>⛔ {issues.filter((i) => i.severity === 'problem').length} problem(s) found</strong>
                   <span>Review them before printing</span>
+                </button>
+              )}
+              {leftovers > 0 && (
+                <button
+                  className="menu-note"
+                  onClick={() => {
+                    setExportOpen(false);
+                    setCheckOpen(true);
+                  }}
+                >
+                  <strong>
+                    {leftovers} box{leftovers > 1 ? 'es' : ''} still {leftovers > 1 ? 'have' : 'has'} example text or no picture
+                  </strong>
+                  <span>Show me which</span>
                 </button>
               )}
               <button onClick={() => runExport('pdf')}>
@@ -671,6 +743,12 @@ export default function Editor({ initial, onClose }: Props) {
           )}
         </div>
       </header>
+      {banner && (
+        <div className="notice-bar" role="status">
+          <div>{banner}</div>
+          <button className="icon-btn" aria-label="Dismiss" onClick={() => setBanner(undefined)}>×</button>
+        </div>
+      )}
       <div className={`workspace${prefs.swapPanels ? ' swapped' : ''}`}>
         {prefs.showTools ? (
           <LeftPanel
@@ -763,13 +841,23 @@ export default function Editor({ initial, onClose }: Props) {
             { label: 'Duplicate this poster', onClick: duplicatePoster },
             { label: 'Download project file', onClick: () => exportPosterFile(posterRef.current) },
             '-',
-            { label: 'Delete this poster…', danger: true, onClick: deleteThisPoster },
+            { label: 'Delete this poster…', danger: true, onClick: () => setConfirmDelete(true) },
           ]}
         />
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
+      {confirmDelete && (
+        <ConfirmDialog
+          title={`Delete “${poster.name}”?`}
+          message="This cannot be undone. Use “Download project file” first if you might want it again."
+          confirmLabel="Delete poster"
+          danger
+          onConfirm={deleteThisPoster}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
       {toast && <div className="toast">{toast}</div>}
       {marquee && (
         <div

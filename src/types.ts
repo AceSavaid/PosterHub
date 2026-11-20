@@ -88,6 +88,8 @@ export interface PosterElement {
   /** which way an arrow points */
   direction?: 'right' | 'left' | 'up' | 'down';
   locked?: boolean;
+  /** elements sharing a group id move, resize, copy and select together */
+  groupId?: string;
 }
 
 export interface Poster {

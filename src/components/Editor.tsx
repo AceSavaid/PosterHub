@@ -3,6 +3,7 @@ import type { ChartSpec, ElementType, Poster, PosterElement } from '../types';
 import { MM_TO_PX, makeElement, uid } from '../model';
 import { usePosterHistory } from '../lib/usePoster';
 import { align, distribute, intersects, matchSize } from '../lib/arrange';
+import { canGroup, canUngroup, dropLonelyGroups, expandToGroups, group, groupMembers, regroupCopies, ungroup, wholeGroup } from '../lib/groups';
 import { deletePoster, exportPosterFile, fileToDataUrl, pickFile, savePoster } from '../lib/storage';
 import { ensurePosterFonts } from '../lib/fonts';
 import { copyImageToClipboard, effectiveDpi, exportPdf, exportPng, exportPptx, makeThumbnail } from '../lib/exporters';
@@ -211,14 +212,30 @@ export default function Editor({ initial, onClose }: Props) {
   function removeSelected() {
     if (!selectedIds.length) return;
     const ids = new Set(selectedIds);
-    update((d) => void (d.elements = d.elements.filter((e) => !ids.has(e.id))));
+    update((d) => {
+      d.elements = d.elements.filter((e) => !ids.has(e.id));
+      dropLonelyGroups(d.elements);
+    });
     setSelectedId(null);
+  }
+
+  function groupSelected() {
+    if (!canGroup(selectedIds, posterRef.current.elements)) return;
+    let ids: string[] = [];
+    update((d) => void (ids = group(d.elements, selectedIds)));
+    setSelectedIds(ids);
+    notify('Grouped. They now move and resize together. Ctrl/⌘-click picks one out; Ctrl/⌘ Shift G ungroups.');
+  }
+
+  function ungroupSelected() {
+    if (!canUngroup(selectedIds, posterRef.current.elements)) return;
+    update((d) => void ungroup(d.elements, selectedIds));
   }
 
   function duplicate(src?: PosterElement, offset = 8) {
     const sources = src ? [src] : posterRef.current.elements.filter((e) => selectedIds.includes(e.id));
     if (!sources.length) return;
-    const copies = sources.map((el) => ({ ...structuredClone(el), id: uid(), x: el.x + offset, y: el.y + offset, locked: false }));
+    const copies = regroupCopies(sources.map((el) => ({ ...structuredClone(el), id: uid(), x: el.x + offset, y: el.y + offset, locked: false })));
     update((d) => void d.elements.push(...copies));
     setSelectedIds(copies.map((c) => c.id));
   }
@@ -283,7 +300,10 @@ export default function Editor({ initial, onClose }: Props) {
       const a = toPoster(start.x, start.y);
       const b = toPoster(ev.clientX, ev.clientY);
       const box = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) };
-      const hit = posterRef.current.elements.filter((el) => intersects(box, el) && !el.locked).map((el) => el.id);
+      const hit = expandToGroups(
+        posterRef.current.elements.filter((el) => intersects(box, el) && !el.locked).map((el) => el.id),
+        posterRef.current.elements,
+      );
       setSelectedIds([...before.filter((id) => !hit.includes(id)), ...hit]);
     };
     const up = () => {
@@ -334,6 +354,10 @@ export default function Editor({ initial, onClose }: Props) {
       } else if (mod && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         duplicate();
+      } else if (mod && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        if (e.shiftKey) ungroupSelected();
+        else groupSelected();
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedIds.length) {
           e.preventDefault();
@@ -542,6 +566,9 @@ export default function Editor({ initial, onClose }: Props) {
     if (!many) items.push({ label: 'Copy', shortcut: '⌘/Ctrl C', onClick: () => copyElement(el) });
     if (!many && internalClipboard) items.push({ label: 'Paste', shortcut: '⌘/Ctrl V', onClick: () => duplicate(internalClipboard!) });
     items.push({ label: 'Duplicate', shortcut: '⌘/Ctrl D', onClick: () => duplicate() });
+    const els = posterRef.current.elements;
+    if (canGroup(selectedIds, els)) items.push({ label: 'Group', shortcut: '⌘/Ctrl G', onClick: groupSelected });
+    if (canUngroup(selectedIds, els)) items.push({ label: 'Ungroup', shortcut: '⌘/Ctrl ⇧ G', onClick: ungroupSelected });
     items.push('-');
     if (!many) {
       items.push({ label: 'Bring to front', onClick: () => layer('front') });
@@ -706,8 +733,13 @@ export default function Editor({ initial, onClose }: Props) {
               snap={snap}
               selectedIds={selectedIds}
               editingId={editingId}
-              onSelect={(id, additive) =>
-                setSelectedIds((cur) => (additive ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : cur.includes(id) ? cur : [id]))
+              onSelect={(id, additive, only) =>
+                setSelectedIds((cur) => {
+                  if (only) return [id];
+                  const members = groupMembers(id, posterRef.current.elements);
+                  if (additive) return cur.includes(id) ? cur.filter((x) => !members.includes(x)) : [...cur, ...members.filter((x) => !cur.includes(x))];
+                  return cur.includes(id) ? cur : members;
+                })
               }
               onMoveMany={(moves, key) =>
                 update((d) => {
@@ -717,7 +749,11 @@ export default function Editor({ initial, onClose }: Props) {
                   }
                 }, key)
               }
-              onEdit={setEditingId}
+              onEdit={(id) => {
+                setEditingId(id);
+                // typing in a grouped text box edits just that box
+                if (id) setSelectedIds((cur) => (cur.length > 1 ? [id] : cur));
+              }}
               onChange={(id, patch, key) => updateElement(id, patch, key)}
               onCommitText={(id, html) => updateElement(id, { html })}
               onContextMenu={(el, x, y) => setMenu({ x, y, el })}
@@ -734,6 +770,9 @@ export default function Editor({ initial, onClose }: Props) {
             poster={poster}
             el={selectedIds.length > 1 ? null : selected}
             multi={selectedIds.length}
+            grouped={!!wholeGroup(selectedIds, poster.elements)}
+            onGroup={canGroup(selectedIds, poster.elements) ? groupSelected : undefined}
+            onUngroup={canUngroup(selectedIds, poster.elements) ? ungroupSelected : undefined}
             overflow={overflow}
             onShrinkText={shrinkToFit}
             onGrowBox={growToFit}

@@ -5,7 +5,7 @@ import { PDFDocument, PDFName, PDFNumber, type PDFImage } from 'pdf-lib';
 import { BasicPlatform, Chart, registerables, type ChartConfiguration } from 'chart.js';
 import type { Poster, PosterElement } from '../../types';
 import { MM_TO_PX, fontStack, resolveColor, resolveFont } from '../../model';
-import { buildChartConfig } from '../chart';
+import { buildChartConfig, chartExtraText } from '../chart';
 import { parseColor, type RGBA } from './color';
 import { FontRegistry, fontkit, type Fetcher } from './fonts';
 import { Painter } from './painter';
@@ -76,7 +76,7 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
   for (const e of p.elements) {
     if (e.type !== 'chart' || !e.chart) continue;
     const s = e.chart;
-    const text = [s.title, s.xLabel, s.yLabel, ...s.columns, ...s.rows.flat(), '0123456789.,-−+eE%kMB '].join('');
+    const text = [s.title, s.xLabel, s.yLabel, ...s.columns, ...s.rows.flat(), chartExtraText(s)].join('');
     want(chartFont, 400, false, text);
     want(chartFont, 700, false, text);
   }

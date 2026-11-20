@@ -40,7 +40,7 @@ export interface TextStyle {
   lineHeight: number;
 }
 
-export type ChartKind = 'bar' | 'horizontalBar' | 'line' | 'scatter' | 'pie' | 'doughnut';
+export type ChartKind = 'bar' | 'horizontalBar' | 'stackedBar' | 'line' | 'scatter' | 'pie' | 'doughnut' | 'histogram' | 'box';
 
 export interface ChartSpec {
   kind: ChartKind;
@@ -57,6 +57,12 @@ export interface ChartSpec {
   yLabel: string;
   showLegend: boolean;
   fontSize: number; // pt
+  /** scatter: draw a least-squares line per series and show its equation and R² */
+  trendline?: boolean;
+  /** histogram: number of bars; empty means pick automatically */
+  bins?: number;
+  /** box plot: one box per ticked column, or group rows by the X column's values */
+  boxGroups?: 'columns' | 'category';
 }
 
 export interface PosterElement {

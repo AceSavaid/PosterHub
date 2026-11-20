@@ -1,7 +1,8 @@
 import type { PosterElement } from '../types';
 import { isCropped } from './geometry';
+import { iconInfo } from './icons/library';
 
-export const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', table: 'Table', equation: 'Equation' };
+export const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', table: 'Table', equation: 'Equation', icon: 'Icon' };
 
 const SHAPE_NAMES: Record<string, string> = { rect: 'Box', ellipse: 'Circle', line: 'Line', triangle: 'Triangle', diamond: 'Diamond', arrow: 'Arrow', star: 'Star' };
 
@@ -43,6 +44,9 @@ export function elementLabel(el: PosterElement): string {
     label = el.table ? `Table, ${el.table.rows.length} rows${cells.length ? ': ' + clip(cells.slice(0, 4).join(', ')) : ', empty'}` : 'Table';
   } else if (el.type === 'equation') {
     label = `Equation${el.equation?.latex ? ': ' + clip(el.equation.latex) : ''}`;
+  } else if (el.type === 'icon') {
+    const name = el.alt || iconInfo(el.icon?.id)?.label;
+    label = `Icon${name ? ': ' + clip(name) : ''}`;
   } else {
     label = SHAPE_NAMES[el.shape ?? 'rect'] ?? 'Shape';
   }

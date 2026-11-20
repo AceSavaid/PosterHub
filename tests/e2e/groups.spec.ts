@@ -95,7 +95,7 @@ test('groups survive a reload', async ({ page }) => {
   await expect(page.locator('.save-state')).toHaveText('Saved');
   await page.getByRole('button', { name: /My posters/ }).click();
   await expect(page.getByRole('heading', { name: 'My posters' })).toBeVisible();
-  await page.reload();
+  await page.goto('/'); // My posters, not the poster's own link (which reopens it by itself)
   await page.locator('.poster-card').first().getByRole('button', { name: 'Open', exact: true }).click();
   await expect(page.locator('.poster')).toBeVisible();
   await els(page).nth(0).click();

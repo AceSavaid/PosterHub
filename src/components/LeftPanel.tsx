@@ -21,18 +21,38 @@ interface Props {
   notify: (msg: string) => void;
 }
 
+const TABS: Tab[] = ['insert', 'layout', 'design'];
+
 export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
-    <aside className="panel left">
-      <div className="tabs">
-        {(['insert', 'layout', 'design'] as Tab[]).map((t) => (
-          <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
+    <aside className="panel left" aria-label="Tools">
+      <div className="tabs" role="tablist" aria-label="Tools">
+        {TABS.map((t, i) => (
+          <button
+            key={t}
+            id={'tab-' + t}
+            role="tab"
+            aria-selected={tab === t}
+            aria-controls="tools-panel"
+            tabIndex={tab === t ? 0 : -1}
+            className={tab === t ? 'active' : ''}
+            onClick={() => setTab(t)}
+            onKeyDown={(e) => {
+              const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+              const to = e.key === 'Home' ? 0 : e.key === 'End' ? TABS.length - 1 : step ? (i + step + TABS.length) % TABS.length : -1;
+              if (to < 0) return;
+              e.preventDefault();
+              e.stopPropagation(); // arrows here switch tabs, not nudge the selected element
+              setTab(TABS[to]);
+              document.getElementById('tab-' + TABS[to])?.focus();
+            }}
+          >
             {t[0].toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
-      <div className="panel-body">
+      <div className="panel-body" id="tools-panel" role="tabpanel" aria-labelledby={'tab-' + tab}>
         {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} />}
         {tab === 'layout' && <LayoutTab poster={poster} update={update} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
@@ -132,16 +152,16 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
       </div>
       <h3>Columns</h3>
       <div className="form-grid">
-        <label className="span2">
-          Number of columns
-          <div className="seg">
+        <div className="span2">
+          <div className="field-label" id="columns-label">Number of columns</div>
+          <div className="seg" role="group" aria-labelledby="columns-label">
             {[1, 2, 3, 4, 5, 6].map((n) => (
-              <button key={n} className={poster.columns === n ? 'active' : ''} onClick={() => update((d) => void (d.columns = n))}>
+              <button key={n} aria-pressed={poster.columns === n} className={poster.columns === n ? 'active' : ''} onClick={() => update((d) => void (d.columns = n))}>
                 {n}
               </button>
             ))}
           </div>
-        </label>
+        </div>
         {num('Margin', 'margin')}
         {num('Gap between columns', 'gutter')}
       </div>

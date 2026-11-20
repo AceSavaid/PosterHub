@@ -4,6 +4,7 @@ import { PALETTES, SIZE_PRESETS, TEMPLATES, columnLefts, columnWidth, createPost
 import type { Poster } from '../types';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
+import { useDialog } from '../lib/useDialog';
 
 interface Props {
   onCreate: (p: Poster) => void;
@@ -22,17 +23,19 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
   const [bodyFont, setBodyFont] = useState('Open Sans');
 
   const fonts = [...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS];
+  const dialog = useDialog<HTMLFormElement>(onCancel, 'new-poster-title');
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
       <form
+        {...dialog}
         className="modal wide"
         onSubmit={(e) => {
           e.preventDefault();
           onCreate(createPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }));
         }}
       >
-        <h2>New poster</h2>
+        <h2 id="new-poster-title">New poster</h2>
         <div className="form-grid">
           <label className="span2">
             Name

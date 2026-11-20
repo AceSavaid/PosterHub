@@ -88,6 +88,8 @@ export interface PosterElement {
   /** which way an arrow points */
   direction?: 'right' | 'left' | 'up' | 'down';
   locked?: boolean;
+  /** Description of an image or graph for screen readers and exported files (alt text). */
+  alt?: string;
 }
 
 export interface Poster {

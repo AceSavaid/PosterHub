@@ -26,11 +26,11 @@ export function SizeFields({ orientation, preset, width, height, onChange }: Pro
   return (
     <>
       <div>
-        <div className="field-label">Orientation</div>
-        <div className="seg">
+        <div className="field-label" id="orientation-label">Orientation</div>
+        <div className="seg" role="group" aria-labelledby="orientation-label">
           {(['portrait', 'landscape'] as Orientation[]).map((o) => (
-            <button type="button" key={o} className={orientation === o ? 'active' : ''} onClick={() => setOrientation(o)}>
-              <span className={'orient-icon ' + o} /> {o[0].toUpperCase() + o.slice(1)}
+            <button type="button" key={o} aria-pressed={orientation === o} className={orientation === o ? 'active' : ''} onClick={() => setOrientation(o)}>
+              <span className={'orient-icon ' + o} aria-hidden /> {o[0].toUpperCase() + o.slice(1)}
             </button>
           ))}
         </div>

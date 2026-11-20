@@ -191,7 +191,7 @@ test.describe('templates', () => {
     page.on('dialog', (d) => d.accept());
     await newPoster(page);
     await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Layout' }).click();
+    await page.getByRole('tab', { name: 'Layout' }).click();
     await page.getByRole('combobox', { name: 'Layout' }).selectOption('boxed');
     await expect(page.getByText('Logos either side of the title')).toBeVisible();
     await page.getByRole('button', { name: /^Apply to/ }).click();
@@ -280,18 +280,18 @@ test.describe('editing', () => {
     await newPoster(page);
     const band = elements(page).first();
     const before = await band.evaluate((el) => getComputedStyle(el).backgroundColor);
-    await page.getByRole('button', { name: 'Design' }).click();
+    await page.getByRole('tab', { name: 'Design' }).click();
     await page.getByRole('button', { name: 'Crimson' }).click();
     await expect.poll(() => band.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(before);
     expect(await band.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(139, 30, 45)');
-    await page.getByRole('button', { name: 'Layout' }).click();
+    await page.getByRole('tab', { name: 'Layout' }).click();
     await page.locator('.seg button', { hasText: /^5$/ }).click();
     await expect(page.locator('.grid-col')).toHaveCount(5);
   });
 
   test('switches orientation and scales content', async ({ page }) => {
     await newPoster(page);
-    await page.getByRole('button', { name: 'Layout' }).click();
+    await page.getByRole('tab', { name: 'Layout' }).click();
     await page.getByRole('button', { name: 'Landscape' }).click();
     const box = await page.locator('.poster').evaluate((el: HTMLElement) => ({ w: el.offsetWidth, h: el.offsetHeight }));
     expect(box.w).toBeGreaterThan(box.h);
@@ -309,7 +309,7 @@ test.describe('editing', () => {
 test.describe('fonts', () => {
   test('uploads a custom font and uses it', async ({ page }) => {
     await newPoster(page);
-    await page.getByRole('button', { name: 'Design' }).click();
+    await page.getByRole('tab', { name: 'Design' }).click();
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /Upload your own font/ }).click();
     await (await chooser).setFiles(path.join(FIXTURES, 'Italiana-Regular.ttf'));
@@ -425,7 +425,7 @@ test.describe('export, import and sharing', () => {
   test('PDF is vector: real text, embedded fonts, vector charts, true page size', async ({ page }) => {
     await newPoster(page, { name: 'Vector', size: 'A3' });
     // custom font for headings
-    await page.getByRole('button', { name: 'Design' }).click();
+    await page.getByRole('tab', { name: 'Design' }).click();
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /Upload your own font/ }).click();
     await (await chooser).setFiles(path.join(FIXTURES, 'Italiana-Regular.ttf'));

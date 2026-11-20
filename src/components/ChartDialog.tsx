@@ -5,6 +5,7 @@ import { resolveColor, resolveFont, typeScale } from '../model';
 import { toNumber } from '../lib/chart';
 import { pickFile } from '../lib/storage';
 import ChartView from './ChartView';
+import { useDialog } from '../lib/useDialog';
 
 interface Props {
   poster: Poster;
@@ -82,12 +83,13 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
     if (f) load(await f.text());
   }
 
+  const dialog = useDialog(onCancel, 'chart-dialog-title');
   const preview = useMemo(() => spec && { ...spec, fontSize: 11 }, [spec]);
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="modal xwide chart-dialog">
-        <h2>{initial ? 'Edit graph' : 'Graph from CSV'}</h2>
+      <div {...dialog} className="modal xwide chart-dialog">
+        <h2 id="chart-dialog-title">{initial ? 'Edit graph' : 'Graph from CSV'}</h2>
         {!spec ? (
           <div className="csv-load">
             <button className="btn primary big" onClick={upload}>Choose a CSV file…</button>

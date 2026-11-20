@@ -7,6 +7,7 @@ import { deletePoster, exportPosterFile, fileToDataUrl, pickFile, savePoster } f
 import { ensurePosterFonts } from '../lib/fonts';
 import { copyImageToClipboard, effectiveDpi, exportPdf, exportPng, exportPptx, makeThumbnail } from '../lib/exporters';
 import { Canvas } from './Canvas';
+import { reducedMotion } from '../lib/a11y';
 import LeftPanel from './LeftPanel';
 import Inspector from './Inspector';
 import ChartDialog from './ChartDialog';
@@ -57,6 +58,33 @@ export default function Editor({ initial, onClose }: Props) {
   const [viewing, setViewing] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  const exportBtn = useRef<HTMLButtonElement>(null);
+  const exportMenu = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!exportOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setExportOpen(false);
+      exportBtn.current?.focus();
+    };
+    const onDown = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!exportMenu.current?.contains(t) && !exportBtn.current?.contains(t)) setExportOpen(false);
+    };
+    const onFocus = (e: FocusEvent) => {
+      const t = e.target as Node;
+      if (!exportMenu.current?.contains(t) && !exportBtn.current?.contains(t)) setExportOpen(false);
+    };
+    window.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('focusin', onFocus);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('focusin', onFocus);
+    };
+  }, [exportOpen]);
   const [checkOpen, setCheckOpen] = useState(false);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
@@ -558,7 +586,9 @@ export default function Editor({ initial, onClose }: Props) {
 
   function pickIssue(id: string) {
     setSelectedId(id);
-    posterNode.current?.querySelector(`[data-id="${id}"]`)?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    const node = posterNode.current?.querySelector<HTMLElement>(`[data-id="${id}"]`);
+    node?.scrollIntoView({ block: 'center', inline: 'center', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    node?.focus({ preventScroll: true });
   }
 
   async function copyImage() {
@@ -579,6 +609,7 @@ export default function Editor({ initial, onClose }: Props) {
 
   return (
     <div className="editor" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+      <h1 className="sr-only">Editing {poster.name || 'poster'}</h1>
       <header className="topbar">
         <button className="btn ghost" onClick={close} title="Back to My posters">
           <Logo /> ‹ My posters
@@ -601,7 +632,7 @@ export default function Editor({ initial, onClose }: Props) {
         <button className="icon-btn" disabled={!canRedo} onClick={redo} title="Redo (Ctrl/⌘ Shift Z)">↷</button>
         <span className="sep" />
         <button className="icon-btn" onClick={() => setZoom((z) => Math.max(0.02, z / 1.25))} title="Zoom out">−</button>
-        <button className="btn ghost zoom-label" onClick={fit} title="Fit to screen (Shift 0)">{Math.round(zoom * 100)}%</button>
+        <button className="btn ghost zoom-label" onClick={fit} title="Fit to screen (Shift 0)" aria-label={`${Math.round(zoom * 100)}%, fit to screen`}>{Math.round(zoom * 100)}%</button>
         <button className="icon-btn" onClick={() => setZoom((z) => Math.min(4, z * 1.25))} title="Zoom in">+</button>
         <span className="sep" />
         <label className="toggle" title="Show column guides">
@@ -626,9 +657,9 @@ export default function Editor({ initial, onClose }: Props) {
         <button className="btn" onClick={() => setViewing(true)}>View</button>
         <button className="btn" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
         <div className="menu-wrap">
-          <button className="btn primary" onClick={() => setExportOpen((o) => !o)}>Export ▾</button>
+          <button ref={exportBtn} className="btn primary" aria-expanded={exportOpen} aria-controls="export-menu" onClick={() => setExportOpen((o) => !o)}>Export ▾</button>
           {exportOpen && (
-            <div className="menu" onMouseLeave={() => setExportOpen(false)}>
+            <div className="menu" id="export-menu" role="group" aria-label="Export" ref={exportMenu} onMouseLeave={() => setExportOpen(false)}>
               {issues.some((i) => i.severity === 'problem') && (
                 <button
                   className="menu-warn"
@@ -687,8 +718,9 @@ export default function Editor({ initial, onClose }: Props) {
             <span>Tools</span>
           </button>
         )}
-        <div
+        <main
           className="stage"
+          aria-label="Poster"
           ref={scroller}
           onPointerDown={startMarquee}
           onWheel={(e) => {
@@ -706,8 +738,8 @@ export default function Editor({ initial, onClose }: Props) {
               snap={snap}
               selectedIds={selectedIds}
               editingId={editingId}
-              onSelect={(id, additive) =>
-                setSelectedIds((cur) => (additive ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : cur.includes(id) ? cur : [id]))
+              onSelect={(id, additive, only) =>
+                setSelectedIds((cur) => (additive ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : cur.includes(id) && !only ? cur : [id]))
               }
               onMoveMany={(moves, key) =>
                 update((d) => {
@@ -728,7 +760,7 @@ export default function Editor({ initial, onClose }: Props) {
               }}
             />
           </div>
-        </div>
+        </main>
         {prefs.showProperties ? (
           <Inspector
             poster={poster}
@@ -770,7 +802,9 @@ export default function Editor({ initial, onClose }: Props) {
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
-      {toast && <div className="toast">{toast}</div>}
+      <div className="toast-region" role="status" aria-live="polite">
+        {toast && <div className="toast">{toast}</div>}
+      </div>
       {marquee && (
         <div
           className="marquee"

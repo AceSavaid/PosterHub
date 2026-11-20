@@ -2,6 +2,7 @@ import { forwardRef, useRef, useState } from 'react';
 import type { Poster, PosterElement } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth } from '../model';
 import { ElementView, Surface } from './Surface';
+import { elementLabel } from '../lib/a11y';
 
 type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -13,7 +14,8 @@ interface Props {
   snap: boolean;
   selectedIds: string[];
   editingId: string | null;
-  onSelect: (id: string, additive: boolean) => void;
+  /** `only` replaces the selection even if the element is already part of it. */
+  onSelect: (id: string, additive: boolean, only?: boolean) => void;
   onMoveMany: (moves: { id: string; patch: Partial<PosterElement> }[], coalesce?: string) => void;
   onEdit: (id: string | null) => void;
   onChange: (id: string, patch: Partial<PosterElement>, coalesce?: string) => void;
@@ -203,6 +205,31 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
             onEditDone={() => onEdit(null)}
             className={(selectedIds.includes(el.id) ? 'selected ' : '') + (el.locked ? 'locked ' : '') + (isEditing ? 'editing' : '')}
             wrapperProps={{
+              // Every element is a stop in the Tab order, so the poster can be edited without a mouse.
+              tabIndex: isEditing ? -1 : 0,
+              // A labelled group (not a button) so the label can summarise long text without clashing with it.
+              role: isEditing ? undefined : 'group',
+              'aria-label': isEditing ? undefined : elementLabel(el) + (selectedIds.includes(el.id) ? ', selected' : ''),
+              'aria-roledescription': isEditing ? undefined : 'poster element',
+              onFocus: (e) => {
+                // Keyboard focus selects the element (a mouse click already selected it on pointer down).
+                if (e.target !== e.currentTarget || isEditing || !e.currentTarget.matches(':focus-visible')) return;
+                if (!selectedIds.includes(el.id) || selectedIds.length > 1) onSelect(el.id, false, true);
+              },
+              onKeyDown: (e) => {
+                if (e.target !== e.currentTarget || isEditing) return;
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'F2') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (isText) onEdit(el.id);
+                  else if (el.type === 'image' || el.type === 'chart') onActivate(el);
+                } else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  onContextMenu(el, r.left + Math.min(r.width / 2, 40), r.top + Math.min(r.height / 2, 40));
+                }
+              },
               onPointerDown: isEditing ? (e) => e.stopPropagation() : (e) => startDrag(e, el),
               onContextMenu: (e) => {
                 if (isEditing) return; // keep the browser's spelling / copy menu while typing

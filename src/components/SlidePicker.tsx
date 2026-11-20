@@ -1,3 +1,4 @@
+import { useDialog } from '../lib/useDialog';
 import { useEffect, useState } from 'react';
 import type { Poster } from '../types';
 import { MM_TO_PX } from '../model';
@@ -44,16 +45,12 @@ export default function SlidePicker({ deck, fileName, onPick, onCancel }: Props)
     };
   }, [deck]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCancel();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  const dialog = useDialog(onCancel, 'slide-picker-title');
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="modal xwide slide-picker" role="dialog" aria-label={isLayouts ? 'Choose a layout' : 'Choose a slide'}>
-        <h2>{isLayouts ? 'Choose a layout to start from' : 'Choose a slide to start from'}</h2>
+      <div {...dialog} className="modal xwide slide-picker">
+        <h2 id="slide-picker-title">{isLayouts ? 'Choose a layout to start from' : 'Choose a slide to start from'}</h2>
         <p className="muted">
           “{fileName}” has {deck.pages.length} {isLayouts ? 'layouts' : 'slides'}. Pick the one that looks most like the poster you want — its colours, fonts and
           shapes become your new poster.

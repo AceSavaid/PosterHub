@@ -17,7 +17,7 @@ test('follows the system theme by default and can be switched to light or dark',
   expect(await theme(page)).toBeNull();
   expect(await bg(page)).toBe('rgb(26, 29, 35)');
 
-  await page.getByRole('button', { name: 'Appearance' }).click();
+  await page.getByRole('button', { name: 'View ▾' }).click();
   await page.getByRole('radio', { name: /Light/ }).click();
   expect(await theme(page)).toBe('light');
   expect(await bg(page)).toBe('rgb(255, 255, 255)');
@@ -43,7 +43,7 @@ test('side panels can be swapped and hidden, and stay that way', async ({ page }
   const stage = page.locator('.stage');
   expect((await tools.boundingBox())!.x).toBeLessThan((await stage.boundingBox())!.x);
 
-  await page.getByRole('button', { name: 'Appearance' }).click();
+  await page.getByRole('button', { name: 'View ▾' }).click();
   await page.getByLabel('Tools on the right').check();
   expect((await tools.boundingBox())!.x).toBeGreaterThan((await stage.boundingBox())!.x);
   expect((await props.boundingBox())!.x).toBeLessThan((await stage.boundingBox())!.x);

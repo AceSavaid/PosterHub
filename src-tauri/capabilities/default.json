@@ -1,0 +1,31 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the PosterHub window may do: read and write posters in Documents/PosterHub, show Save dialogs for exports, and open that folder.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "dialog:allow-save",
+    "fs:allow-exists",
+    "fs:allow-mkdir",
+    "fs:allow-read-dir",
+    "fs:allow-read-text-file",
+    "fs:allow-write-text-file",
+    "fs:allow-write-file",
+    "fs:allow-rename",
+    "fs:allow-remove",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$DOCUMENT/PosterHub" },
+        { "path": "$DOCUMENT/PosterHub/**" },
+        { "path": "$HOME/Documents/PosterHub" },
+        { "path": "$HOME/Documents/PosterHub/**" }
+      ]
+    },
+    {
+      "identifier": "opener:allow-open-path",
+      "allow": [{ "path": "$DOCUMENT/PosterHub" }, { "path": "$HOME/Documents/PosterHub" }]
+    }
+  ]
+}

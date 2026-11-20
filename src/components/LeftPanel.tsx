@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import type { ElementType, Poster, PosterElement } from '../types';
-import { PALETTE_ROLES, TEMPLATES, buildTemplate, templateDef, typeScale, type TemplateId } from '../model';
+import { applyLayout, describeReport } from '../lib/relayout';
+import { PALETTE_ROLES, TEMPLATES, templateDef, typeScale, type TemplateId } from '../model';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
 import { FontSelect } from './FontSelect';
 import { fileToDataUrl, pickFile } from '../lib/storage';
 import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fonts';
 import { importPptx } from '../lib/pptxImport';
+import { askConfirm } from '../lib/dialogs';
 import { SHAPE_CHOICES } from '../lib/shapes';
 
 type Tab = 'insert' | 'layout' | 'design';
@@ -18,30 +20,54 @@ interface Props {
   onInsertImage: () => void;
   onInsertChart: () => void;
   onInsertQr: () => void;
+  onInsertAuthors: () => void;
+  onInsertReferences: () => void;
+  onInsertTable: () => void;
+  onInsertEquation: () => void;
   notify: (msg: string) => void;
 }
 
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, notify }: Props) {
+const TABS: Tab[] = ['insert', 'layout', 'design'];
+
+export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
-    <aside className="panel left">
-      <div className="tabs">
-        {(['insert', 'layout', 'design'] as Tab[]).map((t) => (
-          <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>
+    <aside className="panel left" aria-label="Tools">
+      <div className="tabs" role="tablist" aria-label="Tools">
+        {TABS.map((t, i) => (
+          <button
+            key={t}
+            id={'tab-' + t}
+            role="tab"
+            aria-selected={tab === t}
+            aria-controls="tools-panel"
+            tabIndex={tab === t ? 0 : -1}
+            className={tab === t ? 'active' : ''}
+            onClick={() => setTab(t)}
+            onKeyDown={(e) => {
+              const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+              const to = e.key === 'Home' ? 0 : e.key === 'End' ? TABS.length - 1 : step ? (i + step + TABS.length) % TABS.length : -1;
+              if (to < 0) return;
+              e.preventDefault();
+              e.stopPropagation(); // arrows here switch tabs, not nudge the selected element
+              setTab(TABS[to]);
+              document.getElementById('tab-' + TABS[to])?.focus();
+            }}
+          >
             {t[0].toUpperCase() + t.slice(1)}
           </button>
         ))}
       </div>
-      <div className="panel-body">
-        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} />}
-        {tab === 'layout' && <LayoutTab poster={poster} update={update} />}
+      <div className="panel-body" id="tools-panel" role="tabpanel" aria-labelledby={'tab-' + tab}>
+        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} onInsertReferences={onInsertReferences} onInsertTable={onInsertTable} onInsertEquation={onInsertEquation} />}
+        {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
       </div>
     </aside>
   );
 }
 
-function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr'>) {
+function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors' | 'onInsertReferences' | 'onInsertTable' | 'onInsertEquation'>) {
   return (
     <>
       <h3>Text</h3>
@@ -50,7 +76,10 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<
           <span aria-hidden className="ib-icon t-title">T</span>Title
         </button>
         <button className="insert-btn" onClick={() => onInsert('subtitle')}>
-          <span aria-hidden className="ib-icon t-sub">T</span>Subtitle / authors
+          <span aria-hidden className="ib-icon t-sub">T</span>Subtitle
+        </button>
+        <button className="insert-btn" onClick={onInsertAuthors}>
+          <span aria-hidden className="ib-icon t-sub">A¹</span>Authors and affiliations…
         </button>
         <button className="insert-btn" onClick={() => onInsert('heading')}>
           <span aria-hidden className="ib-icon t-head">H</span>Section header
@@ -58,11 +87,20 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<
         <button className="insert-btn" onClick={() => onInsert('text')}>
           <span aria-hidden className="ib-icon t-body">¶</span>Text box
         </button>
+        <button className="insert-btn" onClick={onInsertReferences}>
+          <span aria-hidden className="ib-icon">[1]</span>References / citations…
+        </button>
+        <button className="insert-btn" onClick={onInsertEquation}>
+          <span aria-hidden className="ib-icon t-eq">∑</span>Equation (LaTeX)…
+        </button>
       </div>
       <h3>Media and data</h3>
       <div className="insert-list">
         <button className="insert-btn" onClick={onInsertImage}>
           <span aria-hidden className="ib-icon">🖼</span>Image…
+        </button>
+        <button className="insert-btn" onClick={onInsertTable}>
+          <span aria-hidden className="ib-icon">▤</span>Table
         </button>
         <button className="insert-btn" onClick={onInsertChart}>
           <span aria-hidden className="ib-icon">📊</span>Graph from CSV…
@@ -81,13 +119,13 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<
         ))}
       </div>
       <p className="hint">
-        Tip: paste text or images straight onto the poster with Ctrl/⌘ + V, or drag image and CSV files in. Double-click any text to edit it.
+        Tip: paste text, images or cells from Excel / Google Sheets straight onto the poster with Ctrl/⌘ + V, or drag image and CSV files in. Double-click any text to edit it.
       </p>
     </>
   );
 }
 
-function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
+function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' | 'notify'>) {
   const [scaleContent, setScaleContent] = useState(true);
   const [template, setTemplate] = useState<TemplateId>('classic');
 
@@ -104,6 +142,8 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
           e.h *= sy;
           if (e.style) e.style.fontSize = Math.max(4, Math.round(e.style.fontSize * fs * 10) / 10);
           if (e.chart) e.chart.fontSize = Math.max(4, Math.round(e.chart.fontSize * fs));
+          if (e.table) e.table.fontSize = Math.max(4, Math.round(e.table.fontSize * fs * 10) / 10);
+          if (e.equation) e.equation.fontSize = Math.max(4, Math.round(e.equation.fontSize * fs * 10) / 10);
         }
         d.margin *= Math.min(sx, sy);
         d.gutter *= Math.min(sx, sy);
@@ -132,21 +172,25 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
       </div>
       <h3>Columns</h3>
       <div className="form-grid">
-        <label className="span2">
-          Number of columns
-          <div className="seg">
+        <div className="span2">
+          <div className="field-label" id="columns-label">Number of columns</div>
+          <div className="seg" role="group" aria-labelledby="columns-label">
             {[1, 2, 3, 4, 5, 6].map((n) => (
-              <button key={n} className={poster.columns === n ? 'active' : ''} onClick={() => update((d) => void (d.columns = n))}>
+              <button key={n} aria-pressed={poster.columns === n} className={poster.columns === n ? 'active' : ''} onClick={() => update((d) => void (d.columns = n))}>
                 {n}
               </button>
             ))}
           </div>
-        </label>
+        </div>
         {num('Margin', 'margin')}
         {num('Gap between columns', 'gutter')}
       </div>
-      <p className="hint">Columns show as blue guides; elements snap to them while you drag. Hold Alt to drag without snapping.</p>
-      <h3>Rebuild layout</h3>
+      <p className="hint">
+        Columns show as blue guides, and elements snap to them while you drag (hold Alt to skip). Changing the number of columns moves the guides only; your
+        content stays where it is.
+      </p>
+      <h3>Switch layout</h3>
+      <p className="hint">Rearranges the poster into another layout with {poster.columns} column{poster.columns > 1 ? 's' : ''}. Your content moves into the matching places.</p>
       <div className="form-grid">
         <label className="span2">
           Layout
@@ -156,12 +200,14 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
             ))}
           </select>
         </label>
-        <p className="hint span2">{templateDef(template).description}</p>
+        <p className="hint span2">{templateDef(template).description} Your text, figures and logos carry over.</p>
         <button
           className="btn span2"
-          onClick={() => {
-            if (!confirm('Replace everything on the poster with this layout? You can undo afterwards.')) return;
-            update((d) => void (d.elements = buildTemplate(template, d)));
+          onClick={async () => {
+            if (!(await askConfirm('Switch to this layout?', 'Your title, authors, section text, figures, logos and QR codes move into the matching places. You can undo afterwards.', 'Apply layout'))) return;
+            const { elements, report } = applyLayout(poster, template);
+            update((d) => void (d.elements = elements));
+            notify(describeReport(report));
           }}
         >
           Apply to {poster.columns} column{poster.columns > 1 ? 's' : ''}

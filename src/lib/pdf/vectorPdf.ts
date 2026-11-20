@@ -1,16 +1,21 @@
 // Vector PDF export: text stays real text with embedded fonts, shapes and
 // charts stay vectors, and photos keep their full original resolution. This
 // is what makes a poster print sharply at A0 and beyond.
-import { PDFDocument, PDFName, PDFNumber, type PDFImage } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFNumber, PDFOperator, PDFOperatorNames as Op, type PDFImage } from 'pdf-lib';
 import { BasicPlatform, Chart, registerables, type ChartConfiguration } from 'chart.js';
 import type { Poster, PosterElement } from '../../types';
 import { MM_TO_PX, fontStack, resolveColor, resolveFont } from '../../model';
-import { buildChartConfig } from '../chart';
+import { buildChartConfig, chartExtraText } from '../chart';
 import { parseColor, type RGBA } from './color';
 import { FontRegistry, fontkit, type Fetcher } from './fonts';
 import { Painter } from './painter';
 import { PdfCanvasContext, RecordingPath2D } from './canvas2d';
-import { extractText, frameOf, type TextPiece } from './domText';
+import { extractText, frameOf, type Frame, type TextPiece } from './domText';
+import { MARK_WIDTH_PT, bleedBox, cropMarkLines, printGeometry, type PrintOptions } from '../print';
+import { POLYGONS, ARROW_ROTATION, isPolygon } from '../shapes';
+import { cellLook, normalizeTable, type Border } from '../table';
+import { drawSvgMarkup } from './svgDraw';
+import { PT_TO_PX, layoutEquation, loadMath, mathSvg, svgDataUrl, typesetLatex } from '../math';
 
 Chart.register(...registerables);
 
@@ -22,6 +27,8 @@ export interface VectorPdfOptions {
   fetcher?: Fetcher;
   /** Image fallbacks for charts that cannot be drawn as vectors, by element id. */
   chartImage?: (id: string) => string | undefined;
+  /** Bleed and crop marks for print shops. */
+  print?: Partial<PrintOptions>;
 }
 
 export interface VectorPdfResult {
@@ -42,15 +49,24 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
 
   const W = p.width * MM_TO_PX;
   const H = p.height * MM_TO_PX;
-  const wPt = W * PT_PER_PX;
-  const hPt = H * PT_PER_PX;
+  const geo = printGeometry(p, opts.print);
+  const M = geo.marginMm * MM_TO_PX; // extra space around the trim for bleed and crop marks
+  const B = geo.bleedMm * MM_TO_PX;
+  const wPt = (W + 2 * M) * PT_PER_PX;
+  const hPt = (H + 2 * M) * PT_PER_PX;
   const unit = Math.max(1, Math.max(wPt, hPt) / MAX_PDF_UNITS);
   const page = doc.addPage([wPt / unit, hPt / unit]);
   if (unit > 1) page.node.set(PDFName.of('UserUnit'), PDFNumber.of(unit));
+  const k = PT_PER_PX / unit;
+  if (M > 0) {
+    // Tell print software where the finished poster is and how far the artwork bleeds.
+    page.setTrimBox(M * k, M * k, W * k, H * k);
+    page.setBleedBox((M - B) * k, (M - B) * k, (W + 2 * B) * k, (H + 2 * B) * k);
+  }
 
   const painter = new Painter(doc, page);
-  // Poster px with y down → PDF units with y up.
-  painter.transform([PT_PER_PX / unit, 0, 0, -PT_PER_PX / unit, 0, hPt / unit]);
+  // Poster px with y down → PDF units with y up; (0, 0) is the top-left trim corner.
+  painter.transform([k, 0, 0, -k, M * k, (H + M) * k]);
 
   const fonts = new FontRegistry(doc, p, opts.fetcher);
 
@@ -61,6 +77,11 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
     if (!isTextType(e)) continue;
     const body = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"] .el-body`);
     if (body) textByEl.set(e.id, extractText(body, frame));
+  }
+  for (const e of p.elements) {
+    if (e.type !== 'table') continue;
+    const wrap = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"] .el-table-wrap`);
+    if (wrap) textByEl.set(e.id, extractText(wrap, frame));
   }
 
   // 2. Load the fonts that text needs.
@@ -76,23 +97,29 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
   for (const e of p.elements) {
     if (e.type !== 'chart' || !e.chart) continue;
     const s = e.chart;
-    const text = [s.title, s.xLabel, s.yLabel, ...s.columns, ...s.rows.flat(), '0123456789.,-−+eE%kMB '].join('');
+    const text = [s.title, s.xLabel, s.yLabel, ...s.columns, ...s.rows.flat(), chartExtraText(s)].join('');
     want(chartFont, 400, false, text);
     want(chartFont, 700, false, text);
   }
   for (const r of requests.values()) await fonts.prepare(r.family, r.weight, r.italic, r.text);
 
-  // 3. Paint.
+  // Equations are typeset again here (same engine and layout as the editor) and drawn as paths.
+  if (p.elements.some((e) => e.type === 'equation' && e.equation)) await loadMath();
+
+  // 3. Paint. Artwork is clipped to the bleed edge (the trim when there is no bleed); crop marks go outside it.
+  painter.save();
+  painter.rect(-B, -B, W + 2 * B, H + 2 * B);
+  painter.clip();
   const pal = p.palette;
   const bg = parseColor(resolveColor('@background', pal));
   if (bg) {
-    painter.rect(0, 0, W, H);
+    painter.rect(-B, -B, W + 2 * B, H + 2 * B);
     painter.fill(bg);
   }
   const images = new ImageCache(doc);
   if (p.backgroundImage) {
-    const img = await images.get(p.backgroundImage, W, H);
-    if (img) drawImageFit(painter, img, 0, 0, W, H, 'cover');
+    const img = await images.get(p.backgroundImage, W + 2 * B, H + 2 * B);
+    if (img) drawImageFit(painter, img, -B, -B, W + 2 * B, H + 2 * B, 'cover');
     else warnings.push('The background image could not be read.');
   }
 
@@ -101,12 +128,19 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
     const y = e.y * MM_TO_PX;
     const w = e.w * MM_TO_PX;
     const h = e.h * MM_TO_PX;
+    // Plain boxes touching the edge run on into the bleed.
+    const bb = bleedBox(e, p, geo.bleedMm);
+    const [bx, by, bw2, bh2] = [bb.x * MM_TO_PX, bb.y * MM_TO_PX, bb.w * MM_TO_PX, bb.h * MM_TO_PX];
     if (e.type === 'shape' && e.shape === 'line') {
       const c = parseColor(resolveColor(e.fill ?? '@primary', pal));
       if (c) {
-        painter.rect(x, y, w, h);
+        painter.rect(bx, by, bw2, bh2);
         painter.fill(c);
       }
+      continue;
+    }
+    if (isPolygon(e)) {
+      drawPolygon(painter, e, pal, x, y, w, h);
       continue;
     }
     const bw = ((e.borderWidth ?? 0) * 96) / 72;
@@ -115,15 +149,19 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
     const outline = (inset: number) =>
       ellipse ? painter.ellipse(x + inset, y + inset, w - 2 * inset, h - 2 * inset) : painter.roundRect(x + inset, y + inset, w - 2 * inset, h - 2 * inset, Math.max(0, r - inset));
 
+    const bled = bb.x !== e.x || bb.y !== e.y || bb.w !== e.w || bb.h !== e.h;
     const fill = parseColor(resolveColor(e.fill, pal));
     if (fill) {
-      outline(0);
+      if (bled) painter.rect(bx, by, bw2, bh2);
+      else outline(0);
       painter.fill(fill);
     }
 
     // Content is clipped to the inside of the border, like the editor's overflow: hidden.
+    // A photo that runs into the bleed is clipped to its bleed box instead.
     painter.save();
-    outline(bw);
+    if (bled && e.type === 'image') painter.rect(bx, by, bw2, bh2);
+    else outline(bw);
     painter.clip();
     const pad = (e.padding ?? 0) * MM_TO_PX;
     const cx = x + bw + pad;
@@ -133,11 +171,12 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
 
     if (e.type === 'image' && e.src) {
       const img = await images.get(e.src, cw, ch);
+      const [ix, iy, iw, ih] = bled ? [bx, by, bw2, bh2] : [cx, cy, cw, ch];
       if (img) {
         painter.save();
-        painter.rect(cx, cy, cw, ch);
+        painter.rect(ix, iy, iw, ih);
         painter.clip();
-        drawImageFit(painter, img, cx, cy, cw, ch, e.fit ?? 'contain');
+        drawImageFit(painter, img, ix, iy, iw, ih, e.fit ?? 'contain');
         painter.restore();
       } else warnings.push('An image could not be read.');
     } else if (e.type === 'chart' && e.chart) {
@@ -152,8 +191,30 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
         if (img) drawImageFit(painter, img, cx, cy, cw, ch, 'fill');
         warnings.push('A chart was exported as an image.');
       }
+    } else if (e.type === 'equation' && e.equation) {
+      const eq = e.equation;
+      const res = typesetLatex(eq.latex);
+      const colorCss = resolveColor(eq.color, pal);
+      const color = parseColor(colorCss) ?? { r: 0, g: 0, b: 0, a: 1 };
+      if (res.ok) {
+        const r = res.render;
+        const at = layoutEquation(r, eq.fontSize * PT_TO_PX, { x: cx, y: cy, w: cw, h: ch }, eq.align);
+        const k = r.width > 0 ? at.w / r.viewBox[2] : 0;
+        const mark = painter.ops.length;
+        const ok = !r.hasText && k > 0 && drawSvgMarkup(painter, r.inner, [k, 0, 0, k, at.x - r.viewBox[0] * k, at.y - r.viewBox[1] * k], color).complete;
+        if (!ok && k > 0) {
+          // Rare symbols drawn with a font: keep them as a sharp 300 dpi picture instead.
+          painter.ops.length = mark;
+          const img = await images.get(svgDataUrl(mathSvg(r, colorCss, at.w, at.h)), at.w, at.h);
+          if (img) painter.image(img, at.x, at.y, at.w, at.h);
+          warnings.push('An equation uses a symbol that was exported as a picture.');
+        }
+      } else warnings.push('An equation has a LaTeX mistake and was left out: ' + res.error);
     } else if (isTextType(e)) {
       drawText(painter, fonts, textByEl.get(e.id) ?? []);
+    } else if (e.type === 'table') {
+      const wrap = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"] .el-table-wrap`);
+      if (wrap) drawTable(painter, fonts, e, p, wrap, frame, textByEl.get(e.id) ?? []);
     }
     painter.restore();
 
@@ -166,9 +227,60 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
     }
   }
 
+  painter.restore(); // end of the bleed clip
+
+  if (geo.marginMm > 0 && opts.print?.cropMarks) drawCropMarks(painter, p, geo.bleedMm);
+
   painter.flush();
   const bytes = await doc.save({ useObjectStreams: true });
   return { bytes, warnings };
+}
+
+// ---------------------------------------------------------------- print extras
+
+/** Hairline crop marks in registration colour (100% of every ink) so they show on every printing plate. */
+export function drawCropMarks(painter: Painter, p: Pick<Poster, 'width' | 'height'>, bleedMm: number) {
+  painter.save();
+  painter.op(Op.StrokingColorCmyk, 1, 1, 1, 1);
+  painter.op(Op.SetLineWidth, MARK_WIDTH_PT / PT_PER_PX);
+  painter.op(Op.SetLineCapStyle, 0);
+  for (const l of cropMarkLines(p, bleedMm)) {
+    painter.moveTo(l.x1 * MM_TO_PX, l.y1 * MM_TO_PX);
+    painter.lineTo(l.x2 * MM_TO_PX, l.y2 * MM_TO_PX);
+  }
+  painter.ops.push(PDFOperator.of(Op.StrokePath));
+  painter.restore();
+}
+
+/** Triangles, diamonds, stars and arrows, drawn like the editor's SVG (100 × 100 box stretched to the element). */
+export function drawPolygon(painter: Painter, e: PosterElement, pal: Poster['palette'], x: number, y: number, w: number, h: number) {
+  const pts = POLYGONS[e.shape!]!.split(' ').map((s) => s.split(',').map(Number) as [number, number]);
+  const deg = e.shape === 'arrow' ? ARROW_ROTATION[e.direction ?? 'right'] : 0;
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.round(Math.cos(rad) * 1e6) / 1e6;
+  const sin = Math.round(Math.sin(rad) * 1e6) / 1e6;
+  const path = () => {
+    pts.forEach(([px, py], i) => {
+      const rx = 50 + (px - 50) * cos - (py - 50) * sin;
+      const ry = 50 + (px - 50) * sin + (py - 50) * cos;
+      const X = x + (rx / 100) * w;
+      const Y = y + (ry / 100) * h;
+      if (i) painter.lineTo(X, Y);
+      else painter.moveTo(X, Y);
+    });
+    painter.closePath();
+  };
+  const fill = parseColor(resolveColor(e.fill, pal));
+  if (fill) {
+    path();
+    painter.fill(fill);
+  }
+  const bw = ((e.borderWidth ?? 0) * 96) / 72;
+  const stroke = bw > 0 ? parseColor(resolveColor(e.borderColor ?? '@primary', pal)) : null;
+  if (stroke) {
+    path();
+    painter.stroke(stroke, { width: bw, join: 'round' });
+  }
 }
 
 // ---------------------------------------------------------------- text
@@ -205,6 +317,47 @@ export function drawText(painter: Painter, fonts: FontRegistry, pieces: TextPiec
     const th = Math.max(0.5, l.face.underlineThickness * l.size);
     painter.rect(l.x0, l.y - th / 2, l.x1 - l.x0, th);
     painter.fill(l.color);
+  }
+}
+
+// ---------------------------------------------------------------- tables
+
+/** Cell shading and rules as vector shapes, placed where the browser laid out each cell, with the text on top. */
+export function drawTable(painter: Painter, fonts: FontRegistry, e: PosterElement, p: Poster, wrap: HTMLElement, frame: Frame, text: TextPiece[]) {
+  const t = normalizeTable(e.table);
+  const cells = Array.from(wrap.querySelectorAll<HTMLElement>('[data-r]')).map((td) => {
+    const r = td.getBoundingClientRect();
+    const row = +td.dataset.r!;
+    const col = +td.dataset.c!;
+    return {
+      look: cellLook(t, p.palette, row, col),
+      x: (r.left - frame.left) / frame.scale,
+      y: (r.top - frame.top) / frame.scale,
+      w: r.width / frame.scale,
+      h: r.height / frame.scale,
+    };
+  });
+  for (const c of cells) {
+    const fill = c.look.fill && parseColor(c.look.fill);
+    if (fill) {
+      painter.rect(c.x, c.y, c.w, c.h);
+      painter.fill(fill);
+    }
+  }
+  drawText(painter, fonts, text);
+  const rule = (b: Border | null, x: number, y: number, w: number, h: number) => {
+    const col = b && parseColor(b.color);
+    if (!b || !col) return;
+    painter.rect(x, y, w, h);
+    painter.fill(col);
+  };
+  for (const c of cells) {
+    const px = (b: Border | null) => ((b?.pt ?? 0) * 96) / 72;
+    const { top, bottom, left, right } = c.look;
+    rule(top, c.x, c.y - px(top) / 2, c.w, px(top));
+    rule(bottom, c.x, c.y + c.h - px(bottom) / 2, c.w, px(bottom));
+    rule(left, c.x - px(left) / 2, c.y, px(left), c.h);
+    rule(right, c.x + c.w - px(right) / 2, c.y, px(right), c.h);
   }
 }
 

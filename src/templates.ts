@@ -5,8 +5,8 @@
 // poster size, orientation and column count, so every template works for A4
 // through 48 × 36 in, portrait or landscape, with 1–6 columns.
 
-import type { Poster, PosterElement, ElementType } from './types';
-import { columnLefts, columnWidth, defaultStyle, makeElement, typeScale } from './model';
+import type { Poster, PosterElement, ElementType, ElementRole } from './types';
+import { columnLefts, columnWidth, defaultStyle, makeElement, typeScale, uid } from './model';
 
 export type TemplateId =
   | 'classic'
@@ -97,6 +97,8 @@ class Builder {
   m: number;
   g: number;
   headH: number;
+  /** Set while building one section, so its elements share a group id. */
+  group?: string;
 
   constructor(
     private poster: Poster,
@@ -111,7 +113,7 @@ class Builder {
   }
 
   add(type: ElementType, at: Partial<PosterElement>) {
-    const e = makeElement(type, this.poster, at);
+    const e = makeElement(type, this.poster, this.group ? { group: this.group, ...at } : at);
     this.els.push(e);
     return e;
   }
@@ -130,10 +132,10 @@ class Builder {
     const capSize = 18;
     if (captionBeside) {
       const w = Math.max(maxW - size - this.g, 0);
-      if (w > 20 * this.s) this.text({ x: x + size + this.g * 0.6, y, w: w + this.g * 0.4, h: size, html: 'Scan for the full paper, data and code.' }, capSize, { color: captionColor });
+      if (w > 20 * this.s) this.text({ x: x + size + this.g * 0.6, y, w: w + this.g * 0.4, h: size, html: 'Scan for the full paper, data and code.', role: 'qrCaption' }, capSize, { color: captionColor });
     } else {
       const h = 18 * this.s;
-      this.text({ x, y: y + size + 3 * this.s, w: size, h, html: 'Scan for the full paper' }, capSize, { color: captionColor, align: 'center' });
+      this.text({ x, y: y + size + 3 * this.s, w: size, h, html: 'Scan for the full paper', role: 'qrCaption' }, capSize, { color: captionColor, align: 'center' });
     }
   }
 
@@ -168,6 +170,7 @@ class Builder {
       default:
         this.flow(cols, top, bottom);
     }
+    for (const e of this.els) e.role ??= defaultRole(e);
     return this.els;
   }
 
@@ -238,17 +241,17 @@ class Builder {
     y += subH + g;
     this.add('shape', { x, y, w: w * 0.3, h: Math.max(1, 3 * s), fill: '@accent' });
     y += Math.max(1, 3 * s) + g;
-    this.add('heading', { x, y, w, h: this.headH, html: 'At a glance', style: { ...defaultStyle('heading', s), color: '#ffffff' } });
+    this.add('heading', { x, y, w, h: this.headH, html: 'At a glance', role: 'summaryHeading', style: { ...defaultStyle('heading', s), color: '#ffffff' } });
     y += this.headH + 6 * s;
     const q = Math.min(w * 0.55, H * 0.14);
     const logoH = Math.min(w * 0.35, H * 0.06);
     const refsH = H * 0.08;
     const qrTop = H - m - logoH - g - refsH - g - q - 22 * s;
     const sumH = Math.max(qrTop - g - y, 10 * s);
-    this.text({ x, y, w, h: sumH, html: 'Summarise the whole study in three or four short sentences: the question, what you did, what you found and why it matters.' }, 30, { color: '#ffffff' });
+    this.text({ x, y, w, h: sumH, html: 'Summarise the whole study in three or four short sentences: the question, what you did, what you found and why it matters.', role: 'summary' }, 30, { color: '#ffffff' });
     this.qr(x, qrTop, q, '#ffffff');
     const refsY = qrTop + q + 22 * s + g;
-    this.text({ x, y: refsY, w, h: refsH, html: `${REFERENCES}<br>${CONTACT}` }, 18, { color: '@surface' });
+    this.text({ x, y: refsY, w, h: refsH, html: `${REFERENCES}<br>${CONTACT}`, role: 'references' }, 18, { color: '@surface' });
     this.placeholder('Logo', { x, y: H - m - logoH, w: Math.min(w, logoH * 2.5), h: logoH, fill: '#ffffff', radius: 2 * s });
     return m;
   }
@@ -257,7 +260,7 @@ class Builder {
     const s = this.s;
     const h = 45 * s;
     this.text(
-      { x: left, y: top, w: right - left, h, html: '<b>Key finding:</b> State your main result in one clear sentence that someone walking past will remember.', fill: '@accent', padding: 8 * s, radius: 4 * s },
+      { x: left, y: top, w: right - left, h, html: '<b>Key finding:</b> State your main result in one clear sentence that someone walking past will remember.', role: 'keyFinding', fill: '@accent', padding: 8 * s, radius: 4 * s },
       40,
       { align: 'center', fontFamily: '@heading' },
     );
@@ -276,19 +279,19 @@ class Builder {
     const innerY = top + m * 0.5;
     const innerH = footerH;
     if (style === 'references') {
-      this.text({ x: m, y: innerY, w: W - 2 * m, h: innerH, html: `${REFERENCES} &nbsp; ${CONTACT}` }, 20);
+      this.text({ x: m, y: innerY, w: W - 2 * m, h: innerH, html: `${REFERENCES} &nbsp; ${CONTACT}`, role: 'references' }, 20);
     } else if (style === 'logos') {
       const logoH = innerH * 0.8;
       const logoW = Math.min(logoH * 1.8, (W - 2 * m) * 0.15);
       const n = W > 300 ? 3 : 2;
       const stripW = n * logoW + (n - 1) * g * 0.6;
-      this.text({ x: m, y: innerY, w: W - 2 * m - stripW - g, h: innerH, html: `${REFERENCES}<br>${CONTACT}` }, 20);
+      this.text({ x: m, y: innerY, w: W - 2 * m - stripW - g, h: innerH, html: `${REFERENCES}<br>${CONTACT}`, role: 'references' }, 20);
       for (let i = 0; i < n; i++) {
         this.placeholder('Logo', { x: W - m - stripW + i * (logoW + g * 0.6), y: innerY + (innerH - logoH) / 2, w: logoW, h: logoH, fill: '#ffffff', radius: 2 * s });
       }
     } else {
       const q = innerH * 0.9;
-      this.text({ x: m, y: innerY, w: W - 2 * m - q - g, h: innerH, html: `${REFERENCES}<br>${CONTACT}` }, 20);
+      this.text({ x: m, y: innerY, w: W - 2 * m - q - g, h: innerH, html: `${REFERENCES}<br>${CONTACT}`, role: 'references' }, 20);
       this.placeholder('QR code', { x: W - m - q, y: innerY + (innerH - q) / 2, w: q, h: q, fill: '#ffffff' });
     }
     return top;
@@ -321,13 +324,23 @@ class Builder {
   section(x: number, y: number, w: number, h: number, name: string, index: number, figure = FIGURE_SECTIONS.has(name)) {
     const { s } = this;
     const style = this.def.sections;
+    const headStyle = defaultStyle('heading', s);
+    this.group = uid();
+    try {
+      this.sectionParts(style, x, y, w, h, name, index, figure, headStyle);
+    } finally {
+      this.group = undefined;
+    }
+  }
+
+  private sectionParts(style: SectionStyle, x: number, y: number, w: number, h: number, name: string, index: number, figure: boolean, headStyle: PosterElement['style'] & object) {
+    const { s } = this;
     let headH = this.headH;
     let bx = x;
     let bw = w;
     let by = y;
     let bh = h;
     const pad = 8 * s;
-    const headStyle = defaultStyle('heading', s);
 
     if (style === 'boxed' || style === 'framed') {
       this.add('shape', {
@@ -355,7 +368,7 @@ class Builder {
     } else if (style === 'numbered') {
       const numSize = Math.max(6, Math.round(36 * s));
       this.add('heading', {
-        x: bx, y: by, w: headH, h: headH, html: String(index + 1), fill: '@accent', radius: headH / 2,
+        x: bx, y: by, w: headH, h: headH, html: String(index + 1), role: 'number', fill: '@accent', radius: headH / 2,
         // one line box as tall as the circle centres the number vertically (1 pt = 0.3528 mm)
         style: { ...headStyle, align: 'center', color: '#ffffff', fontSize: numSize, lineHeight: headH / (numSize * 0.3528) },
       });
@@ -373,11 +386,11 @@ class Builder {
     if (bodyH <= 0) return;
     if (figure && bodyH > 140 * s) {
       const textH = bodyH * 0.36;
-      this.text({ x: bx, y: bodyY, w: bw, h: textH, html: LOREM });
+      this.text({ x: bx, y: bodyY, w: bw, h: textH, html: LOREM, role: 'body' });
       this.placeholder('Figure', { x: bx, y: bodyY + textH + gap, w: bw, h: bodyH - textH - gap, fill: '@surface' });
       if (style === 'boxed') this.els[this.els.length - 1].fill = '@background';
     } else {
-      this.text({ x: bx, y: bodyY, w: bw, h: bodyH, html: LOREM });
+      this.text({ x: bx, y: bodyY, w: bw, h: bodyH, html: LOREM, role: 'body' });
     }
   }
 
@@ -422,11 +435,13 @@ class Builder {
     const { s } = this;
     const { mid } = parts;
     const avail = bottom - top;
+    this.group = uid();
     this.add('heading', { x: mid.x, y: top, w: mid.w, h: this.headH, html: 'Key Figure', style: { ...defaultStyle('heading', s), align: 'center' } });
     const imgY = top + this.headH + 6 * s;
     const imgH = avail * 0.6;
     this.placeholder('Figure', { x: mid.x, y: imgY, w: mid.w, h: imgH });
-    this.text({ x: mid.x, y: imgY + imgH + 6 * s, w: mid.w, h: Math.min(avail * 0.25, bottom - imgY - imgH - 6 * s), html: '<i>Figure 1.</i> Describe what the figure shows and why it matters.' }, 28, { align: 'center' });
+    this.text({ x: mid.x, y: imgY + imgH + 6 * s, w: mid.w, h: Math.min(avail * 0.25, bottom - imgY - imgH - 6 * s), html: '<i>Figure 1.</i> Describe what the figure shows and why it matters.', role: 'caption' }, 28, { align: 'center' });
+    this.group = undefined;
     this.sideFlow(parts, top, bottom);
   }
 
@@ -439,13 +454,13 @@ class Builder {
       const left = cols[0].x;
       const right = cols[cols.length - 1].x + cols[cols.length - 1].w;
       const h = Math.min((bottom - top) * 0.25, 160 * s);
-      this.text({ x: left, y: top, w: right - left, h, html: statement, fill: '@surface', padding: 10 * s, radius: 5 * s }, 64, { fontFamily: '@heading', color: '@primary', align: 'center', lineHeight: 1.15 });
+      this.text({ x: left, y: top, w: right - left, h, html: statement, role: 'keyFinding', fill: '@surface', padding: 10 * s, radius: 5 * s }, 64, { fontFamily: '@heading', color: '@primary', align: 'center', lineHeight: 1.15 });
       return this.flow(cols, top + h + g, bottom);
     }
     const { mid } = parts;
     const avail = bottom - top;
     const stH = avail * 0.4;
-    this.text({ x: mid.x, y: top, w: mid.w, h: stH, html: statement, fill: '@primary', padding: 14 * s, radius: 5 * s }, Math.min(80, (mid.w * 0.28) / s), { fontFamily: '@heading', color: '#ffffff', align: 'center', lineHeight: 1.15 });
+    this.text({ x: mid.x, y: top, w: mid.w, h: stH, html: statement, role: 'keyFinding', fill: '@primary', padding: 14 * s, radius: 5 * s }, Math.min(80, (mid.w * 0.28) / s), { fontFamily: '@heading', color: '#ffffff', align: 'center', lineHeight: 1.15 });
     const q = Math.min(mid.w * 0.4, avail * 0.16);
     const capH = 22 * s;
     const figY = top + stH + g;
@@ -469,15 +484,46 @@ class Builder {
     const midY = top + rowH + g;
     const midH = avail - 2 * rowH - 2 * g;
     const pad = 8 * s;
+    this.group = uid();
     this.add('shape', { x: left, y: midY, w: right - left, h: midH, fill: '@surface', radius: 5 * s });
     this.add('heading', { x: left + pad, y: midY + pad, w: right - left - 2 * pad, h: this.headH, html: 'Results', style: { ...defaultStyle('heading', s), align: 'center' } });
     const capH = 30 * s;
     const figY = midY + pad + this.headH + 6 * s;
     const figH = midH - 2 * pad - this.headH - 6 * s - capH - 6 * s;
     this.placeholder('Figure', { x: left + pad, y: figY, w: right - left - 2 * pad, h: figH, fill: '@background' });
-    this.text({ x: left + pad, y: figY + figH + 6 * s, w: right - left - 2 * pad, h: capH, html: '<i>Figure 1.</i> Your headline result. Say what the reader should notice first.' }, 26, { align: 'center' });
+    this.text({ x: left + pad, y: figY + figH + 6 * s, w: right - left - 2 * pad, h: capH, html: '<i>Figure 1.</i> Your headline result. Say what the reader should notice first.', role: 'caption' }, 26, { align: 'center' });
+    this.group = undefined;
 
     const botY = midY + midH + g;
     cols.forEach((c, i) => this.section(c.x, botY, c.w, bottom - botY, bottomNames[i] ?? `Section ${cols.length + i + 1}`, cols.length + i, false));
   }
 }
+
+const PLACEHOLDER_ROLES: Record<string, ElementRole> = { Logo: 'logo', 'QR code': 'qr', Figure: 'figure' };
+
+function defaultRole(e: PosterElement): ElementRole | undefined {
+  if (e.type === 'title' || e.type === 'subtitle') return e.type;
+  if (e.type === 'heading') return 'heading';
+  if (e.type === 'shape') return 'decor';
+  if (e.type === 'image' && e.placeholder) return PLACEHOLDER_ROLES[e.placeholder];
+  return undefined;
+}
+
+/** Every piece of starter text the templates use, so we can tell it apart from text people have written. */
+let defaults: Set<string> | null = null;
+export function isStarterText(html: string | undefined): boolean {
+  if (!defaults) {
+    defaults = new Set();
+    const sample = { width: 841, height: 1189, margin: 25, gutter: 21, columns: 3 } as Poster;
+    for (const t of TEMPLATES)
+      for (const cols of [1, 3, 4])
+        for (const e of buildTemplate(t.id, { ...sample, columns: cols, elements: [] } as Poster)) if (e.html) defaults.add(norm(e.html));
+    for (const type of ['title', 'subtitle', 'heading', 'text'] as const) {
+      const html = makeElement(type, { ...sample, elements: [] } as Poster).html;
+      if (html) defaults.add(norm(html));
+    }
+  }
+  return !html || !norm(html) || defaults.has(norm(html));
+}
+
+const norm = (html: string) => html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();

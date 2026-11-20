@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useUiPrefs, type Theme } from '../lib/uiPrefs';
 
 const THEMES: { id: Theme; label: string }[] = [
@@ -7,8 +7,11 @@ const THEMES: { id: Theme; label: string }[] = [
   { id: 'dark', label: 'Dark' },
 ];
 
-/** Small popover for how the app looks to this person. `panels` adds the editor's panel options. */
-export default function AppearanceMenu({ panels = false }: { panels?: boolean }) {
+/**
+ * Small popover for how the app looks to this person. `panels` adds the editor's panel options;
+ * with a `label` it becomes a text button (the editor's "View" menu) and `children` go at the top.
+ */
+export default function AppearanceMenu({ panels = false, label, children }: { panels?: boolean; label?: string; children?: ReactNode }) {
   const [prefs, change] = useUiPrefs();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -34,15 +37,22 @@ export default function AppearanceMenu({ panels = false }: { panels?: boolean })
 
   return (
     <div className="menu-wrap" ref={wrap}>
-      <button className="icon-btn" title="Appearance" aria-label="Appearance" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-          <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor" />
-        </svg>
-      </button>
+      {label ? (
+        <button className="btn ghost" title="Guides, snapping, theme and side panels" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          {label} ▾
+        </button>
+      ) : (
+        <button className="icon-btn" title="Appearance" aria-label="Appearance" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+            <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
+            <path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor" />
+          </svg>
+        </button>
+      )}
       {open && (
-        <div className="menu appearance-menu" role="dialog" aria-label="Appearance">
-          <div className="field-label">Theme</div>
+        <div className="menu appearance-menu" role="dialog" aria-label={label ? `${label} options` : 'Appearance'}>
+          {children}
+          <div className={'field-label' + (children ? ' appearance-gap' : '')}>Theme</div>
           <div className="seg theme-seg" role="radiogroup" aria-label="Theme">
             {THEMES.map((t) => (
               <button

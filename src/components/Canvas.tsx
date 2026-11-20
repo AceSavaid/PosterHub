@@ -1,7 +1,10 @@
 import { forwardRef, useRef, useState } from 'react';
-import type { Poster, PosterElement } from '../types';
+import type { Poster, PosterElement, TableSpec } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth } from '../model';
 import { ElementView, Surface } from './Surface';
+import { boundsOf } from '../lib/arrange';
+import { groupMembers, scaleInto, wholeGroup } from '../lib/groups';
+import { elementLabel } from '../lib/a11y';
 
 type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
@@ -13,13 +16,18 @@ interface Props {
   snap: boolean;
   selectedIds: string[];
   editingId: string | null;
-  onSelect: (id: string, additive: boolean) => void;
+  /** additive toggles the element (and its group); `only` picks one element out of its group */
+  onSelect: (id: string, additive: boolean, only?: boolean) => void;
   onMoveMany: (moves: { id: string; patch: Partial<PosterElement> }[], coalesce?: string) => void;
   onEdit: (id: string | null) => void;
   onChange: (id: string, patch: Partial<PosterElement>, coalesce?: string) => void;
   onCommitText: (id: string, html: string) => void;
+  onCommitTable: (id: string, t: TableSpec) => void;
+  onActiveCell: (cell: { r: number; c: number } | null) => void;
   onActivate: (el: PosterElement) => void; // double-click on image/chart
   onContextMenu: (el: PosterElement, x: number, y: number) => void;
+  /** review notes layer, drawn outside the exported poster node */
+  notes?: React.ReactNode;
 }
 
 interface Guide {
@@ -28,7 +36,7 @@ interface Guide {
 }
 
 export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, ref) {
-  const { poster, zoom, showGrid, snap, selectedIds, editingId, onSelect, onMoveMany, onEdit, onChange, onCommitText, onActivate, onContextMenu } = props;
+  const { poster, zoom, showGrid, snap, selectedIds, editingId, onSelect, onMoveMany, onEdit, onChange, onCommitText, onCommitTable, onActiveCell, onActivate, onContextMenu, notes } = props;
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
   const [guides, setGuides] = useState<Guide[]>([]);
   const dragging = useRef(false);
@@ -68,8 +76,15 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       return;
     }
     // Dragging one of several selected elements moves the whole group.
-    if (!handle && selectedIds.length > 1 && selectedIds.includes(el.id)) return startGroupDrag(e);
-    onSelect(el.id, false);
+    if (!handle && selectedIds.length > 1 && selectedIds.includes(el.id)) return startGroupDrag(e, selectedIds);
+    const only = e.ctrlKey || e.metaKey;
+    // A grouped element moves with its group, unless it was picked out on its own (Ctrl/⌘-click).
+    if (!handle && el.groupId && !only && !(selectedIds.length === 1 && selectedIds[0] === el.id)) {
+      const members = groupMembers(el.id, poster.elements);
+      onSelect(el.id, false);
+      return startGroupDrag(e, members);
+    }
+    onSelect(el.id, false, only);
     if (el.locked) return;
     const start = { x: e.clientX, y: e.clientY };
     const orig = { x: el.x, y: el.y, w: el.w, h: el.h };
@@ -146,8 +161,8 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
     window.addEventListener('pointerup', up);
   }
 
-  function startGroupDrag(e: React.PointerEvent) {
-    const group = poster.elements.filter((x) => selectedIds.includes(x.id) && !x.locked);
+  function startGroupDrag(e: React.PointerEvent, ids: string[]) {
+    const group = poster.elements.filter((x) => ids.includes(x.id) && !x.locked);
     if (!group.length) return;
     const start = { x: e.clientX, y: e.clientY };
     const origs = group.map((g) => ({ id: g.id, x: g.x, y: g.y }));
@@ -155,7 +170,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
     const by = Math.min(...group.map((g) => g.y));
     const bw = Math.max(...group.map((g) => g.x + g.w)) - bx;
     const bh = Math.max(...group.map((g) => g.y + g.h)) - by;
-    const lines = snapLines(selectedIds);
+    const lines = snapLines(ids);
     const threshold = 6 / scale;
     const key = 'group-' + Date.now();
     const move = (ev: PointerEvent) => {
@@ -180,6 +195,43 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
     window.addEventListener('pointerup', up);
   }
 
+  /** Resizing a whole group scales every member inside the group's box. */
+  function startGroupResize(e: React.PointerEvent, handle: Handle) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const members = poster.elements.filter((x) => selectedIds.includes(x.id));
+    if (members.some((m) => m.locked)) return;
+    const orig = boundsOf(members);
+    const start = { x: e.clientX, y: e.clientY };
+    const ratio = orig.w / orig.h;
+    const key = 'group-resize-' + Date.now();
+    const move = (ev: PointerEvent) => {
+      const dx = (ev.clientX - start.x) / scale;
+      const dy = (ev.clientY - start.y) / scale;
+      const minS = 5;
+      let { x, y, w, h } = orig;
+      if (handle.includes('e')) w = Math.max(minS, orig.w + dx);
+      if (handle.includes('s')) h = Math.max(minS, orig.h + dy);
+      if (handle.includes('w')) (w = Math.max(minS, orig.w - dx)), (x = orig.x + orig.w - w);
+      if (handle.includes('n')) (h = Math.max(minS, orig.h - dy)), (y = orig.y + orig.h - h);
+      // Corner handles keep the group's proportions so pictures don't stretch; Shift frees them.
+      if (handle.length === 2 && !ev.shiftKey) {
+        h = w / ratio;
+        if (handle.includes('n')) y = orig.y + orig.h - h;
+      }
+      onMoveMany(scaleInto(members, { x, y, w, h }), key);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  const groupSel = wholeGroup(selectedIds, poster.elements);
+  const groupBox = groupSel ? boundsOf(poster.elements.filter((x) => selectedIds.includes(x.id))) : null;
+  const groupLocked = !!groupSel && poster.elements.some((x) => selectedIds.includes(x.id) && x.locked);
   const selected = poster.elements.find((e) => e.id === selectedId);
   const others = selectedIds.length > 1 ? poster.elements.filter((e) => selectedIds.includes(e.id)) : [];
   const hs = 10 / zoom; // handle size in poster px, constant on screen
@@ -190,9 +242,10 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       poster={poster}
       zoom={zoom}
       showGrid={showGrid}
+      outside={notes}
       renderElement={(el) => {
         const isEditing = editingId === el.id;
-        const isText = el.style != null;
+        const isText = el.style != null || el.type === 'table';
         return (
           <ElementView
             key={el.id}
@@ -200,9 +253,36 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
             poster={poster}
             editing={isEditing}
             onCommitText={(html) => onCommitText(el.id, html)}
+            onCommitTable={(t) => onCommitTable(el.id, t)}
+            onActiveCell={onActiveCell}
             onEditDone={() => onEdit(null)}
             className={(selectedIds.includes(el.id) ? 'selected ' : '') + (el.locked ? 'locked ' : '') + (isEditing ? 'editing' : '')}
             wrapperProps={{
+              // Every element is a stop in the Tab order, so the poster can be edited without a mouse.
+              tabIndex: isEditing ? -1 : 0,
+              // A labelled group (not a button) so the label can summarise long text without clashing with it.
+              role: isEditing ? undefined : 'group',
+              'aria-label': isEditing ? undefined : elementLabel(el) + (selectedIds.includes(el.id) ? ', selected' : ''),
+              'aria-roledescription': isEditing ? undefined : 'poster element',
+              onFocus: (e) => {
+                // Keyboard focus selects the element (a mouse click already selected it on pointer down).
+                if (e.target !== e.currentTarget || isEditing || !e.currentTarget.matches(':focus-visible')) return;
+                if (!selectedIds.includes(el.id) || selectedIds.length > 1) onSelect(el.id, false, true);
+              },
+              onKeyDown: (e) => {
+                if (e.target !== e.currentTarget || isEditing) return;
+                if (e.key === 'Enter' || e.key === ' ' || e.key === 'F2') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (isText) onEdit(el.id);
+                  else if (el.type === 'image' || el.type === 'chart') onActivate(el);
+                } else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const r = e.currentTarget.getBoundingClientRect();
+                  onContextMenu(el, r.left + Math.min(r.width / 2, 40), r.top + Math.min(r.height / 2, 40));
+                }
+              },
               onPointerDown: isEditing ? (e) => e.stopPropagation() : (e) => startDrag(e, el),
               onContextMenu: (e) => {
                 if (isEditing) return; // keep the browser's spelling / copy menu while typing
@@ -248,6 +328,23 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
           style={{ left: o.x * MM_TO_PX, top: o.y * MM_TO_PX, width: o.w * MM_TO_PX, height: o.h * MM_TO_PX, borderWidth: 2 / zoom }}
         />
       ))}
+      {groupBox && !editingId && (
+        <div
+          className="ui-only sel-box group-box"
+          data-testid="group-box"
+          style={{ left: groupBox.x * MM_TO_PX, top: groupBox.y * MM_TO_PX, width: groupBox.w * MM_TO_PX, height: groupBox.h * MM_TO_PX, borderWidth: 2 / zoom }}
+        >
+          {!groupLocked &&
+            HANDLES.map((h) => (
+              <div
+                key={h}
+                className={'handle h-' + h}
+                style={{ width: hs, height: hs, margin: -hs / 2, borderWidth: 1.5 / zoom }}
+                onPointerDown={(e) => startGroupResize(e, h)}
+              />
+            ))}
+        </div>
+      )}
       {guides.map((g, i) => (
         <div
           key={i}

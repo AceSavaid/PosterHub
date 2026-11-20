@@ -1,5 +1,9 @@
 import { useState } from 'react';
-import type { Poster, PosterElement, TextStyle } from '../types';
+import type { EquationSpec, Poster, PosterElement, TableSpec, TableStyleId, TextStyle } from '../types';
+import { TABLE_STYLES, cellLook, normalizeTable } from '../lib/table';
+import type { TableAction } from './Editor';
+import { typesetLatex } from '../lib/math';
+import { useMathReady } from '../lib/useMath';
 import { QR_MAX_LENGTH, normaliseLink, qrDataUrl } from '../lib/qr';
 import { FontSelect } from './FontSelect';
 import { ColorInput } from './ColorInput';
@@ -7,6 +11,8 @@ import type { AlignMode } from '../lib/arrange';
 import { SHAPE_CHOICES } from '../lib/shapes';
 import { resizeSelection, styleSelection } from '../lib/richtext';
 import { PALETTE_ROLES } from '../model';
+import { CITATION_STYLES, DEFAULT_STYLE, shortLabel } from '../lib/refs/format';
+import { TYPE_NAMES } from '../lib/a11y';
 
 interface Props {
   poster: Poster;
@@ -18,13 +24,28 @@ interface Props {
   onLayer: (dir: 'front' | 'back' | 'up' | 'down') => void;
   onReplaceImage: () => void;
   onEditChart: () => void;
+  onEditAuthors?: () => void;
+  onEditEquation: () => void;
   multi: number;
+  /** the selection is exactly one group */
+  grouped?: boolean;
+  onGroup?: () => void;
+  onUngroup?: () => void;
   overflow: boolean;
   onShrinkText: () => void;
   onGrowBox: () => void;
   onAlign: (mode: AlignMode) => void;
   onDistribute: (axis: 'x' | 'y') => void;
   onMatchSize: (dim: 'w' | 'h') => void;
+  /** insert a citation of this reference at the caret (while typing) */
+  onCite: (refId: string) => void;
+  onOpenReferences: () => void;
+  onSetStyle: (style: Poster['citationStyle']) => void;
+  activeCell?: { r: number; c: number } | null;
+  onTableAction?: (a: TableAction) => void;
+  onTableGraph?: () => void;
+  onEditTable?: () => void;
+  onConvertTable?: () => void;
 }
 
 const ALIGN: { mode: AlignMode; label: string; icon: string }[] = [
@@ -65,30 +86,43 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: 
   );
 }
 
-const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape' };
 
 export default function Inspector(props: Props) {
-  const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart, multi, overflow, onShrinkText, onGrowBox } = props;
+  const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart, onEditEquation, multi, overflow, onShrinkText, onGrowBox, onCite, onOpenReferences, onSetStyle } = props;
   if (multi > 1) {
     return (
-      <aside className="panel right">
+      <aside className="panel right" aria-label="Properties">
         <div className="panel-body">
           <div className="insp-head">
-            <h3>{multi} elements selected</h3>
+            <h3>{props.grouped ? `Group of ${multi}` : `${multi} elements selected`}</h3>
             <div className="icon-row">
               <button className="icon-btn" title="Duplicate (Ctrl/⌘ D)" onClick={onDuplicate}>⧉</button>
               <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
             </div>
           </div>
+          {(props.onGroup || props.onUngroup) && (
+            <section>
+              <h4>Group</h4>
+              <div className="toolbar-row">
+                {props.onGroup && <button className="btn small-btn" onClick={props.onGroup} title="Ctrl/⌘ G">Group</button>}
+                {props.onUngroup && <button className="btn small-btn" onClick={props.onUngroup} title="Ctrl/⌘ Shift G">Ungroup</button>}
+              </div>
+              <p className="hint">
+                {props.grouped
+                  ? 'Drag to move the group; drag a corner to resize it all (Shift lets it stretch). Ctrl/⌘-click picks out one element.'
+                  : 'Group them to keep a figure with its caption, or a row of logos, together.'}
+              </p>
+            </section>
+          )}
           <ArrangeSection count={multi} {...props} />
-          <p className="hint">Drag any of them to move them together. Shift-click to add or remove one from the selection.</p>
+          {!props.grouped && <p className="hint">Drag any of them to move them together. Shift-click to add or remove one from the selection.</p>}
         </div>
       </aside>
     );
   }
   if (!el) {
     return (
-      <aside className="panel right">
+      <aside className="panel right" aria-label="Properties">
         <div className="panel-body">
           <h3>Nothing selected</h3>
           <p className="hint">Click an element on the poster to change its text, colours, size and position. Double-click text to type.</p>
@@ -97,6 +131,10 @@ export default function Inspector(props: Props) {
             <li><kbd>Ctrl/⌘ Z</kbd> undo, <kbd>Ctrl/⌘ Shift Z</kbd> redo</li>
             <li><kbd>Ctrl/⌘ C / X / V</kbd> copy, cut, paste elements, text or images</li>
             <li><kbd>Ctrl/⌘ D</kbd> duplicate</li>
+            <li><kbd>Ctrl/⌘ G</kbd> group, <kbd>Ctrl/⌘ Shift G</kbd> ungroup</li>
+            <li><kbd>Tab</kbd> move between elements on the poster</li>
+            <li><kbd>Enter</kbd> edit text, or choose an image or graph</li>
+            <li><kbd>Shift F10</kbd> actions menu for the element</li>
             <li><kbd>Delete</kbd> remove selected</li>
             <li><kbd>Shift</kbd>-click or drag a box to select several</li>
             <li><kbd>Ctrl/⌘ A</kbd> select everything</li>
@@ -118,27 +156,34 @@ export default function Inspector(props: Props) {
     editing ? document.execCommand(cmd) : setStyle({ [key]: !st![key] } as Partial<TextStyle>);
 
   return (
-    <aside className="panel right">
+    <aside className="panel right" aria-label="Properties">
       <div className="panel-body">
         <div className="insp-head">
-          <h3>{TYPE_NAMES[el.type]}</h3>
+          <h3>{el.refList ? 'Reference list' : TYPE_NAMES[el.type]}</h3>
           <div className="icon-row">
             <button className="icon-btn" title="Duplicate (Ctrl/⌘ D)" onClick={onDuplicate}>⧉</button>
-            <button className="icon-btn" title={el.locked ? 'Unlock' : 'Lock position'} onClick={() => onChange({ locked: !el.locked })}>
+            <button className="icon-btn" title={el.locked ? 'Unlock' : 'Lock position'} aria-label="Lock position" aria-pressed={!!el.locked} onClick={() => onChange({ locked: !el.locked })}>
               {el.locked ? '🔒' : '🔓'}
             </button>
             <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
           </div>
         </div>
 
-        {st && overflow && (
+        {(st || el.type === 'table') && overflow && (
           <section className="warn-box" role="status">
             <strong>Some text is hidden</strong>
-            <span>The text is longer than its box.</span>
+            <span>{el.type === 'table' ? 'The table is taller than its box.' : 'The text is longer than its box.'}</span>
             <div className="toolbar-row">
               <button className="btn small-btn" onClick={onShrinkText}>Shrink text to fit</button>
               <button className="btn small-btn" onClick={onGrowBox}>Make box taller</button>
             </div>
+          </section>
+        )}
+
+        {st && props.onEditAuthors && (el.authors || el.type === 'subtitle') && (
+          <section>
+            <button className="btn primary" onClick={props.onEditAuthors}>{el.authors ? 'Edit authors and affiliations…' : 'Build author list…'}</button>
+            {el.authors && <p className="hint">Changes typed straight into this box are replaced when you update the list.</p>}
           </section>
         )}
 
@@ -189,8 +234,8 @@ export default function Inspector(props: Props) {
               <div className="sel-format">
                 <div className="field-label">Selected words</div>
                 <div className="toolbar-row">
-                  <button className="fmt" title="Larger" aria-label="Make selected words larger" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1.15)}>A+</button>
-                  <button className="fmt" title="Smaller" aria-label="Make selected words smaller" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1 / 1.15)}>A−</button>
+                  <button className="fmt" title="Make selected words larger" aria-label="A+ larger" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1.15)}>A+</button>
+                  <button className="fmt" title="Make selected words smaller" aria-label="A− smaller" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1 / 1.15)}>A−</button>
                   <span className="sep" />
                   {PALETTE_ROLES.filter((r) => r !== 'background' && r !== 'surface').map((r) => (
                     <button
@@ -211,6 +256,59 @@ export default function Inspector(props: Props) {
           </section>
         )}
 
+        {el.refList && (
+          <section className="refs-section">
+            <h4>Reference list</h4>
+            <p className="hint">This box is filled in from your references. Numbers follow the order they are cited on the poster.</p>
+            <button className="btn primary" onClick={onOpenReferences}>Edit references…</button>
+            <label>
+              Citation style
+              <select value={poster.citationStyle ?? DEFAULT_STYLE} onChange={(e) => onSetStyle(e.target.value as Poster['citationStyle'])}>
+                {CITATION_STYLES.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Heading
+              <input value={el.refTitle ?? 'References'} onChange={(e) => onChange({ refTitle: e.target.value }, 'reftitle')} placeholder="(no heading)" />
+            </label>
+          </section>
+        )}
+
+        {st && editing && !el.refList && (
+          <section className="cite-section">
+            <h4>Cite</h4>
+            {(poster.references ?? []).length ? (
+              <>
+                <p className="hint">Click where the citation goes, then pick a reference. Pick several in a row to cite them together.</p>
+                <div className="cite-list">
+                  {(poster.references ?? []).map((r) => (
+                    <button key={r.id} className="cite-pick" onMouseDown={(e) => e.preventDefault()} onClick={() => onCite(r.id)} title={r.title}>
+                      <strong>{shortLabel(r)}</strong>
+                      <span>{r.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="hint">Add references from their DOIs or BibTeX, then cite them here.</p>
+            )}
+            <button className="btn small-btn" onMouseDown={(e) => e.preventDefault()} onClick={onOpenReferences}>
+              {(poster.references ?? []).length ? 'Manage references…' : 'Add references…'}
+            </button>
+          </section>
+        )}
+        {st && el.html?.includes('<table') && props.onConvertTable && (
+          <section>
+            <h4>Table</h4>
+            <button className="btn" onClick={props.onConvertTable}>Convert to editable table</button>
+            <p className="hint">Imported tables keep their PowerPoint formatting. Convert to type in cells, add rows and pick a table style.</p>
+          </section>
+        )}
+
+        {el.type === 'table' && <TableSection {...props} el={el} />}
+
         {el.type === 'image' && (
           <section>
             <h4>Image</h4>
@@ -224,6 +322,10 @@ export default function Inspector(props: Props) {
               </select>
             </label>
             <p className="hint">Hold Shift while dragging a corner to keep proportions.</p>
+            <label>
+              Description (alt text)
+              <textarea rows={2} value={el.alt ?? ''} placeholder="What does it show? Read aloud by screen readers." onChange={(e) => onChange({ alt: e.target.value || undefined }, 'alt')} />
+            </label>
           </section>
         )}
 
@@ -239,8 +341,14 @@ export default function Inspector(props: Props) {
                 <input type="number" min={4} value={el.chart.fontSize} onChange={(e) => onChange((x) => void (x.chart!.fontSize = Math.max(4, +e.target.value || 4)), 'cfs')} />
               </label>
             )}
+            <label>
+              Description (alt text)
+              <textarea rows={2} value={el.alt ?? ''} placeholder="What does it show? Read aloud by screen readers." onChange={(e) => onChange({ alt: e.target.value || undefined }, 'alt')} />
+            </label>
           </section>
         )}
+
+        {el.type === 'equation' && el.equation && <EquationSection key={el.id} poster={poster} el={el} onChange={onChange} onEdit={onEditEquation} />}
 
         {el.type === 'shape' && el.shape !== 'line' && (
           <section>
@@ -402,6 +510,130 @@ function QrSection({ el, onChange }: { el: PosterElement; onChange: Props['onCha
       ) : (
         <p className="hint">Paste a link to your paper, data, code or lab page. The QR code is made on your computer and updates as you type.</p>
       )}
+    </section>
+  );
+}
+
+function TableSection({ poster, el, editing, onChange, activeCell, onTableAction, onTableGraph, onEditTable }: Props & { el: PosterElement }) {
+  const t = normalizeTable(el.table);
+  const set = (patch: Partial<TableSpec>, key?: string) => onChange((e) => void (e.table = { ...normalizeTable(e.table), ...patch }), key);
+  // Buttons keep the cursor in the cell being edited.
+  const keep = (e: React.MouseEvent) => e.preventDefault();
+  const act = (a: TableAction) => onTableAction?.(a);
+  const where = activeCell ? `row ${activeCell.r + 1}, column ${activeCell.c + 1}` : null;
+  return (
+    <section>
+      <h4>Table</h4>
+      {!editing && (
+        <button className="btn primary" onClick={onEditTable}>Edit cells</button>
+      )}
+      <p className="hint">
+        {editing
+          ? 'Type in the cells. Tab moves to the next cell (and adds a row at the end), Enter moves down. Paste cells from Excel or Google Sheets to fill the table.'
+          : 'Double-click a cell to type. Paste cells from Excel or Google Sheets onto the poster to make a new table.'}
+      </p>
+      <div className="field-label">Style</div>
+      <div className="table-styles" role="radiogroup" aria-label="Table style">
+        {TABLE_STYLES.map((s) => (
+          <button key={s.id} role="radio" aria-checked={t.style === s.id} className={t.style === s.id ? 'on' : ''} title={s.hint} onMouseDown={keep} onClick={() => set({ style: s.id })}>
+            <StylePreview style={s.id} poster={poster} />
+            {s.label}
+          </button>
+        ))}
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={t.headerRow} onChange={(e) => set({ headerRow: e.target.checked })} /> First row is a header
+      </label>
+      <div className="row2">
+        <label>
+          Text size (pt)
+          <input type="number" min={4} max={400} value={t.fontSize} onChange={(e) => set({ fontSize: Math.max(4, +e.target.value || 4) }, 'tfs')} />
+        </label>
+        <label>
+          Align columns
+          <select value={t.align} onChange={(e) => set({ align: e.target.value as TableSpec['align'] })}>
+            <option value="auto">Numbers right</option>
+            <option value="left">All left</option>
+            <option value="center">All centred</option>
+          </select>
+        </label>
+      </div>
+      <div className="field-label">
+        Rows and columns{where ? ` (at ${where})` : ''}: {t.rows.length} × {t.rows[0].length}
+      </div>
+      <div className="toolbar-row">
+        <button className="btn small-btn" onMouseDown={keep} onClick={() => act('rowAbove')}>+ Row above</button>
+        <button className="btn small-btn" onMouseDown={keep} onClick={() => act('rowBelow')}>+ Row below</button>
+        <button className="btn small-btn" onMouseDown={keep} onClick={() => act('colLeft')}>+ Column left</button>
+        <button className="btn small-btn" onMouseDown={keep} onClick={() => act('colRight')}>+ Column right</button>
+      </div>
+      <div className="toolbar-row">
+        <button className="btn small-btn" disabled={t.rows.length <= 1} onMouseDown={keep} onClick={() => act('deleteRow')}>− Delete row</button>
+        <button className="btn small-btn" disabled={t.rows[0].length <= 1} onMouseDown={keep} onClick={() => act('deleteCol')}>− Delete column</button>
+      </div>
+      {!where && <p className="hint">Click into a cell first to add or delete next to it; otherwise changes apply at the end.</p>}
+      <button className="btn" onClick={onTableGraph}>Make a graph from this table…</button>
+    </section>
+  );
+}
+
+/** A tiny drawing of a table in the given style, using the poster's colours. */
+function StylePreview({ style, poster }: { style: TableStyleId; poster: Poster }) {
+  const t: TableSpec = { rows: [['', '', ''], ['', '', ''], ['', '', ''], ['', '', '']], headerRow: true, style, fontSize: 10, align: 'auto' };
+  const W = 60;
+  const H = 30;
+  const rw = W / 3;
+  const rh = H / 4;
+  const out: React.ReactNode[] = [];
+  t.rows.forEach((row, r) =>
+    row.forEach((_, c) => {
+      const l = cellLook(t, poster.palette, r, c);
+      const x = c * rw;
+      const y = r * rh;
+      if (l.fill) out.push(<rect key={`f${r}${c}`} x={x} y={y} width={rw} height={rh} fill={l.fill} />);
+      out.push(<rect key={`t${r}${c}`} x={x + 3} y={y + rh / 2 - 0.8} width={rw - 8} height={1.6} rx={0.8} fill={l.color} opacity={l.bold ? 0.95 : 0.45} />);
+      const line = (b: typeof l.top, x1: number, y1: number, x2: number, y2: number, k: string) =>
+        b && out.push(<line key={k + r + c} x1={x1} y1={y1} x2={x2} y2={y2} stroke={b.color} strokeWidth={b.pt * 0.9} />);
+      line(l.top, x, y + 0.5, x + rw, y + 0.5, 'a');
+      line(l.bottom, x, y + rh - 0.5, x + rw, y + rh - 0.5, 'b');
+      line(l.left, x + 0.4, y, x + 0.4, y + rh, 'c');
+      line(l.right, x + rw - 0.4, y, x + rw - 0.4, y + rh, 'd');
+    }),
+  );
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} aria-hidden style={{ background: poster.palette.background, borderRadius: 3 }}>
+      {out}
+    </svg>
+  );
+}
+function EquationSection({ poster, el, onChange, onEdit }: { poster: Poster; el: PosterElement; onChange: Props['onChange']; onEdit: () => void }) {
+  const eq = el.equation!;
+  const ready = useMathReady();
+  const res = ready ? typesetLatex(eq.latex) : null;
+  const set = (patch: Partial<EquationSpec>, key?: string) => onChange((e) => void Object.assign(e.equation!, patch), key);
+  return (
+    <section>
+      <h4>Equation</h4>
+      <button className="btn primary" onClick={onEdit}>Edit equation…</button>
+      <label>
+        LaTeX
+        <textarea className="insp-latex" rows={3} spellCheck={false} value={eq.latex} onChange={(e) => set({ latex: e.target.value }, 'latex')} />
+      </label>
+      {res && !res.ok && <div className="insp-eq-error" role="alert">{res.error}</div>}
+      <label>
+        Size (pt)
+        <input type="number" min={4} max={600} value={eq.fontSize} onChange={(e) => set({ fontSize: Math.max(4, +e.target.value || 4) }, 'eqfs')} />
+      </label>
+      <div className="toolbar-row">
+        {(['left', 'center', 'right'] as const).map((a) => (
+          <button key={a} className={'fmt' + (eq.align === a ? ' on' : '')} onClick={() => set({ align: a })} title={'Align ' + a} aria-label={'Align equation ' + a}>
+            <AlignIcon a={a} />
+          </button>
+        ))}
+      </div>
+      <div className="field-label">Colour</div>
+      <ColorInput value={eq.color} palette={poster.palette} onChange={(c) => set({ color: c ?? '@text' })} />
+      <p className="hint">If the box is too small the equation shrinks to fit; drag a corner to make it bigger.</p>
     </section>
   );
 }

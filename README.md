@@ -8,12 +8,13 @@ Make research and academic posters in your browser. No account, no install: ever
 - **Starter templates**: a gallery of ten designed layouts (classic columns, boxed sections, heading bars, clean minimal, sidebar, big takeaway, results showcase, framed panels, central figure, key-finding banner) plus blank. Each one adapts to any size, portrait or landscape, and 1–6 columns, and includes labelled spots for logos, figures and a QR code. Previews update with your size, columns and colours. Elements snap to the column guides.
 - **Colour palettes**: ten ready-made palettes or your own colours. Elements linked to a palette colour update when you switch palettes.
 - **Titles, headers, text, images, shapes and graphs**: double-click to type, paste text or images straight onto the poster, drag image files in.
+- **Equations**: type LaTeX such as `E = mc^2` or `\frac{a}{b}` and get properly typeset maths, with a live preview, buttons for common symbols and plain-language error messages. Typesetting is bundled (MathJax), so it works offline. Equations stay sharp vector paths in the PDF and come out as vector SVG pictures in PowerPoint.
 - **QR codes**: insert a QR code (or use a template's QR spot), paste a link to your paper, data or lab page and the code is made on your computer, even offline. Bare DOIs and web addresses get `https://` added so phones open them.
 - **Graphs from CSV**: load a CSV (or paste cells from Excel / Sheets), pick the columns and rows to plot, and choose bar, line, scatter, pie or doughnut.
 - **Fonts**: popular Google Fonts built in, add any other Google font by name, or upload your own `.ttf` / `.otf` / `.woff` file.
 - **PowerPoint templates**: import a `.pptx` or `.potx` template; its size, colours, fonts, background, shapes, text and pictures come across.
 - **My posters**: every poster autosaves to a library in your browser, with thumbnails, rename, duplicate and delete.
-- **Export**: print-quality vector PDF (real, selectable text with embedded fonts, vector shapes and charts, full-resolution photos, so it stays sharp at A0 and beyond), PowerPoint (editable text, shapes and native charts), PNG, or a `.poster.json` project file you can back up or open on another computer.
+- **Export**: print-quality vector PDF (real, selectable text with embedded fonts, vector shapes, charts and equations, full-resolution photos, so it stays sharp at A0 and beyond), PowerPoint (editable text, shapes and native charts), PNG, or a `.poster.json` project file you can back up or open on another computer.
 - **Share and present**: copy the poster as an image to paste anywhere, or open View mode to present it full screen.
 
 ## Development

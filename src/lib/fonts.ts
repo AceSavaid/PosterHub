@@ -3,6 +3,7 @@
 // and is picked up by image/PDF export).
 import type { CustomFont, Poster } from '../types';
 import { SYSTEM_FONTS } from '../model';
+import { safeFontDataUrl } from './sanitize';
 
 const loadedGoogle = new Set<string>();
 
@@ -30,11 +31,11 @@ export function loadGoogleFont(family: string): Promise<void> {
 const loadedCustom = new Set<string>();
 
 export function registerCustomFont(f: CustomFont) {
-  if (loadedCustom.has(f.family)) return;
+  if (loadedCustom.has(f.family) || !safeFontDataUrl(f.dataUrl)) return;
   loadedCustom.add(f.family);
   const style = document.createElement('style');
   style.dataset.customFont = f.family;
-  style.textContent = `@font-face { font-family: "${f.family.replace(/"/g, '')}"; src: url(${f.dataUrl}); font-display: block; }`;
+  style.textContent = `@font-face { font-family: "${f.family.replace(/"/g, '')}"; src: url("${f.dataUrl.replace(/["\\\s]/g, '')}"); font-display: block; }`;
   document.head.appendChild(style);
 }
 

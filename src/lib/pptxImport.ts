@@ -11,6 +11,7 @@
 import JSZip from 'jszip';
 import type { ChartKind, ChartSpec, Palette, Poster, PosterElement, TextStyle } from '../types';
 import { uid } from '../model';
+import { sanitizePoster } from './sanitize';
 
 const EMU_PER_MM = 36000;
 const A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -37,6 +38,8 @@ const num = (el: Element | null | undefined, attr: string, fallback = 0) => {
   return v == null || v === '' ? fallback : Number(v);
 };
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** A font name made safe to put inside an inline style attribute: letters, digits, spaces, - and . only. */
+const cssFontName = (s: string) => s.replace(/[^\p{L}\p{N} .\-]/gu, '').trim();
 
 function resolvePath(base: string, target: string) {
   if (target.startsWith('/')) return target.slice(1);
@@ -403,7 +406,7 @@ function textFromBody(body: Element, theme: Theme, kind: 'title' | 'subtitle' | 
       if (!props.italic && first.italic) style.push('font-style:normal');
       if (props.color && props.color !== first.color) style.push(`color:${props.color}`);
       if (props.size && props.size !== (first.size ?? 18)) style.push(`font-size:${props.size}pt`);
-      if (props.font && props.font !== first.font) style.push(`font-family:'${props.font.replace(/'/g, '')}'`);
+      if (props.font && props.font !== first.font && cssFontName(props.font)) style.push(`font-family:'${cssFontName(props.font)}'`);
       html += style.length ? `<span style="${style.join(';')}">${s}</span>` : s;
     }
     blocks.push({ bullet: !!base.bullet && !!html, html, align: base.align });
@@ -579,7 +582,7 @@ function tableHtml(tbl: Element, theme: Theme, part: Part, styled: boolean): Tex
         if (s.color !== base.color) c.css.push(`color:${s.color === '@text' ? theme.colors.dk1 ?? '#000000' : s.color}`);
         if (s.bold !== base.bold) c.css.push(`font-weight:${s.bold ? 'bold' : 'normal'}`);
         if (s.italic !== base.italic) c.css.push(`font-style:${s.italic ? 'italic' : 'normal'}`);
-        if (s.fontFamily !== base.fontFamily && !s.fontFamily.startsWith('@')) c.css.push(`font-family:'${s.fontFamily.replace(/'/g, '')}'`);
+        if (s.fontFamily !== base.fontFamily && !s.fontFamily.startsWith('@') && cssFontName(s.fontFamily)) c.css.push(`font-family:'${cssFontName(s.fontFamily)}'`);
         if (s.align !== 'left') c.css.push(`text-align:${s.align}`);
       }
       cells += `<td${c.spans} style="${c.css.join(';')}">${c.text ? c.text.html : '<br>'}</td>`;
@@ -1090,7 +1093,7 @@ export async function importPptx(file: Blob, slideIndex = 0): Promise<PptxImport
 export function posterFromImport(r: PptxImportResult, name: string): Poster {
   const short = Math.min(r.poster.width, r.poster.height);
   const now = Date.now();
-  return {
+  return sanitizePoster({
     ...r.poster,
     id: uid(),
     name,
@@ -1103,5 +1106,5 @@ export function posterFromImport(r: PptxImportResult, name: string): Poster {
     googleFonts: [],
     createdAt: now,
     updatedAt: now,
-  };
+  });
 }

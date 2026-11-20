@@ -2,6 +2,7 @@
 // reloads and handles large embedded images. A desktop build can swap this
 // module for one that reads/writes a folder on disk.
 import type { Poster } from '../types';
+import { sanitizePoster } from './sanitize';
 
 const DB_NAME = 'posterhub';
 const STORE = 'posters';
@@ -65,7 +66,7 @@ export async function readPosterFile(file: File): Promise<Poster> {
     throw new Error('This file is not a PosterHub project.');
   }
   delete data.app;
-  return data as Poster;
+  return sanitizePoster(data as Poster);
 }
 
 export function pickFile(accept: string): Promise<File | null> {

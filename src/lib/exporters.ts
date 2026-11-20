@@ -4,6 +4,7 @@ import { MM_TO_IN, MM_TO_PX, resolveColor, resolveFont } from '../model';
 import { fontEmbedCss } from './fonts';
 import { downloadBlob, safeFileName } from './storage';
 import { seriesData } from './chart';
+import { cleanHtml } from './sanitize';
 
 const MAX_SIDE = 16000;
 const MAX_AREA = 120_000_000;
@@ -117,7 +118,7 @@ interface Run {
 /** Converts the limited HTML produced by the editor into PptxGenJS text runs. */
 export function htmlToRuns(html: string): Run[] {
   const root = document.createElement('div');
-  root.innerHTML = html;
+  root.innerHTML = cleanHtml(html);
   const runs: Run[] = [];
   const BLOCK = /^(DIV|P|LI|H[1-6]|UL|OL)$/;
   const walk = (n: Node, f: { b?: boolean; i?: boolean; u?: boolean; sup?: boolean; sub?: boolean; color?: string }) => {
@@ -259,7 +260,7 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
 /** Exports a text element holding an HTML table (e.g. imported from PowerPoint) as a real PowerPoint table. */
 export function tableRowsFromHtml(html: string) {
   const root = document.createElement('div');
-  root.innerHTML = html;
+  root.innerHTML = cleanHtml(html);
   const table = root.querySelector('table');
   if (!table) return null;
   const widths = Array.from(table.querySelectorAll('col')).map((c) => parseFloat((c as HTMLElement).style.width) || 0);

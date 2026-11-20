@@ -365,3 +365,37 @@ describe('images', () => {
     expect(r.warnings.join(' ')).toMatch(/EMF\/WMF/);
   });
 });
+
+describe('booby-trapped PowerPoint files', () => {
+  it('cannot sneak HTML in through font names or text', async () => {
+    const evilFont = 'Arial&quot;&gt;&lt;img src=x onerror=&quot;alert(1)&quot;&gt;';
+    const runs =
+      `<a:p><a:r><a:rPr lang="en-US"/><a:t>Normal </a:t></a:r>` +
+      `<a:r><a:rPr lang="en-US"><a:latin typeface="${evilFont}"/></a:rPr><a:t>&lt;script&gt;alert(2)&lt;/script&gt;</a:t></a:r></a:p>`;
+    const table =
+      `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="77" name="T"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="0" y="0"/><a:ext cx="${100 * MM}" cy="${40 * MM}"/></p:xfrm>` +
+      `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblGrid><a:gridCol w="${50 * MM}"/><a:gridCol w="${50 * MM}"/></a:tblGrid>` +
+      `<a:tr h="${20 * MM}"><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:rPr><a:latin typeface="${evilFont}"/></a:rPr><a:t>A</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc>` +
+      `<a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:t>B</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc></a:tr>` +
+      `<a:tr h="${20 * MM}"><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:t>C</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc><a:tc><a:txBody><a:bodyPr/><a:p><a:r><a:t>D</a:t></a:r></a:p></a:txBody><a:tcPr/></a:tc></a:tr>` +
+      `</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
+    let blob = await deck((pptx) => pptx.addSlide());
+    blob = await patch(blob, {
+      'ppt/slides/slide1.xml': withShapes(sp(`<p:spPr>${box(0, 0, 200 * MM, 50 * MM)}</p:spPr><p:txBody><a:bodyPr/><a:lstStyle/>${runs}</p:txBody>`) + table),
+    });
+    const r = await importPptx(blob);
+    const html = r.poster.elements.map((e) => e.html ?? '').join('\n');
+    expect(html).toContain('Normal');
+    expect(html).toContain('&lt;script&gt;'); // the text is shown as text
+    expect(html).toContain('<table');
+    expect(html).not.toMatch(/<img|<script|onerror=/i);
+
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    expect(div.querySelector('img, script, [onerror]')).toBeNull();
+
+    const poster = posterFromImport(r, 'Evil');
+    expect(poster.elements.map((e) => e.html ?? '').join('')).not.toMatch(/<img|onerror=/i);
+    for (const e of poster.elements) if (e.style) expect(e.style.fontFamily).not.toMatch(/[<>"]/); // font names are plain names
+  });
+});

@@ -1,6 +1,7 @@
 // Reading and writing PosterHub project files (`.poster.json`). Shared by the
 // "Export project file" button and the desktop app's on-disk library.
 import type { Poster } from '../types';
+import { sanitizePoster } from './sanitize';
 
 export const FILE_EXT = '.poster.json';
 
@@ -20,5 +21,5 @@ export function parsePosterText(text: string): Poster {
     throw new Error('This file is not a PosterHub project.');
   }
   delete data.app;
-  return data as Poster;
+  return sanitizePoster(data as Poster);
 }

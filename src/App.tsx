@@ -4,6 +4,7 @@ import Library from './components/Library';
 import Editor from './components/Editor';
 import { loadPoster } from './lib/storage';
 import { ensurePosterFonts } from './lib/fonts';
+import { sanitizePoster } from './lib/sanitize';
 
 export default function App() {
   const [open, setOpen] = useState<Poster | null>(null);
@@ -15,6 +16,7 @@ export default function App() {
   }, []);
 
   async function openPoster(p: Poster) {
+    sanitizePoster(p);
     await ensurePosterFonts(p);
     history.replaceState(null, '', `#/poster/${p.id}`);
     setOpen(p);

@@ -3,6 +3,7 @@ import type { Poster, PosterElement } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth, fontStack, resolveColor, resolveFont } from '../model';
 import ChartView from './ChartView';
 import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
+import { cleanHtml } from '../lib/sanitize';
 
 const px = (mm: number) => mm * MM_TO_PX;
 
@@ -151,7 +152,10 @@ function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement
   const filled = useRef(false);
   useLayoutEffect(() => {
     // Fill on first mount (even if it starts in editing mode), then only while not typing.
-    if (ref.current && (!editing || !filled.current) && ref.current.innerHTML !== (el.html ?? '')) ref.current.innerHTML = el.html ?? '';
+    if (ref.current && (!editing || !filled.current)) {
+      const html = cleanHtml(el.html);
+      if (ref.current.innerHTML !== html) ref.current.innerHTML = html;
+    }
     filled.current = true;
   }, [el.html, editing]);
 

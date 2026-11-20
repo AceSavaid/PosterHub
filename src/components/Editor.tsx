@@ -19,6 +19,7 @@ import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import AppearanceMenu from './AppearanceMenu';
 import { useUiPrefs } from '../lib/uiPrefs';
 import { askConfirm } from '../lib/dialogs';
+import { htmlToText, sanitizeElement } from '../lib/sanitize';
 
 const CLIP_MIME = 'application/x-posterhub-element';
 let internalClipboard: PosterElement | null = null;
@@ -381,9 +382,7 @@ export default function Editor({ initial, onClose }: Props) {
       if (!el) return;
       e.preventDefault();
       internalClipboard = structuredClone(el);
-      const div = document.createElement('div');
-      div.innerHTML = el.html ?? '';
-      e.clipboardData?.setData('text/plain', div.innerText || div.textContent || '');
+      e.clipboardData?.setData('text/plain', htmlToText(el.html));
       e.clipboardData?.setData(CLIP_MIME, JSON.stringify(el));
       if (e.type === 'cut') removeSelected();
     };
@@ -395,7 +394,8 @@ export default function Editor({ initial, onClose }: Props) {
       if (json) {
         e.preventDefault();
         try {
-          duplicate(JSON.parse(json));
+          const el = JSON.parse(json) as PosterElement;
+          if (el && typeof el === 'object' && typeof el.type === 'string') duplicate(sanitizeElement(el));
         } catch {
           /* ignore */
         }
@@ -408,7 +408,7 @@ export default function Editor({ initial, onClose }: Props) {
         return;
       }
       const text = dt.getData('text/plain');
-      if (text && internalClipboard && text === (() => { const d = document.createElement('div'); d.innerHTML = internalClipboard.html ?? ''; return d.innerText || d.textContent || ''; })()) {
+      if (text && internalClipboard && text === htmlToText(internalClipboard.html)) {
         e.preventDefault();
         duplicate(internalClipboard);
         return;
@@ -527,9 +527,7 @@ export default function Editor({ initial, onClose }: Props) {
 
   function copyElement(el: PosterElement) {
     internalClipboard = structuredClone(el);
-    const div = document.createElement('div');
-    div.innerHTML = el.html ?? '';
-    navigator.clipboard?.writeText(div.innerText || div.textContent || '').catch(() => {});
+    navigator.clipboard?.writeText(htmlToText(el.html)).catch(() => {});
     notify('Copied. Press Ctrl/⌘ V on the poster to paste it.');
   }
 

@@ -6,11 +6,12 @@ import { PDFDocument, PDFName, PDFDict, PDFRawStream, PDFStream } from 'pdf-lib'
 /** All text on page 1, as extracted by PDF.js (what readers and search use). */
 export async function pdfText(bytes: Uint8Array): Promise<string> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes) }).promise;
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes) });
+  const doc = await task.promise;
   const page = await doc.getPage(1);
   const content = await page.getTextContent();
   const text = content.items.map((i) => ('str' in i ? i.str : '')).join(' ');
-  await doc.destroy();
+  await task.destroy();
   return text.replace(/\s+/g, ' ');
 }
 

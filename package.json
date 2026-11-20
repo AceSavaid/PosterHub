@@ -22,8 +22,9 @@
     "@tauri-apps/plugin-fs": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2.7.3",
     "chart.js": "^4.6.1",
+    "dompurify": "^3.4.18",
     "html-to-image": "^1.11.13",
-    "jspdf": "^3.0.4",
+    "jspdf": "^4.2.1",
     "jszip": "^3.10.2",
     "papaparse": "^5.7.1",
     "pdf-lib": "^1.17.1",
@@ -43,9 +44,12 @@
     "@vitejs/plugin-react": "^6.3.0",
     "jsdom": "^27.4.0",
     "jsqr": "^1.4.0",
-    "pdfjs-dist": "^5.7.284",
+    "pdfjs-dist": "^6.5.438",
     "typescript": "5.9",
     "vite": "^8.3.8",
     "vitest": "^5.1.1"
+  },
+  "overrides": {
+    "image-size": "^2.1.0"
   }
 }

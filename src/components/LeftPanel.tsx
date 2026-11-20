@@ -20,10 +20,11 @@ interface Props {
   onInsertImage: () => void;
   onInsertChart: () => void;
   onInsertQr: () => void;
+  onInsertAuthors: () => void;
   notify: (msg: string) => void;
 }
 
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, notify }: Props) {
+export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
     <aside className="panel left">
@@ -35,7 +36,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
         ))}
       </div>
       <div className="panel-body">
-        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} />}
+        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} />}
         {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
       </div>
@@ -43,7 +44,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
   );
 }
 
-function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr'>) {
+function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors'>) {
   return (
     <>
       <h3>Text</h3>
@@ -52,7 +53,10 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<
           <span aria-hidden className="ib-icon t-title">T</span>Title
         </button>
         <button className="insert-btn" onClick={() => onInsert('subtitle')}>
-          <span aria-hidden className="ib-icon t-sub">T</span>Subtitle / authors
+          <span aria-hidden className="ib-icon t-sub">T</span>Subtitle
+        </button>
+        <button className="insert-btn" onClick={onInsertAuthors}>
+          <span aria-hidden className="ib-icon t-sub">A¹</span>Authors and affiliations…
         </button>
         <button className="insert-btn" onClick={() => onInsert('heading')}>
           <span aria-hidden className="ib-icon t-head">H</span>Section header

@@ -3,6 +3,7 @@ import type { ChartSpec, ElementType, Poster, PosterElement } from '../types';
 import { MM_TO_PX, makeElement, uid } from '../model';
 import { usePosterHistory } from '../lib/usePoster';
 import { align, distribute, intersects, matchSize } from '../lib/arrange';
+import { canGroup, canUngroup, dropLonelyGroups, expandToGroups, group, groupMembers, regroupCopies, ungroup, wholeGroup } from '../lib/groups';
 import { deletePoster, exportPosterFile, fileToDataUrl, pickFile, savePoster } from '../lib/storage';
 import { ensurePosterFonts } from '../lib/fonts';
 import { copyImageToClipboard, effectiveDpi, exportPdf, exportPng, exportPptx, makeThumbnail } from '../lib/exporters';
@@ -17,6 +18,9 @@ import CheckPanel from './CheckPanel';
 import ContextMenu, { type MenuItem } from './ContextMenu';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import AppearanceMenu from './AppearanceMenu';
+import AuthorsDialog from './AuthorsDialog';
+import { PLACEHOLDER_TEXT } from '../lib/checks';
+import type { AuthorList } from '../types';
 import { useUiPrefs } from '../lib/uiPrefs';
 import { askConfirm } from '../lib/dialogs';
 import { htmlToText, sanitizeElement } from '../lib/sanitize';
@@ -59,6 +63,8 @@ export default function Editor({ initial, onClose }: Props) {
   const [viewing, setViewing] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  /** open authors dialog; `id` is the text box it fills (none = add a new one) */
+  const [authorsDialog, setAuthorsDialog] = useState<{ id?: string; initial?: AuthorList; replacing?: boolean } | null>(null);
   const [checkOpen, setCheckOpen] = useState(false);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
@@ -210,17 +216,69 @@ export default function Editor({ initial, onClose }: Props) {
     setChartDialog(null);
   }
 
+  /** Opens the authors tool for the selected box, the template's author line, or a new box. */
+  function openAuthors(forId?: string) {
+    const els = posterRef.current.elements;
+    const sel = els.find((e) => e.id === (forId ?? selectedId));
+    if (sel?.authors) return setAuthorsDialog({ id: sel.id, initial: sel.authors });
+    if (sel?.style && sel.type !== 'title') return setAuthorsDialog({ id: sel.id, replacing: !!sel.html?.trim() });
+    const authorLine = PLACEHOLDER_TEXT.find((t) => t.startsWith('Author One'))!;
+    const ph = els.find((e) => e.authors || (e.style && e.html?.includes(authorLine)));
+    if (ph) return setAuthorsDialog({ id: ph.id, initial: ph.authors });
+    setAuthorsDialog({});
+  }
+
+  function saveAuthors(list: AuthorList, html: string) {
+    const id = authorsDialog?.id;
+    let target = id;
+    if (id && posterRef.current.elements.some((e) => e.id === id)) {
+      updateElement(id, { authors: list, html });
+      setSelectedId(id);
+    } else {
+      const el = makeElement('subtitle', posterRef.current);
+      el.authors = list;
+      el.html = html;
+      el.h = el.h * 1.6; // room for the affiliation and contact lines
+      addElement(el);
+      target = el.id;
+    }
+    setAuthorsDialog(null);
+    // Make the affiliation and contact lines fit: a new box grows, while a box that
+    // sits in a template slot (e.g. a header band) keeps its size and its text shrinks.
+    const isNew = target !== id;
+    setTimeout(() => {
+      const n = target ? textNode(target) : null;
+      if (n && n.scrollHeight > n.clientHeight + 1) (isNew ? growToFit : shrinkToFit)(target);
+    }, 50);
+  }
+
   function removeSelected() {
     if (!selectedIds.length) return;
     const ids = new Set(selectedIds);
-    update((d) => void (d.elements = d.elements.filter((e) => !ids.has(e.id))));
+    update((d) => {
+      d.elements = d.elements.filter((e) => !ids.has(e.id));
+      dropLonelyGroups(d.elements);
+    });
     setSelectedId(null);
+  }
+
+  function groupSelected() {
+    if (!canGroup(selectedIds, posterRef.current.elements)) return;
+    let ids: string[] = [];
+    update((d) => void (ids = group(d.elements, selectedIds)));
+    setSelectedIds(ids);
+    notify('Grouped. They now move and resize together. Ctrl/⌘-click picks one out; Ctrl/⌘ Shift G ungroups.');
+  }
+
+  function ungroupSelected() {
+    if (!canUngroup(selectedIds, posterRef.current.elements)) return;
+    update((d) => void ungroup(d.elements, selectedIds));
   }
 
   function duplicate(src?: PosterElement, offset = 8) {
     const sources = src ? [src] : posterRef.current.elements.filter((e) => selectedIds.includes(e.id));
     if (!sources.length) return;
-    const copies = sources.map((el) => ({ ...structuredClone(el), id: uid(), x: el.x + offset, y: el.y + offset, locked: false }));
+    const copies = regroupCopies(sources.map((el) => ({ ...structuredClone(el), id: uid(), x: el.x + offset, y: el.y + offset, locked: false })));
     update((d) => void d.elements.push(...copies));
     setSelectedIds(copies.map((c) => c.id));
   }
@@ -244,18 +302,18 @@ export default function Editor({ initial, onClose }: Props) {
     setOverflow(!!n && n.scrollHeight > n.clientHeight + 1);
   });
 
-  function growToFit() {
-    const n = selectedId && textNode(selectedId);
+  function growToFit(id = selectedId) {
+    const n = id && textNode(id);
     if (!n) return;
-    const el = posterRef.current.elements.find((e) => e.id === selectedId)!;
+    const el = posterRef.current.elements.find((e) => e.id === id)!;
     const extra = el.h * MM_TO_PX - n.clientHeight; // padding + border
     updateElement(el.id, { h: (n.scrollHeight + extra) / MM_TO_PX + 0.5 });
   }
 
-  function shrinkToFit() {
-    const n = selectedId && textNode(selectedId);
+  function shrinkToFit(id = selectedId) {
+    const n = id && textNode(id);
     if (!n) return;
-    const el = posterRef.current.elements.find((e) => e.id === selectedId)!;
+    const el = posterRef.current.elements.find((e) => e.id === id)!;
     const original = n.style.fontSize;
     let size = el.style!.fontSize;
     while (size > 4 && n.scrollHeight > n.clientHeight + 1) {
@@ -285,7 +343,10 @@ export default function Editor({ initial, onClose }: Props) {
       const a = toPoster(start.x, start.y);
       const b = toPoster(ev.clientX, ev.clientY);
       const box = { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) };
-      const hit = posterRef.current.elements.filter((el) => intersects(box, el) && !el.locked).map((el) => el.id);
+      const hit = expandToGroups(
+        posterRef.current.elements.filter((el) => intersects(box, el) && !el.locked).map((el) => el.id),
+        posterRef.current.elements,
+      );
       setSelectedIds([...before.filter((id) => !hit.includes(id)), ...hit]);
     };
     const up = () => {
@@ -312,7 +373,7 @@ export default function Editor({ initial, onClose }: Props) {
   useEffect(() => {
     const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     const onKey = (e: KeyboardEvent) => {
-      if (viewing || chartDialog) return;
+      if (viewing || chartDialog || authorsDialog) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -336,6 +397,10 @@ export default function Editor({ initial, onClose }: Props) {
       } else if (mod && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         duplicate();
+      } else if (mod && e.key.toLowerCase() === 'g') {
+        e.preventDefault();
+        if (e.shiftKey) ungroupSelected();
+        else groupSelected();
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         if (selectedIds.length) {
           e.preventDefault();
@@ -387,7 +452,7 @@ export default function Editor({ initial, onClose }: Props) {
       if (e.type === 'cut') removeSelected();
     };
     const onPaste = (e: ClipboardEvent) => {
-      if (isTyping(e.target) || isTyping(document.activeElement) || viewing || chartDialog) return;
+      if (isTyping(e.target) || isTyping(document.activeElement) || viewing || chartDialog || authorsDialog) return;
       const dt = e.clipboardData;
       if (!dt) return;
       const json = dt.getData(CLIP_MIME);
@@ -541,6 +606,9 @@ export default function Editor({ initial, onClose }: Props) {
     if (!many) items.push({ label: 'Copy', shortcut: '⌘/Ctrl C', onClick: () => copyElement(el) });
     if (!many && internalClipboard) items.push({ label: 'Paste', shortcut: '⌘/Ctrl V', onClick: () => duplicate(internalClipboard!) });
     items.push({ label: 'Duplicate', shortcut: '⌘/Ctrl D', onClick: () => duplicate() });
+    const els = posterRef.current.elements;
+    if (canGroup(selectedIds, els)) items.push({ label: 'Group', shortcut: '⌘/Ctrl G', onClick: groupSelected });
+    if (canUngroup(selectedIds, els)) items.push({ label: 'Ungroup', shortcut: '⌘/Ctrl ⇧ G', onClick: ungroupSelected });
     items.push('-');
     if (!many) {
       items.push({ label: 'Bring to front', onClick: () => layer('front') });
@@ -679,6 +747,7 @@ export default function Editor({ initial, onClose }: Props) {
             onInsertImage={() => chooseImage()}
             onInsertChart={() => setChartDialog({})}
             onInsertQr={insertQr}
+            onInsertAuthors={() => openAuthors()}
             notify={notify}
           />
         ) : (
@@ -705,8 +774,13 @@ export default function Editor({ initial, onClose }: Props) {
               snap={snap}
               selectedIds={selectedIds}
               editingId={editingId}
-              onSelect={(id, additive) =>
-                setSelectedIds((cur) => (additive ? (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]) : cur.includes(id) ? cur : [id]))
+              onSelect={(id, additive, only) =>
+                setSelectedIds((cur) => {
+                  if (only) return [id];
+                  const members = groupMembers(id, posterRef.current.elements);
+                  if (additive) return cur.includes(id) ? cur.filter((x) => !members.includes(x)) : [...cur, ...members.filter((x) => !cur.includes(x))];
+                  return cur.includes(id) ? cur : members;
+                })
               }
               onMoveMany={(moves, key) =>
                 update((d) => {
@@ -716,7 +790,11 @@ export default function Editor({ initial, onClose }: Props) {
                   }
                 }, key)
               }
-              onEdit={setEditingId}
+              onEdit={(id) => {
+                setEditingId(id);
+                // typing in a grouped text box edits just that box
+                if (id) setSelectedIds((cur) => (cur.length > 1 ? [id] : cur));
+              }}
               onChange={(id, patch, key) => updateElement(id, patch, key)}
               onCommitText={(id, html) => updateElement(id, { html })}
               onContextMenu={(el, x, y) => setMenu({ x, y, el })}
@@ -733,9 +811,12 @@ export default function Editor({ initial, onClose }: Props) {
             poster={poster}
             el={selectedIds.length > 1 ? null : selected}
             multi={selectedIds.length}
+            grouped={!!wholeGroup(selectedIds, poster.elements)}
+            onGroup={canGroup(selectedIds, poster.elements) ? groupSelected : undefined}
+            onUngroup={canUngroup(selectedIds, poster.elements) ? ungroupSelected : undefined}
             overflow={overflow}
-            onShrinkText={shrinkToFit}
-            onGrowBox={growToFit}
+            onShrinkText={() => shrinkToFit()}
+            onGrowBox={() => growToFit()}
             onAlign={(mode) => arrange((els, d) => align(els, mode, { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin }))}
             onDistribute={(axis) => arrange((els) => distribute(els, axis))}
             onMatchSize={(dim) => arrange((els) => matchSize(els, dim))}
@@ -746,6 +827,7 @@ export default function Editor({ initial, onClose }: Props) {
             onLayer={layer}
             onReplaceImage={() => selected && chooseImage(selected.id)}
             onEditChart={() => selected && setChartDialog({ id: selected.id, spec: selected.chart })}
+            onEditAuthors={() => selected && openAuthors(selected.id)}
           />
         ) : (
           <button className="panel-reveal props" title="Show properties panel" aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>
@@ -769,6 +851,7 @@ export default function Editor({ initial, onClose }: Props) {
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
+      {authorsDialog && <AuthorsDialog initial={authorsDialog.initial} replacing={authorsDialog.replacing} onSave={saveAuthors} onCancel={() => setAuthorsDialog(null)} />}
       {toast && <div className="toast">{toast}</div>}
       {marquee && (
         <div

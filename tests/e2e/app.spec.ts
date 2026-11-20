@@ -317,7 +317,7 @@ test.describe('editing', () => {
 
   test('inserts every element type from the Insert panel', async ({ page }) => {
     await newPoster(page, { template: 'Blank' });
-    for (const name of ['Title', 'Subtitle / authors', 'Section header', 'Text box', 'Box / panel', 'Circle', 'Line']) {
+    for (const name of ['Title', 'Subtitle', 'Section header', 'Text box', 'Box / panel', 'Circle', 'Line']) {
       await page.getByRole('button', { name, exact: true }).click();
       await page.keyboard.press('Escape');
     }

@@ -18,7 +18,12 @@ interface Props {
   onLayer: (dir: 'front' | 'back' | 'up' | 'down') => void;
   onReplaceImage: () => void;
   onEditChart: () => void;
+  onEditAuthors?: () => void;
   multi: number;
+  /** the selection is exactly one group */
+  grouped?: boolean;
+  onGroup?: () => void;
+  onUngroup?: () => void;
   overflow: boolean;
   onShrinkText: () => void;
   onGrowBox: () => void;
@@ -74,14 +79,28 @@ export default function Inspector(props: Props) {
       <aside className="panel right">
         <div className="panel-body">
           <div className="insp-head">
-            <h3>{multi} elements selected</h3>
+            <h3>{props.grouped ? `Group of ${multi}` : `${multi} elements selected`}</h3>
             <div className="icon-row">
               <button className="icon-btn" title="Duplicate (Ctrl/⌘ D)" onClick={onDuplicate}>⧉</button>
               <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
             </div>
           </div>
+          {(props.onGroup || props.onUngroup) && (
+            <section>
+              <h4>Group</h4>
+              <div className="toolbar-row">
+                {props.onGroup && <button className="btn small-btn" onClick={props.onGroup} title="Ctrl/⌘ G">Group</button>}
+                {props.onUngroup && <button className="btn small-btn" onClick={props.onUngroup} title="Ctrl/⌘ Shift G">Ungroup</button>}
+              </div>
+              <p className="hint">
+                {props.grouped
+                  ? 'Drag to move the group; drag a corner to resize it all (Shift lets it stretch). Ctrl/⌘-click picks out one element.'
+                  : 'Group them to keep a figure with its caption, or a row of logos, together.'}
+              </p>
+            </section>
+          )}
           <ArrangeSection count={multi} {...props} />
-          <p className="hint">Drag any of them to move them together. Shift-click to add or remove one from the selection.</p>
+          {!props.grouped && <p className="hint">Drag any of them to move them together. Shift-click to add or remove one from the selection.</p>}
         </div>
       </aside>
     );
@@ -97,6 +116,7 @@ export default function Inspector(props: Props) {
             <li><kbd>Ctrl/⌘ Z</kbd> undo, <kbd>Ctrl/⌘ Shift Z</kbd> redo</li>
             <li><kbd>Ctrl/⌘ C / X / V</kbd> copy, cut, paste elements, text or images</li>
             <li><kbd>Ctrl/⌘ D</kbd> duplicate</li>
+            <li><kbd>Ctrl/⌘ G</kbd> group, <kbd>Ctrl/⌘ Shift G</kbd> ungroup</li>
             <li><kbd>Delete</kbd> remove selected</li>
             <li><kbd>Shift</kbd>-click or drag a box to select several</li>
             <li><kbd>Ctrl/⌘ A</kbd> select everything</li>
@@ -139,6 +159,13 @@ export default function Inspector(props: Props) {
               <button className="btn small-btn" onClick={onShrinkText}>Shrink text to fit</button>
               <button className="btn small-btn" onClick={onGrowBox}>Make box taller</button>
             </div>
+          </section>
+        )}
+
+        {st && props.onEditAuthors && (el.authors || el.type === 'subtitle') && (
+          <section>
+            <button className="btn primary" onClick={props.onEditAuthors}>{el.authors ? 'Edit authors and affiliations…' : 'Build author list…'}</button>
+            {el.authors && <p className="hint">Changes typed straight into this box are replaced when you update the list.</p>}
           </section>
         )}
 

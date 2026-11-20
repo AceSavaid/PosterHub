@@ -61,7 +61,7 @@ export function backgroundBehind(p: Poster, el: PosterElement): string | null {
   return resolveColor('@background', p.palette);
 }
 
-const plain = (html = '') => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+export const plain = (html = '') => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
 const NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape' };
 function label(el: PosterElement) {

@@ -70,15 +70,16 @@ try {
   app = await launch();
   await app.until('the saved poster', `return document.body.innerText.includes('Smoke test poster')`);
   await app.click('Rename', `document.querySelector('.poster-card')`);
-  await app.until('the rename dialog', `return !!document.querySelector('.app-dialog input')`);
-  await app.run(typeInto('.app-dialog input', 'Renamed poster'));
-  await app.click('Rename', `document.querySelector('.app-dialog')`);
+  // Renaming happens in place on the card: type, then press Enter.
+  await app.until('the name field', `return !!document.querySelector('.card-rename')`);
+  await app.run(typeInto('.card-rename', 'Renamed poster'));
+  await app.run(`document.querySelector('.card-rename').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));`);
   for (let i = 0; i < 40 && !files().includes('Renamed-poster.poster.json'); i++) await sleep(250);
   assert.deepEqual(files(), ['Renamed-poster.poster.json']);
 
   await app.click('Delete', `document.querySelector('.poster-card')`);
-  await app.until('the delete dialog', `return !!document.querySelector('.app-dialog')`);
-  await app.click('Delete', `document.querySelector('.app-dialog')`);
+  await app.until('the delete confirmation', `return !!document.querySelector('[role=alertdialog]')`);
+  await app.click('Delete poster', `document.querySelector('[role=alertdialog]')`);
   for (let i = 0; i < 40 && files().length; i++) await sleep(250);
   assert.deepEqual(files(), []);
   console.log('Desktop smoke test passed');

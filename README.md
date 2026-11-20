@@ -49,6 +49,8 @@ Pull requests that touch the desktop code also build the Linux app and run `test
 
 `src/lib/storage.ts` is the only module the UI uses. It picks a `PosterStore` (`src/lib/store/`): `browserStore` (IndexedDB) on the web, or `FolderStore` (one `.poster.json` per poster in Documents/PosterHub) in the desktop app. Desktop file access is limited to that folder and to files you pick in a Save dialog (`src-tauri/capabilities/default.json`).
 
+The desktop window also enforces a Content Security Policy (`app.security.csp` in `src-tauri/tauri.conf.json`): only the app's own scripts run, and the only outside servers allowed are Google Fonts and the Fontsource CDN. Keep it in step with the web policy. `dangerousDisableAssetCspModification` is set for `style-src` because Tauri would otherwise add nonces there, which makes browsers ignore `'unsafe-inline'` and breaks the editor's inline styles.
+
 The app is a static site (Vite + React + TypeScript). `vite.config.ts` uses relative asset paths so the same build works on GitHub Pages and inside a desktop wrapper (Tauri or Electron) later.
 
 ### Project layout

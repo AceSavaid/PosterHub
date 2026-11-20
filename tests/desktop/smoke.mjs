@@ -48,6 +48,8 @@ let app = await launch();
 try {
   await app.until('the library', `return document.body.innerText.includes('My posters')`);
   assert.equal(await app.run(`return '__TAURI_INTERNALS__' in window`), true, 'runs inside the desktop shell');
+  // The Content Security Policy is active and normal use does not trip it.
+  assert.match(await app.run(`window.__cspViolations = []; document.addEventListener('securitypolicyviolation', (e) => window.__cspViolations.push(e.violatedDirective + ' ' + e.blockedURI)); let r; try { eval('1'); r = 'eval allowed'; } catch { r = 'eval blocked'; } await new Promise((ok) => setTimeout(ok, 100)); window.__cspViolations = []; return r;`), /eval blocked/);
   assert.match(await app.run(`return document.querySelector('.lib-location')?.textContent ?? ''`), /Saved as files in .*PosterHub/);
 
   // New poster -> file on disk.
@@ -61,6 +63,7 @@ try {
   const saved = JSON.parse(fs.readFileSync(path.join(folder, 'Smoke-test-poster.poster.json'), 'utf8'));
   assert.equal(saved.app, 'posterhub');
   assert.equal(saved.name, 'Smoke test poster');
+  assert.deepEqual(JSON.parse(await app.run(`return JSON.stringify(window.__cspViolations)`)), [], 'no CSP violations while editing');
   await app.quit();
 
   // Restart: the poster is found on disk; rename and delete change the files.

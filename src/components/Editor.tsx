@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChartSpec, ElementType, Poster, PosterElement } from '../types';
+import type { ChartSpec, ElementType, Poster, PosterElement, ReviewNote } from '../types';
 import { MM_TO_PX, makeElement, uid } from '../model';
 import { usePosterHistory } from '../lib/usePoster';
 import { align, distribute, emptyFigureSlot, findFreeSpot, intersects, matchSize } from '../lib/arrange';
@@ -32,6 +32,8 @@ import { insertCitationAtCaret } from '../lib/refs/caret';
 import { refreshMarkersIn } from '../lib/refs/citations';
 import { replaceColor } from '../lib/printColor';
 import { BLEED_CHOICES } from '../lib/print';
+import { NotesLayer, NotesPanel } from './ReviewNotes';
+import { cleanText, createNote, loadReviewerName, MAX_NOTE_LENGTH, notePositionFor, openNotes, saveReviewerName } from '../lib/notes';
 
 /** Start of the example reference in starter templates. */
 const EXAMPLE_REFS = 'Author, A. (2025). Title of work';
@@ -92,7 +94,10 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   }, []);
   const setFindOpen = useCallback((v: boolean) => {
     setFindOpenRaw(v);
-    if (v) setCheckOpenRaw(false);
+    if (v) {
+      setCheckOpenRaw(false);
+      setNotesOpen(false);
+    }
   }, []);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
@@ -106,6 +111,10 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const scroller = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<number>(undefined);
   const [prefs, setPrefs] = useUiPrefs();
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null);
+  const [showResolved, setShowResolved] = useState(false);
+  const [reviewer, setReviewer] = useState(loadReviewerName);
 
   const notify = useCallback((msg: string) => {
     setToast(msg);
@@ -463,6 +472,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         return;
       }
       if (isTyping(e.target)) return;
+      // keys pressed on a note pin or in the notes list are about the note, not the selected elements
+      if (e.target instanceof HTMLElement && e.target.closest('.notes-layer, .notes-panel') && !mod) return;
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) redo();
@@ -598,11 +609,63 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     }
   }
 
+  // ---- review notes (never part of the exported poster node)
+  function updateNote(id: string, fn: (n: ReviewNote) => void, coalesce?: string) {
+    update((d) => {
+      const n = d.notes?.find((x) => x.id === id);
+      if (n) fn(n);
+    }, coalesce);
+  }
+
+  function addNote(onEl?: PosterElement) {
+    const p = posterRef.current;
+    const el = onEl ?? (selectedIds.length === 1 ? p.elements.find((e) => e.id === selectedId) : undefined);
+    const note = createNote(el ? notePositionFor(el, p) : viewCenter(), reviewer, el?.id);
+    update((d) => void (d.notes = [...(d.notes ?? []), note]));
+    if (!prefs.showNotes) setPrefs({ showNotes: true });
+    setEditingId(null);
+    setOpenNoteId(note.id);
+    if (!reviewer) {
+      setCheckOpen(false);
+      setNotesOpen(true);
+      notify('Tip: type your name in the Notes panel so co-authors can see who left each note.');
+    }
+  }
+
+  function deleteNote(id: string) {
+    update((d) => void (d.notes = (d.notes ?? []).filter((n) => n.id !== id)));
+    if (openNoteId === id) setOpenNoteId(null);
+    notify('Note deleted. Press Ctrl/⌘ Z to undo.');
+  }
+
+  function deleteResolvedNotes() {
+    const n = (posterRef.current.notes ?? []).filter((x) => x.resolved).length;
+    update((d) => void (d.notes = (d.notes ?? []).filter((x) => !x.resolved)));
+    notify(`Deleted ${n} resolved note(s). Press Ctrl/⌘ Z to undo.`);
+  }
+
+  function resolveNote(id: string, resolved: boolean) {
+    updateNote(id, (n) => void (n.resolved = resolved));
+    // a resolved note disappears from the poster unless resolved notes are shown
+    if (resolved && !showResolved && openNoteId === id) setOpenNoteId(null);
+  }
+
+  function pickNote(id: string) {
+    if (!prefs.showNotes) setPrefs({ showNotes: true });
+    const n = posterRef.current.notes?.find((x) => x.id === id);
+    if (n?.resolved) setShowResolved(true);
+    setOpenNoteId(id);
+    requestAnimationFrame(() =>
+      document.querySelector(`[data-note-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' }),
+    );
+  }
+
   // ---- export
   async function runExport(kind: 'pdf' | 'png' | 'pptx' | 'project') {
     setExportOpen(false);
     setSelectedId(null);
     setEditingId(null);
+    setOpenNoteId(null);
     const p = posterRef.current;
     await new Promise((r) => setTimeout(r, 50));
     try {
@@ -697,6 +760,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       items.push({ label: 'Bring to front', onClick: () => layer('front') });
       items.push({ label: 'Send to back', onClick: () => layer('back') });
       items.push({ label: el.locked ? 'Unlock' : 'Lock position', onClick: () => updateElement(el.id, { locked: !el.locked }) });
+      items.push('-');
+      items.push({ label: 'Add note', onClick: () => addNote(el) });
     } else {
       items.push({ label: 'Align left edges', onClick: () => arrange((els, d) => align(els, 'left', { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin })) });
       items.push({ label: 'Align top edges', onClick: () => arrange((els, d) => align(els, 'top', { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin })) });
@@ -848,9 +913,22 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         </AppearanceMenu>
         <span className="sep" />
         <button
+          className={'btn check-btn notes-btn' + (notesOpen ? ' active' : '')}
+          onClick={() => {
+            setCheckOpen(false);
+            setFindOpen(false);
+            setNotesOpen((o) => !o);
+          }}
+          title="Comments for co-authors and supervisors. Saved with the poster, never printed."
+        >
+          Notes
+          {openNotes(poster).length > 0 && <span className="badge note-badge">{openNotes(poster).length}</span>}
+        </button>
+        <button
           className={'btn check-btn' + (checkOpen ? ' active' : '')}
           onClick={() => {
             runCheck();
+            setNotesOpen(false);
             setCheckOpen((o) => !o);
           }}
           title="Look for small text, low contrast, blurry images and leftover example text"
@@ -1021,6 +1099,21 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
               onChange={(id, patch, key) => updateElement(id, patch, key)}
               onCommitText={(id, html) => updateElement(id, { html })}
               onContextMenu={(el, x, y) => setMenu({ x, y, el })}
+              notes={
+                prefs.showNotes && (poster.notes?.length ?? 0) > 0 ? (
+                  <NotesLayer
+                    poster={poster}
+                    zoom={zoom}
+                    showResolved={showResolved}
+                    openId={openNoteId}
+                    onOpen={setOpenNoteId}
+                    onMove={(id, x, y, key) => updateNote(id, (n) => Object.assign(n, { x, y }), key)}
+                    onText={(id, text) => updateNote(id, (n) => void (n.text = cleanText(text, MAX_NOTE_LENGTH)), 'note-text-' + id)}
+                    onResolve={resolveNote}
+                    onDelete={deleteNote}
+                  />
+                ) : null
+              }
               onActivate={(el) => {
                 if (el.type === 'image' && (el.qr || el.placeholder === 'QR code')) focusQrLink();
                 else if (el.type === 'image') chooseImage(el.id);
@@ -1082,6 +1175,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           tab={checkTab}
           onTab={setCheckTab}
           onPick={pickIssue}
+          onPickNote={pickNote}
           onFix={fixIssue}
           onPickMany={(ids) => ids[0] && pickIssue(ids[0], ids)}
           onFixWord={(word, replacement) => {
@@ -1113,6 +1207,29 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           }}
           onNotify={notify}
           onClose={() => setFindOpen(false)}
+        />
+      )}
+      {notesOpen && (
+        <NotesPanel
+          poster={poster}
+          reviewer={reviewer}
+          onReviewer={(name) => {
+            setReviewer(name);
+            saveReviewerName(name);
+          }}
+          showNotes={prefs.showNotes}
+          onShowNotes={(show) => {
+            setPrefs({ showNotes: show });
+            if (!show) setOpenNoteId(null);
+          }}
+          showResolved={showResolved}
+          onShowResolved={setShowResolved}
+          onAdd={() => addNote()}
+          onPick={pickNote}
+          onResolve={resolveNote}
+          onDelete={deleteNote}
+          onDeleteResolved={deleteResolvedNotes}
+          onClose={() => setNotesOpen(false)}
         />
       )}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}

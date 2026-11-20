@@ -18,9 +18,11 @@ export interface UiPrefs {
   pdfBleedMm: number;
   /** Add crop marks to PDFs. */
   pdfCropMarks: boolean;
+  /** draw review-note pins on the poster while editing */
+  showNotes: boolean;
 }
 
-export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false };
+export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false, showNotes: true };
 export const PREFS_KEY = 'posterhub.ui';
 
 /** Fills in defaults and drops anything malformed (old versions, hand-edited storage). */
@@ -34,6 +36,7 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     showProperties: bool(r.showProperties, DEFAULT_PREFS.showProperties),
     pdfBleedMm: sanitizePrintOptions({ bleedMm: r.pdfBleedMm as number }).bleedMm,
     pdfCropMarks: bool(r.pdfCropMarks, DEFAULT_PREFS.pdfCropMarks),
+    showNotes: bool(r.showNotes, DEFAULT_PREFS.showNotes),
   };
 }
 

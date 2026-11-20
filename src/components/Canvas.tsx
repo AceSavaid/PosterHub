@@ -23,6 +23,8 @@ interface Props {
   onCommitText: (id: string, html: string) => void;
   onActivate: (el: PosterElement) => void; // double-click on image/chart
   onContextMenu: (el: PosterElement, x: number, y: number) => void;
+  /** review notes layer, drawn outside the exported poster node */
+  notes?: React.ReactNode;
 }
 
 interface Guide {
@@ -31,7 +33,7 @@ interface Guide {
 }
 
 export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, ref) {
-  const { poster, zoom, showGrid, snap, selectedIds, editingId, onSelect, onMoveMany, onEdit, onChange, onCommitText, onActivate, onContextMenu } = props;
+  const { poster, zoom, showGrid, snap, selectedIds, editingId, onSelect, onMoveMany, onEdit, onChange, onCommitText, onActivate, onContextMenu, notes } = props;
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
   const [guides, setGuides] = useState<Guide[]>([]);
   const dragging = useRef(false);
@@ -237,6 +239,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       poster={poster}
       zoom={zoom}
       showGrid={showGrid}
+      outside={notes}
       renderElement={(el) => {
         const isEditing = editingId === el.id;
         const isText = el.style != null;

@@ -2,6 +2,7 @@
 // "Export project file" button and the desktop app's on-disk library.
 import type { Poster } from '../types';
 import { sanitizePoster } from './sanitize';
+import { sanitizeNotes } from './notes';
 
 export const FILE_EXT = '.poster.json';
 
@@ -21,5 +22,7 @@ export function parsePosterText(text: string): Poster {
     throw new Error('This file is not a PosterHub project.');
   }
   delete data.app;
+  // Review notes come from other people's files: keep only clean, plain-text notes.
+  if (data.notes !== undefined) data.notes = sanitizeNotes(data.notes, { width: data.width, height: data.height });
   return sanitizePoster(data as Poster);
 }

@@ -9,11 +9,11 @@ beforeEach(() => {
 
 describe('editor appearance preferences', () => {
   it('defaults to following the system theme with both panels in place', () => {
-    expect(loadPrefs()).toEqual({ theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false });
+    expect(loadPrefs()).toEqual({ theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false, showNotes: true });
   });
 
   it('round-trips through localStorage', () => {
-    const p = { theme: 'dark' as const, swapPanels: true, showTools: false, showProperties: true, pdfBleedMm: 3, pdfCropMarks: true };
+    const p = { theme: 'dark' as const, swapPanels: true, showTools: false, showProperties: true, pdfBleedMm: 3, pdfCropMarks: true, showNotes: false };
     savePrefs(p);
     expect(JSON.parse(localStorage.getItem(PREFS_KEY)!)).toEqual(p);
     expect(loadPrefs()).toEqual(p);

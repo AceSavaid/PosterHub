@@ -7,12 +7,15 @@ import { boundsOf, intersects } from './arrange';
 import { wordCount } from './textTools';
 import { citeCounts } from './refs/citations';
 import { dullColorIssues } from './printColor';
+import { authorName, openNotes, preview } from './notes';
 
 export type Severity = 'problem' | 'warning' | 'tip';
 
 export interface Issue {
   id: string;
   elementId?: string;
+  /** set when the issue is an unresolved review note */
+  noteId?: string;
   severity: Severity;
   title: string;
   detail: string;
@@ -91,8 +94,17 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
   const minPt = minReadablePt(p);
   const page = { x: 0, y: 0, w: p.width, h: p.height };
 
+  // ---- unresolved review notes: feedback that has not been dealt with yet
+  for (const n of openNotes(p)) {
+    issues.push({
+      id: 'note-' + n.id, noteId: n.id, severity: 'warning',
+      title: `Open note from ${authorName(n)}: “${preview(n.text, 34)}”`,
+      detail: 'Resolve or delete it once you have dealt with it. Notes are never printed or exported.',
+    });
+  }
+
   if (!p.elements.length) {
-    issues.push({ id: 'empty', severity: 'tip', title: 'The poster is empty', detail: 'Add a title from the Insert panel, or pick a layout under Layout → Start over with a layout.' });
+    issues.push({ id: 'empty', severity: 'tip', title: 'The poster is empty', detail: 'Add a title from the Insert panel, or pick a layout under Layout → Switch layout.' });
     return issues;
   }
 

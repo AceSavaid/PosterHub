@@ -14,6 +14,8 @@ interface Props {
   tab: CheckTab;
   onTab: (t: CheckTab) => void;
   onPick: (elementId: string) => void;
+  /** open the review note an issue is about */
+  onPickNote?: (noteId: string) => void;
   /** select several boxes (a whole section) */
   onPickMany: (elementIds: string[]) => void;
   /** replace a misspelt word everywhere on the poster */
@@ -54,7 +56,7 @@ export default function CheckPanel(props: Props) {
   );
 }
 
-function Problems({ issues, onPick, onFix }: Props) {
+function Problems({ issues, onPick, onPickNote, onFix }: Props) {
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const warnings = issues.filter((i) => i.severity === 'warning').length;
   if (issues.length === 0)
@@ -76,7 +78,7 @@ function Problems({ issues, onPick, onFix }: Props) {
       <ul className="issue-list">
         {issues.map((i) => (
           <li key={i.id} className={'issue ' + i.severity}>
-            <button disabled={!i.elementId} onClick={() => i.elementId && onPick(i.elementId)}>
+            <button disabled={!i.elementId && !(i.noteId && onPickNote)} onClick={() => (i.noteId ? onPickNote?.(i.noteId) : i.elementId && onPick(i.elementId))}>
               <span className="issue-icon" aria-hidden>{ICON[i.severity]}</span>
               <span>
                 <strong>{i.title}</strong>

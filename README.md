@@ -10,6 +10,7 @@ Make research and academic posters in your browser. No account, no install: ever
 - **Titles, headers, text, images, shapes and graphs**: double-click to type, paste text or images straight onto the poster, drag image files in.
 - **QR codes**: insert a QR code (or use a template's QR spot), paste a link to your paper, data or lab page and the code is made on your computer, even offline. Bare DOIs and web addresses get `https://` added so phones open them.
 - **Graphs from CSV**: load a CSV (or paste cells from Excel / Sheets), pick the columns and rows to plot, and choose bar, line, scatter, pie or doughnut.
+- **References and citations**: paste DOIs, doi.org links or arXiv ids (looked up online via Crossref and DataCite), BibTeX or CSL-JSON from Zotero / Mendeley / Google Scholar (offline), or type one in. Cite while typing; numbered markers like [1] renumber by themselves in reading order. Styles: Vancouver, IEEE, Nature, APA 7, Harvard and Chicago author-date. The reference list and markers are included in every export.
 - **Fonts**: popular Google Fonts built in, add any other Google font by name, or upload your own `.ttf` / `.otf` / `.woff` file.
 - **PowerPoint templates**: import a `.pptx` or `.potx` template; its size, colours, fonts, background, shapes, text and pictures come across.
 - **My posters**: every poster autosaves to a library in your browser, with thumbnails, rename, duplicate and delete.

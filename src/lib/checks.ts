@@ -4,6 +4,7 @@
 import type { Poster, PosterElement } from '../types';
 import { resolveColor, typeScale } from '../model';
 import { boundsOf, intersects } from './arrange';
+import { citeCounts } from './refs/citations';
 
 export type Severity = 'problem' | 'warning' | 'tip';
 
@@ -110,9 +111,11 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
         issues.push({ id: 'blank-' + el.id, elementId: el.id, severity: 'tip', title: `An empty ${NAMES[el.type].toLowerCase()}`, detail: 'Type something in it or delete it.' });
       }
       // ---- too small
-      if (text && el.style.fontSize < minPt && el.type !== 'title') {
+      // reference lists are read up close, so they may be smaller than body text
+      const min = el.refList ? minPt * 0.6 : minPt;
+      if (text && el.style.fontSize < min && el.type !== 'title') {
         issues.push({
-          id: 'small-' + el.id, elementId: el.id, severity: el.style.fontSize < minPt * 0.7 ? 'problem' : 'warning',
+          id: 'small-' + el.id, elementId: el.id, severity: el.style.fontSize < min * 0.7 ? 'problem' : 'warning',
           title: `${name} may be too small to read`,
           detail: `It is ${el.style.fontSize} pt. On a poster this size, aim for at least ${minPt} pt so it can be read from a step or two away.`,
         });
@@ -154,6 +157,22 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
     if (el.type === 'chart' && el.chart && el.chart.fontSize < minPt * 0.75) {
       issues.push({ id: 'chartfont-' + el.id, elementId: el.id, severity: 'warning', title: 'Graph labels may be too small', detail: `They are ${el.chart.fontSize} pt; try at least ${Math.round(minPt * 0.75)} pt (Label size in the side panel).` });
     }
+  }
+
+  // ---- citations
+  const counts = citeCounts(p);
+  const refIds = new Set((p.references ?? []).map((r) => r.id));
+  const broken = [...counts.keys()].filter((id) => !refIds.has(id));
+  if (broken.length) {
+    const el = p.elements.find((e) => broken.some((id) => e.html?.includes(id)));
+    issues.push({ id: 'cite-missing', elementId: el?.id, severity: 'warning', title: 'A citation points to a missing reference', detail: 'It shows as [?]. Delete the marker and cite the reference again from the Cite list.' });
+  }
+  if (counts.size && !p.elements.some((e) => e.refList)) {
+    issues.push({ id: 'cite-nolist', severity: 'warning', title: 'Citations but no reference list', detail: 'Add one with Insert → References / citations → Add reference list to poster.' });
+  }
+  const uncited = (p.references ?? []).filter((r) => !counts.has(r.id));
+  if (counts.size && uncited.length) {
+    issues.push({ id: 'cite-unused', severity: 'tip', title: `${uncited.length} reference${uncited.length > 1 ? 's are' : ' is'} not cited in the text`, detail: 'They are listed at the end of the reference list. Cite them, or remove them under Insert → References / citations.' });
   }
 
   // ---- crowding: content too close to everything else is hard to spot; keep it simple and check overall balance

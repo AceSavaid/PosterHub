@@ -18,7 +18,12 @@ import ContextMenu, { type MenuItem } from './ContextMenu';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import AppearanceMenu from './AppearanceMenu';
 import { useUiPrefs } from '../lib/uiPrefs';
+import ReferencesDialog from './ReferencesDialog';
+import { insertCitationAtCaret } from '../lib/refs/caret';
+import { refreshMarkersIn } from '../lib/refs/citations';
 
+/** Start of the example reference in starter templates. */
+const EXAMPLE_REFS = 'Author, A. (2025). Title of work';
 const CLIP_MIME = 'application/x-posterhub-element';
 let internalClipboard: PosterElement | null = null;
 
@@ -55,6 +60,7 @@ export default function Editor({ initial, onClose }: Props) {
   const [showGrid, setShowGrid] = useState(true);
   const [snap, setSnap] = useState(true);
   const [viewing, setViewing] = useState(false);
+  const [refsOpen, setRefsOpen] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [checkOpen, setCheckOpen] = useState(false);
@@ -346,7 +352,10 @@ export default function Editor({ initial, onClose }: Props) {
         setSelectedIds(posterRef.current.elements.filter((x) => !x.locked).map((x) => x.id));
       } else if (e.key === 'Enter' && selectedId) {
         const el = posterRef.current.elements.find((x) => x.id === selectedId);
-        if (el?.style) {
+        if (el?.refList) {
+          e.preventDefault();
+          setRefsOpen(true);
+        } else if (el?.style) {
           e.preventDefault();
           setEditingId(el.id);
         }
@@ -561,6 +570,72 @@ export default function Editor({ initial, onClose }: Props) {
     posterNode.current?.querySelector(`[data-id="${id}"]`)?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
   }
 
+  /** Double-click / Enter on text: the reference list opens the references dialog instead of typing. */
+  function startEditing(id: string | null) {
+    const el = id ? posterRef.current.elements.find((x) => x.id === id) : null;
+    if (el?.refList) {
+      setEditingId(null);
+      setRefsOpen(true);
+    } else setEditingId(id);
+  }
+
+  function cite(refId: string) {
+    if (!editingId) return;
+    const host = insertCitationAtCaret(refId, posterRef.current);
+    if (!host) {
+      notify('Click inside the text where the citation should go, then pick the reference.');
+      return;
+    }
+    updateElement(editingId, { html: host.innerHTML });
+  }
+
+  function addReferenceList(useSelected: boolean) {
+    const p = posterRef.current;
+    const target = useSelected ? p.elements.find((x) => x.id === selectedId && x.style && !x.refList) : undefined;
+    if (target) {
+      update((d) => {
+        const el = d.elements.find((x) => x.id === target.id)!;
+        el.refList = true;
+        el.refTitle = 'References';
+      });
+      setSelectedId(target.id);
+    } else if (p.elements.some((x) => x.style && !x.refList && x.html?.includes(EXAMPLE_REFS))) {
+      // a template's example "References … Contact …" footer: the list takes its place, contact details stay beside it
+      const ex = p.elements.find((x) => x.style && !x.refList && x.html?.includes(EXAMPLE_REFS))!;
+      update((d) => {
+        const el = d.elements.find((x) => x.id === ex.id)!;
+        const contact = /<b>Contact<\/b>[\s\S]*$/.exec(el.html ?? '')?.[0];
+        if (contact) {
+          const w = el.w;
+          el.w = w * 0.72;
+          d.elements.push({ ...structuredClone(el), id: uid(), x: el.x + w * 0.75, w: w * 0.25, html: contact, refList: undefined, refTitle: undefined });
+        }
+        el.refList = true;
+        el.refTitle = 'References';
+      });
+      setSelectedId(ex.id);
+    } else {
+      const el = makeElement('text', p, { refList: true, refTitle: 'References', html: '' });
+      el.style = { ...el.style!, fontSize: Math.max(8, Math.round(el.style!.fontSize * 0.75)) };
+      addElement(el);
+    }
+    setRefsOpen(false);
+    notify('Reference list added. It updates by itself as you cite.');
+  }
+
+  function showReferenceList() {
+    const el = posterRef.current.elements.find((x) => x.refList);
+    setRefsOpen(false);
+    if (el) pickIssue(el.id);
+  }
+
+  // Keep citation numbers right inside the box being typed in (the stored copy is synced on every change).
+  useEffect(() => {
+    if (!editingId) return;
+    const node = posterNode.current?.querySelector<HTMLElement>(`[data-id="${editingId}"] .el-body`);
+    if (node) refreshMarkersIn(node, poster);
+  }, [poster, editingId]);
+
   async function copyImage() {
     setSelectedId(null);
     setEditingId(null);
@@ -680,6 +755,7 @@ export default function Editor({ initial, onClose }: Props) {
             onInsertImage={() => chooseImage()}
             onInsertChart={() => setChartDialog({})}
             onInsertQr={insertQr}
+            onInsertReferences={() => setRefsOpen(true)}
             notify={notify}
           />
         ) : (
@@ -717,7 +793,7 @@ export default function Editor({ initial, onClose }: Props) {
                   }
                 }, key)
               }
-              onEdit={setEditingId}
+              onEdit={startEditing}
               onChange={(id, patch, key) => updateElement(id, patch, key)}
               onCommitText={(id, html) => updateElement(id, { html })}
               onContextMenu={(el, x, y) => setMenu({ x, y, el })}
@@ -747,6 +823,9 @@ export default function Editor({ initial, onClose }: Props) {
             onLayer={layer}
             onReplaceImage={() => selected && chooseImage(selected.id)}
             onEditChart={() => selected && setChartDialog({ id: selected.id, spec: selected.chart })}
+            onCite={cite}
+            onOpenReferences={() => setRefsOpen(true)}
+            onSetStyle={(st) => update((d) => void (d.citationStyle = st))}
           />
         ) : (
           <button className="panel-reveal props" title="Show properties panel" aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>
@@ -770,6 +849,16 @@ export default function Editor({ initial, onClose }: Props) {
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
+      {refsOpen && (
+        <ReferencesDialog
+          poster={poster}
+          update={update}
+          selectedTextId={selected?.style && !selected.refList ? selected.id : null}
+          onAddList={addReferenceList}
+          onShowList={showReferenceList}
+          onClose={() => setRefsOpen(false)}
+        />
+      )}
       {toast && <div className="toast">{toast}</div>}
       {marquee && (
         <div

@@ -7,6 +7,7 @@ import type { AlignMode } from '../lib/arrange';
 import { SHAPE_CHOICES } from '../lib/shapes';
 import { resizeSelection, styleSelection } from '../lib/richtext';
 import { PALETTE_ROLES } from '../model';
+import { CITATION_STYLES, DEFAULT_STYLE, shortLabel } from '../lib/refs/format';
 
 interface Props {
   poster: Poster;
@@ -25,6 +26,10 @@ interface Props {
   onAlign: (mode: AlignMode) => void;
   onDistribute: (axis: 'x' | 'y') => void;
   onMatchSize: (dim: 'w' | 'h') => void;
+  /** insert a citation of this reference at the caret (while typing) */
+  onCite: (refId: string) => void;
+  onOpenReferences: () => void;
+  onSetStyle: (style: Poster['citationStyle']) => void;
 }
 
 const ALIGN: { mode: AlignMode; label: string; icon: string }[] = [
@@ -68,7 +73,7 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: 
 const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape' };
 
 export default function Inspector(props: Props) {
-  const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart, multi, overflow, onShrinkText, onGrowBox } = props;
+  const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart, multi, overflow, onShrinkText, onGrowBox, onCite, onOpenReferences, onSetStyle } = props;
   if (multi > 1) {
     return (
       <aside className="panel right">
@@ -121,7 +126,7 @@ export default function Inspector(props: Props) {
     <aside className="panel right">
       <div className="panel-body">
         <div className="insp-head">
-          <h3>{TYPE_NAMES[el.type]}</h3>
+          <h3>{el.refList ? 'Reference list' : TYPE_NAMES[el.type]}</h3>
           <div className="icon-row">
             <button className="icon-btn" title="Duplicate (Ctrl/⌘ D)" onClick={onDuplicate}>⧉</button>
             <button className="icon-btn" title={el.locked ? 'Unlock' : 'Lock position'} onClick={() => onChange({ locked: !el.locked })}>
@@ -208,6 +213,50 @@ export default function Inspector(props: Props) {
                 <p className="hint">Select words while typing, then use B / I / U, size or colour to change only those words.</p>
               </div>
             )}
+          </section>
+        )}
+
+        {el.refList && (
+          <section className="refs-section">
+            <h4>Reference list</h4>
+            <p className="hint">This box is filled in from your references. Numbers follow the order they are cited on the poster.</p>
+            <button className="btn primary" onClick={onOpenReferences}>Edit references…</button>
+            <label>
+              Citation style
+              <select value={poster.citationStyle ?? DEFAULT_STYLE} onChange={(e) => onSetStyle(e.target.value as Poster['citationStyle'])}>
+                {CITATION_STYLES.map((c) => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Heading
+              <input value={el.refTitle ?? 'References'} onChange={(e) => onChange({ refTitle: e.target.value }, 'reftitle')} placeholder="(no heading)" />
+            </label>
+          </section>
+        )}
+
+        {st && editing && !el.refList && (
+          <section className="cite-section">
+            <h4>Cite</h4>
+            {(poster.references ?? []).length ? (
+              <>
+                <p className="hint">Click where the citation goes, then pick a reference. Pick several in a row to cite them together.</p>
+                <div className="cite-list">
+                  {(poster.references ?? []).map((r) => (
+                    <button key={r.id} className="cite-pick" onMouseDown={(e) => e.preventDefault()} onClick={() => onCite(r.id)} title={r.title}>
+                      <strong>{shortLabel(r)}</strong>
+                      <span>{r.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="hint">Add references from their DOIs or BibTeX, then cite them here.</p>
+            )}
+            <button className="btn small-btn" onMouseDown={(e) => e.preventDefault()} onClick={onOpenReferences}>
+              {(poster.references ?? []).length ? 'Manage references…' : 'Add references…'}
+            </button>
           </section>
         )}
 

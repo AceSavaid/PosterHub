@@ -18,10 +18,11 @@ interface Props {
   onInsertImage: () => void;
   onInsertChart: () => void;
   onInsertQr: () => void;
+  onInsertReferences: () => void;
   notify: (msg: string) => void;
 }
 
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, notify }: Props) {
+export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertReferences, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
     <aside className="panel left">
@@ -33,7 +34,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
         ))}
       </div>
       <div className="panel-body">
-        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} />}
+        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertReferences={onInsertReferences} />}
         {tab === 'layout' && <LayoutTab poster={poster} update={update} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
       </div>
@@ -41,7 +42,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
   );
 }
 
-function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr'>) {
+function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertReferences }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertReferences'>) {
   return (
     <>
       <h3>Text</h3>
@@ -57,6 +58,9 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<
         </button>
         <button className="insert-btn" onClick={() => onInsert('text')}>
           <span aria-hidden className="ib-icon t-body">¶</span>Text box
+        </button>
+        <button className="insert-btn" onClick={onInsertReferences}>
+          <span aria-hidden className="ib-icon">[1]</span>References / citations…
         </button>
       </div>
       <h3>Media and data</h3>

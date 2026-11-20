@@ -16,6 +16,8 @@ import { POLYGONS, ARROW_ROTATION, isPolygon } from '../shapes';
 import { cellLook, normalizeTable, type Border } from '../table';
 import { drawSvgMarkup } from './svgDraw';
 import { PT_TO_PX, layoutEquation, loadMath, mathSvg, svgDataUrl, typesetLatex } from '../math';
+import { multiply, rotate, translate } from './matrix';
+import { isCropped, placeImage, rad } from '../geometry';
 
 Chart.register(...registerables);
 
@@ -75,8 +77,14 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
   const textByEl = new Map<string, TextPiece[]>();
   for (const e of p.elements) {
     if (!isTextType(e)) continue;
-    const body = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"] .el-body`);
-    if (body) textByEl.set(e.id, extractText(body, frame));
+    const box = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"]`);
+    const body = box?.querySelector<HTMLElement>('.el-body');
+    if (!box || !body) continue;
+    // Measure rotated boxes upright; the rotation is applied again when painting.
+    const turned = box.style.transform;
+    if (turned) box.style.transform = '';
+    textByEl.set(e.id, extractText(body, frame));
+    if (turned) box.style.transform = turned;
   }
   for (const e of p.elements) {
     if (e.type !== 'table') continue;
@@ -128,8 +136,15 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
     const y = e.y * MM_TO_PX;
     const w = e.w * MM_TO_PX;
     const h = e.h * MM_TO_PX;
-    // Plain boxes touching the edge run on into the bleed.
-    const bb = bleedBox(e, p, geo.bleedMm);
+    painter.save();
+    if (e.rotation) painter.transform(multiply(translate(x + w / 2, y + h / 2), multiply(rotate(rad(e.rotation)), translate(-x - w / 2, -y - h / 2))));
+    await paintElement(e, x, y, w, h);
+    painter.restore();
+  }
+
+  async function paintElement(e: PosterElement, x: number, y: number, w: number, h: number) {
+    // Plain boxes touching the edge run on into the bleed (not turned ones: they keep their own shape).
+    const bb = e.rotation ? e : bleedBox(e, p, geo.bleedMm);
     const [bx, by, bw2, bh2] = [bb.x * MM_TO_PX, bb.y * MM_TO_PX, bb.w * MM_TO_PX, bb.h * MM_TO_PX];
     if (e.type === 'shape' && e.shape === 'line') {
       const c = parseColor(resolveColor(e.fill ?? '@primary', pal));
@@ -137,11 +152,11 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
         painter.rect(bx, by, bw2, bh2);
         painter.fill(c);
       }
-      continue;
+      return;
     }
     if (isPolygon(e)) {
       drawPolygon(painter, e, pal, x, y, w, h);
-      continue;
+      return;
     }
     const bw = ((e.borderWidth ?? 0) * 96) / 72;
     const ellipse = e.type === 'shape' && e.shape === 'ellipse';
@@ -170,13 +185,20 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
     const ch = Math.max(0, h - 2 * (bw + pad));
 
     if (e.type === 'image' && e.src) {
-      const img = await images.get(e.src, cw, ch);
+      const crop = isCropped(e.crop) ? e.crop! : undefined;
+      const img = await images.get(e.src, crop ? cw / crop.w : cw, crop ? ch / crop.h : ch);
       const [ix, iy, iw, ih] = bled ? [bx, by, bw2, bh2] : [cx, cy, cw, ch];
       if (img) {
         painter.save();
         painter.rect(ix, iy, iw, ih);
         painter.clip();
-        drawImageFit(painter, img, ix, iy, iw, ih, e.fit ?? 'contain');
+        if (crop) {
+          // Show only the chosen part: clip to it, then place the whole picture around it.
+          const { region, image } = placeImage(iw, ih, img.width, img.height, e.fit ?? 'contain', crop);
+          painter.rect(ix + region.x, iy + region.y, region.w, region.h);
+          painter.clip();
+          painter.image(img, ix + image.x, iy + image.y, image.w, image.h);
+        } else drawImageFit(painter, img, ix, iy, iw, ih, e.fit ?? 'contain');
         painter.restore();
       } else warnings.push('An image could not be read.');
     } else if (e.type === 'chart' && e.chart) {

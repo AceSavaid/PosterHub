@@ -99,7 +99,8 @@ test('adds, edits, resolves, reopens and deletes notes; all of it can be undone'
   await expect(page.locator('.notes-btn .badge')).toHaveText('1');
 
   // a second note from the right-click menu
-  await page.locator('.poster .el-subtitle').click({ button: 'right' });
+  // (left part of the box: the selected title's rotate handle sits over the middle)
+  await page.locator('.poster .el-subtitle').click({ button: 'right', position: { x: 20, y: 10 } });
   await page.getByRole('menuitem', { name: 'Add note' }).click();
   await page.getByLabel('Note text').fill('Add ORCID iDs');
   await expect(pins(page)).toHaveCount(2);

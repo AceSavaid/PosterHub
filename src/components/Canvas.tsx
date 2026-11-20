@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { forwardRef, useRef, useState } from 'react';
 import type { Poster, PosterElement, TableSpec } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth } from '../model';
@@ -6,7 +7,7 @@ import { boundsOf } from '../lib/arrange';
 import { groupMembers, scaleInto, wholeGroup } from '../lib/groups';
 import { elementLabel } from '../lib/a11y';
 
-type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+import { resizeRotated, snapAngle, type Handle } from '../lib/geometry';
 const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
 interface Props {
@@ -39,6 +40,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
   const { poster, zoom, showGrid, snap, selectedIds, editingId, onSelect, onMoveMany, onEdit, onChange, onCommitText, onCommitTable, onActiveCell, onActivate, onContextMenu, notes } = props;
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
   const [guides, setGuides] = useState<Guide[]>([]);
+  const [angle, setAngle] = useState<{ deg: number; x: number; y: number } | null>(null);
   const dragging = useRef(false);
 
   const scale = zoom * MM_TO_PX; // screen px per mm
@@ -112,6 +114,9 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
           if (sx) (x += sx.d), g.push({ axis: 'x', at: sx.at });
           if (sy) (y += sy.d), g.push({ axis: 'y', at: sy.at });
         }
+      } else if (el.rotation) {
+        // Rotated boxes resize along their own axes; snapping is off because edges aren't straight.
+        ({ x, y, w, h } = resizeRotated(orig, el.rotation, handle, dx, dy, { keepRatio: ev.shiftKey }));
       } else {
         const minS = 5;
         if (handle.includes('e')) w = Math.max(minS, orig.w + dx);
@@ -156,6 +161,30 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       window.removeEventListener('pointerup', up);
       setGuides([]);
       setTimeout(() => (dragging.current = false), 0);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  /** Drag the round handle above the selection to rotate around the centre. */
+  function startRotate(e: React.PointerEvent, el: PosterElement) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const node = (e.currentTarget as HTMLElement).closest('.sel-box') as HTMLElement;
+    const r = node.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const key = 'rotate-' + el.id + '-' + Date.now();
+    const move = (ev: PointerEvent) => {
+      const deg = (Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180) / Math.PI + 90;
+      const rotation = snapAngle(deg, ev.shiftKey ? 15 : undefined);
+      setAngle({ deg: rotation, x: ev.clientX, y: ev.clientY });
+      onChange(el.id, { rotation }, key);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setAngle(null);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -235,6 +264,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
   const selected = poster.elements.find((e) => e.id === selectedId);
   const others = selectedIds.length > 1 ? poster.elements.filter((e) => selectedIds.includes(e.id)) : [];
   const hs = 10 / zoom; // handle size in poster px, constant on screen
+  const rotBelow = !!selected && selected.y * MM_TO_PX < 40 / zoom;
 
   return (
     <Surface
@@ -304,8 +334,34 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       {selected && !editingId && (
         <div
           className="ui-only sel-box"
-          style={{ left: selected.x * MM_TO_PX, top: selected.y * MM_TO_PX, width: selected.w * MM_TO_PX, height: selected.h * MM_TO_PX, borderWidth: 2 / zoom }}
+          style={{
+            left: selected.x * MM_TO_PX,
+            top: selected.y * MM_TO_PX,
+            width: selected.w * MM_TO_PX,
+            height: selected.h * MM_TO_PX,
+            borderWidth: 2 / zoom,
+            transform: selected.rotation ? `rotate(${selected.rotation}deg)` : undefined,
+          }}
         >
+          {!selected.locked && selected.shape !== 'line' && (
+            <>
+              {/* Above the box, or below it when the box touches the top of the poster (which clips). */}
+              <div className="rotate-stem" style={{ height: 22 / zoom, width: 1.5 / zoom, top: rotBelow ? '100%' : -22 / zoom }} />
+              <div
+                className="rotate-handle"
+                title="Drag to rotate (hold Shift for 15° steps)"
+                aria-hidden
+                style={{
+                  width: hs * 1.4,
+                  height: hs * 1.4,
+                  top: rotBelow ? `calc(100% + ${22 / zoom - hs * 0.7}px)` : -22 / zoom - hs * 0.7,
+                  marginLeft: -hs * 0.7,
+                  borderWidth: 1.5 / zoom,
+                }}
+                onPointerDown={(e) => startRotate(e, selected)}
+              />
+            </>
+          )}
           {!selected.locked &&
             HANDLES.map((h) => (
               <div
@@ -325,7 +381,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
         <div
           key={o.id}
           className="ui-only sel-box multi"
-          style={{ left: o.x * MM_TO_PX, top: o.y * MM_TO_PX, width: o.w * MM_TO_PX, height: o.h * MM_TO_PX, borderWidth: 2 / zoom }}
+          style={{ left: o.x * MM_TO_PX, top: o.y * MM_TO_PX, width: o.w * MM_TO_PX, height: o.h * MM_TO_PX, borderWidth: 2 / zoom, transform: o.rotation ? `rotate(${o.rotation}deg)` : undefined }}
         />
       ))}
       {groupBox && !editingId && (
@@ -345,6 +401,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
             ))}
         </div>
       )}
+      {angle && createPortal(<div className="angle-tip" style={{ left: angle.x + 16, top: angle.y + 16 }}>{angle.deg}°</div>, document.body)}
       {guides.map((g, i) => (
         <div
           key={i}

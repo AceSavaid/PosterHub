@@ -9,6 +9,7 @@ import { FontSelect } from './FontSelect';
 import { ColorInput } from './ColorInput';
 import type { AlignMode } from '../lib/arrange';
 import { SHAPE_CHOICES } from '../lib/shapes';
+import { isCropped, normAngle } from '../lib/geometry';
 import { resizeSelection, styleSelection } from '../lib/richtext';
 import { PALETTE_ROLES } from '../model';
 import { CITATION_STYLES, DEFAULT_STYLE, shortLabel } from '../lib/refs/format';
@@ -23,6 +24,7 @@ interface Props {
   onDuplicate: () => void;
   onLayer: (dir: 'front' | 'back' | 'up' | 'down') => void;
   onReplaceImage: () => void;
+  onCrop: () => void;
   onEditChart: () => void;
   onEditAuthors?: () => void;
   onEditEquation: () => void;
@@ -88,7 +90,7 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: 
 
 
 export default function Inspector(props: Props) {
-  const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart, onEditEquation, multi, overflow, onShrinkText, onGrowBox, onCite, onOpenReferences, onSetStyle } = props;
+  const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onCrop, onEditChart, onEditEquation, multi, overflow, onShrinkText, onGrowBox, onCite, onOpenReferences, onSetStyle } = props;
   if (multi > 1) {
     return (
       <aside className="panel right" aria-label="Properties">
@@ -312,7 +314,19 @@ export default function Inspector(props: Props) {
         {el.type === 'image' && (
           <section>
             <h4>Image</h4>
-            <button className="btn" onClick={onReplaceImage}>{el.src ? 'Replace image…' : 'Choose image…'}</button>
+            <div className="toolbar-row">
+              <button className="btn" onClick={onReplaceImage}>{el.src ? 'Replace image…' : 'Choose image…'}</button>
+              {el.src && !el.qr && (
+                <button className="btn" onClick={onCrop}>
+                  Crop…
+                </button>
+              )}
+              {isCropped(el.crop) && (
+                <button className="btn small-btn" onClick={() => onChange({ crop: undefined })}>
+                  Undo crop
+                </button>
+              )}
+            </div>
             <label>
               Fit
               <select value={el.fit ?? 'contain'} onChange={(e) => onChange({ fit: e.target.value as PosterElement['fit'] })}>
@@ -441,6 +455,21 @@ export default function Inspector(props: Props) {
               </label>
             ))}
           </div>
+          {el.shape !== 'line' && (
+            <div className="rotate-row">
+              <label>
+                Rotation (°)
+                <input type="number" step={1} value={el.rotation ?? 0} onChange={(e) => onChange({ rotation: normAngle(+e.target.value || 0) || undefined }, 'rot')} />
+              </label>
+              <button className="fmt" title="Rotate 90° left" aria-label="Rotate 90° left" onClick={() => onChange({ rotation: normAngle((el.rotation ?? 0) - 90) || undefined })}>↺</button>
+              <button className="fmt" title="Rotate 90° right" aria-label="Rotate 90° right" onClick={() => onChange({ rotation: normAngle((el.rotation ?? 0) + 90) || undefined })}>↻</button>
+              {!!el.rotation && (
+                <button className="btn small-btn" onClick={() => onChange({ rotation: undefined })}>
+                  Straighten
+                </button>
+              )}
+            </div>
+          )}
           <div className="toolbar-row">
             <button className="btn small-btn" onClick={() => onLayer('front')}>Bring to front</button>
             <button className="btn small-btn" onClick={() => onLayer('up')}>Forward</button>

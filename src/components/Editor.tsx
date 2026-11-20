@@ -21,6 +21,7 @@ import { Logo } from './Library';
 import CheckPanel, { type CheckTab } from './CheckPanel';
 import FindPanel from './FindPanel';
 import ContextMenu, { type MenuItem } from './ContextMenu';
+import CropDialog from './CropDialog';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import { replaceAllInPoster } from '../lib/textTools';
 import { ignoreKey } from '../lib/spelling';
@@ -29,6 +30,8 @@ import AuthorsDialog from './AuthorsDialog';
 import { PLACEHOLDER_TEXT } from '../lib/checks';
 import type { AuthorList } from '../types';
 import ConfirmDialog from './ConfirmDialog';
+import SaveTemplateDialog from './SaveTemplateDialog';
+import { saveAsTemplate } from '../lib/userTemplates';
 import { useUiPrefs } from '../lib/uiPrefs';
 import { sanitizeElement } from '../lib/sanitize';
 import ReferencesDialog from './ReferencesDialog';
@@ -95,6 +98,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [viewing, setViewing] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
+  const [cropFor, setCropFor] = useState<string | null>(null);
   const [eqDialog, setEqDialog] = useState<{ id?: string; spec: EquationSpec } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   /** open authors dialog; `id` is the text box it fills (none = add a new one) */
@@ -146,6 +150,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     };
   }, [exportOpen]);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
+  const [templateDialog, setTemplateDialog] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [dpi, setDpi] = useState(200);
@@ -900,6 +905,16 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     notify(`Saved “${p.name} (copy)” to My posters. You are still editing the original.`);
   }
 
+  async function saveTemplate(name: string, keepPictures: string[]) {
+    setTemplateDialog(false);
+    try {
+      const t = await saveAsTemplate(posterRef.current, name, { keepPictures });
+      notify(`Saved “${t.name}” to My templates. Pick it under New poster → My templates.`);
+    } catch (e) {
+      notify('Could not save the template: ' + String(e));
+    }
+  }
+
   async function deleteThisPoster() {
     setConfirmDelete(false);
     closing.current = true;
@@ -918,6 +933,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     const items: (MenuItem | '-')[] = [];
     if (!many && el.style) items.push({ label: 'Edit text', shortcut: 'Enter', onClick: () => setEditingId(el.id) });
     if (!many && el.type === 'image') items.push({ label: el.src ? 'Replace image…' : 'Choose image…', onClick: () => chooseImage(el.id) });
+    if (!many && el.type === 'image' && el.src && !el.qr) items.push({ label: 'Crop image…', onClick: () => setCropFor(el.id) });
     if (!many && el.type === 'chart') items.push({ label: 'Edit graph…', onClick: () => setChartDialog({ id: el.id, spec: el.chart }) });
     if (!many && el.type === 'table') {
       items.push({ label: 'Edit cells', shortcut: 'Enter', onClick: () => setEditingId(el.id) });
@@ -1046,6 +1062,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   }
 
   const selected = poster.elements.find((e) => e.id === selectedId) ?? null;
+  const cropEl = cropFor ? poster.elements.find((e) => e.id === cropFor && e.src) ?? null : null;
   // Leftover example text and empty figure boxes are a to-do list, not errors: they don't turn the
   // Check badge red (a brand-new poster is full of them) but are pointed out again in the Export menu.
   const leftovers = issues.filter((i) => i.leftover).length;
@@ -1330,6 +1347,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             onDuplicate={() => duplicate()}
             onLayer={layer}
             onReplaceImage={() => selected && chooseImage(selected.id)}
+            onCrop={() => selected && setCropFor(selected.id)}
             onEditChart={() => selected && setChartDialog({ id: selected.id, spec: selected.chart })}
             onEditAuthors={() => selected && openAuthors(selected.id)}
             onCite={cite}
@@ -1356,6 +1374,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           items={[
             { label: 'Duplicate this poster', onClick: duplicatePoster },
             { label: 'Download project file', onClick: () => exportPosterFile(posterRef.current) },
+            { label: 'Save as my template…', onClick: () => setTemplateDialog(true) },
             '-',
             { label: 'Delete this poster…', danger: true, onClick: () => setConfirmDelete(true) },
           ]}
@@ -1430,8 +1449,22 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       )}
       <VisionFilters />
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
+      {cropEl && (
+        <CropDialog
+          el={cropEl}
+          onCancel={() => setCropFor(null)}
+          onApply={(crop, resizeBox, ratio) => {
+            updateElement(cropEl.id, (e) => {
+              e.crop = crop;
+              if (resizeBox && ratio > 0) e.h = Math.round((e.w / ratio) * 10) / 10;
+            });
+            setCropFor(null);
+          }}
+        />
+      )}
       {eqDialog && <EquationDialog poster={poster} initial={eqDialog.spec} isNew={!eqDialog.id} onSave={saveEquation} onCancel={() => setEqDialog(null)} />}
       {authorsDialog && <AuthorsDialog initial={authorsDialog.initial} replacing={authorsDialog.replacing} onSave={saveAuthors} onCancel={() => setAuthorsDialog(null)} />}
+      {templateDialog && <SaveTemplateDialog poster={poster} onSave={saveTemplate} onCancel={() => setTemplateDialog(false)} />}
       {confirmDelete && (
         <ConfirmDialog
           title={`Delete “${poster.name}”?`}

@@ -1,4 +1,5 @@
 import type { PosterElement } from '../types';
+import { isCropped } from './geometry';
 
 export const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', table: 'Table', equation: 'Equation' };
 
@@ -45,5 +46,9 @@ export function elementLabel(el: PosterElement): string {
   } else {
     label = SHAPE_NAMES[el.shape ?? 'rect'] ?? 'Shape';
   }
-  return el.locked ? `${label} (locked)` : label;
+  const extras: string[] = [];
+  if (el.type === 'image' && el.src && isCropped(el.crop)) extras.push('cropped');
+  if (el.rotation) extras.push(`rotated ${Math.round(el.rotation)}°`);
+  if (el.locked) extras.push('locked');
+  return extras.length ? `${label} (${extras.join(', ')})` : label;
 }

@@ -1,9 +1,14 @@
 import { forwardRef, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import type { Poster, PosterElement } from '../types';
+import type { Poster, PosterElement, TableSpec } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth, fontStack, resolveColor, resolveFont } from '../model';
 import ChartView from './ChartView';
+import TableView from './TableView';
+import { TYPE_NAMES } from '../lib/a11y';
 import { isCropped, placeImage } from '../lib/geometry';
 import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
+import { cleanHtml } from '../lib/sanitize';
+import { PT_TO_PX, layoutEquation, mathSvg, svgDataUrl, typesetLatex } from '../lib/math';
+import { useMathReady } from '../lib/useMath';
 
 const px = (mm: number) => mm * MM_TO_PX;
 
@@ -12,11 +17,13 @@ interface SurfaceProps {
   zoom: number;
   showGrid?: boolean;
   children?: ReactNode; // overlay (selection handles, guides)
+  /** screen-space layer drawn next to (not inside) the poster node, so it can never end up in an export */
+  outside?: ReactNode;
   renderElement: (el: PosterElement, index: number) => ReactNode;
 }
 
 /** The poster page at true size (1 mm = 3.78 px), scaled visually by `zoom`. */
-export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface({ poster, zoom, showGrid, children, renderElement }, ref) {
+export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface({ poster, zoom, showGrid, children, outside, renderElement }, ref) {
   const pal = poster.palette;
   const style: CSSProperties = {
     width: px(poster.width),
@@ -28,6 +35,7 @@ export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface
     backgroundPosition: 'center',
     color: resolveColor('@text', pal),
     fontFamily: fontStack(poster.bodyFont),
+    ['--zoom' as string]: zoom,
   };
   return (
     <div className="surface-scroll-size" style={{ width: px(poster.width) * zoom, height: px(poster.height) * zoom }}>
@@ -36,6 +44,7 @@ export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface
         {poster.elements.map((el, i) => renderElement(el, i))}
         {children}
       </div>
+      {outside}
     </div>
   );
 });
@@ -62,12 +71,14 @@ interface ElementProps {
   poster: Poster;
   editing?: boolean;
   onCommitText?: (html: string) => void;
+  onCommitTable?: (t: TableSpec) => void;
+  onActiveCell?: (cell: { r: number; c: number } | null) => void;
   onEditDone?: () => void;
   className?: string;
   wrapperProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
-export function ElementView({ el, poster, editing, onCommitText, onEditDone, className, wrapperProps }: ElementProps) {
+export function ElementView({ el, poster, editing, onCommitText, onCommitTable, onActiveCell, onEditDone, className, wrapperProps }: ElementProps) {
   const pal = poster.palette;
   const box: CSSProperties = {
     left: px(el.x),
@@ -108,12 +119,12 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
         isCropped(el.crop) ? (
           <CroppedImage el={el} />
         ) : (
-          <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain', imageRendering: el.qr ? 'pixelated' : undefined }} />
+          <img src={el.src} alt={el.alt ?? ""} draggable={false} style={{ objectFit: el.fit ?? 'contain', imageRendering: el.qr ? 'pixelated' : undefined }} />
         )
       ) : (
         <div className="img-placeholder ui-only">
           <span>{el.placeholder ?? 'Image'}</span>
-          <small>Double-click to choose, or drop / paste an image</small>
+          <small>Double-click or press Enter to choose, or drop / paste an image</small>
         </div>
       );
       break;
@@ -132,9 +143,17 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
       ) : (
         <div className="img-placeholder ui-only">
           <span>Chart</span>
-          <small>Double-click to load a CSV</small>
+          <small>Double-click or press Enter to load a CSV</small>
         </div>
       );
+      break;
+    }
+    case 'table':
+      inner = <TableView el={el} poster={poster} editing={!!editing} onCommit={onCommitTable} onDone={onEditDone} onActiveCell={onActiveCell} />;
+      break;
+    case 'equation': {
+      const inset = 2 * px(el.padding ?? 0) + (el.borderWidth ? ((el.borderWidth * 96) / 72) * 2 : 0);
+      inner = <EquationBody el={el} poster={poster} widthPx={px(el.w) - inset} heightPx={px(el.h) - inset} />;
       break;
     }
     default:
@@ -148,6 +167,37 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
   );
 }
 
+/** A typeset equation, drawn as a crisp SVG picture laid out exactly like the PDF export. */
+export function EquationBody({ el, poster, widthPx, heightPx }: { el: PosterElement; poster: Poster; widthPx: number; heightPx: number }) {
+  const ready = useMathReady();
+  const eq = el.equation;
+  if (!eq) return null;
+  if (!ready) return <div className="el-math-loading ui-only">Loading equation…</div>;
+  const res = typesetLatex(eq.latex);
+  if (!res.ok) {
+    return (
+      <div className="el-math-error ui-only" role="alert">
+        <strong>Equation needs fixing</strong>
+        <span>{res.error}</span>
+      </div>
+    );
+  }
+  const r = res.render;
+  const at = layoutEquation(r, eq.fontSize * PT_TO_PX, { x: 0, y: 0, w: Math.max(0, widthPx), h: Math.max(0, heightPx) }, eq.align);
+  const color = resolveColor(eq.color, poster.palette);
+  return (
+    <div className="el-math" data-scale={at.scale.toFixed(3)}>
+      <img
+        src={svgDataUrl(mathSvg(r, color, at.w, at.h))}
+        alt={eq.latex}
+        title={eq.latex}
+        draggable={false}
+        style={{ left: at.x, top: at.y, width: at.w, height: at.h }}
+      />
+    </div>
+  );
+}
+
 function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement; poster: Poster; editing: boolean; onCommit?: (html: string) => void; onDone?: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const st = el.style!;
@@ -157,7 +207,10 @@ function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement
   const filled = useRef(false);
   useLayoutEffect(() => {
     // Fill on first mount (even if it starts in editing mode), then only while not typing.
-    if (ref.current && (!editing || !filled.current) && ref.current.innerHTML !== (el.html ?? '')) ref.current.innerHTML = el.html ?? '';
+    if (ref.current && (!editing || !filled.current)) {
+      const html = cleanHtml(el.html);
+      if (ref.current.innerHTML !== html) ref.current.innerHTML = html;
+    }
     filled.current = true;
   }, [el.html, editing]);
 
@@ -196,6 +249,9 @@ function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement
       className="el-body"
       style={style}
       contentEditable={editing}
+      role={editing ? 'textbox' : undefined}
+      aria-multiline={editing || undefined}
+      aria-label={editing ? `Editing ${TYPE_NAMES[el.type].toLowerCase()}. Press Escape when done.` : undefined}
       suppressContentEditableWarning
       spellCheck={editing}
       onBlur={() => {
@@ -207,7 +263,10 @@ function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.preventDefault();
+          const box = e.currentTarget.parentElement as HTMLElement | null;
           (e.currentTarget as HTMLElement).blur();
+          // Hand focus back to the element itself so keyboard users can carry on from here.
+          if (box?.classList.contains('el')) box.focus();
         }
         e.stopPropagation();
       }}
@@ -235,7 +294,7 @@ function CroppedImage({ el }: { el: PosterElement }) {
     <div className="crop-box" style={{ left: pad + region.x, top: pad + region.y, width: region.w, height: region.h }}>
       <img
         src={el.src}
-        alt=""
+        alt={el.alt ?? ""}
         draggable={false}
         onLoad={(e) => setNatural({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
         style={{ position: 'absolute', left: image.x - region.x, top: image.y - region.y, width: image.w, height: image.h, maxWidth: 'none', visibility: natural ? 'visible' : 'hidden' }}

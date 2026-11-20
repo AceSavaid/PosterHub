@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Poster, PosterElement } from '../types';
+import { syncCitations } from './refs/citations';
 
 const HISTORY_LIMIT = 100;
 
@@ -21,6 +22,8 @@ export function usePosterHistory(initial: Poster) {
     const prev = current.current;
     const draft = structuredClone(prev);
     fn(draft);
+    // citation numbers and the reference list follow every change (text, order, layout)
+    syncCitations(draft);
     draft.updatedAt = Date.now();
     const now = Date.now();
     const merge = coalesce && last.current.key === coalesce && now - last.current.t < 1200;

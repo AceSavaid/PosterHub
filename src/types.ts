@@ -27,7 +27,7 @@ export interface CustomFont {
 
 export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'triangle' | 'diamond' | 'arrow' | 'star';
 
-export type ElementType = 'title' | 'subtitle' | 'heading' | 'text' | 'image' | 'chart' | 'shape';
+export type ElementType = 'title' | 'subtitle' | 'heading' | 'text' | 'image' | 'chart' | 'shape' | 'table' | 'equation';
 
 export interface TextStyle {
   fontFamily: string; // "@heading" | "@body" | a concrete family
@@ -40,7 +40,7 @@ export interface TextStyle {
   lineHeight: number;
 }
 
-export type ChartKind = 'bar' | 'horizontalBar' | 'line' | 'scatter' | 'pie' | 'doughnut';
+export type ChartKind = 'bar' | 'horizontalBar' | 'stackedBar' | 'line' | 'scatter' | 'pie' | 'doughnut' | 'histogram' | 'box';
 
 export interface ChartSpec {
   kind: ChartKind;
@@ -57,6 +57,53 @@ export interface ChartSpec {
   yLabel: string;
   showLegend: boolean;
   fontSize: number; // pt
+  /** scatter: draw a least-squares line per series and show its equation and R² */
+  trendline?: boolean;
+  /** histogram: number of bars; empty means pick automatically */
+  bins?: number;
+  /** box plot: one box per ticked column, or group rows by the X column's values */
+  boxGroups?: 'columns' | 'category';
+}
+
+export interface Author {
+  name: string;
+  /** indexes into AuthorList.affiliations */
+  affiliations: number[];
+  presenter?: boolean;
+  corresponding?: boolean;
+  orcid?: string;
+}
+
+/** Structured author block; the element's html is generated from it. */
+export interface AuthorList {
+  authors: Author[];
+  affiliations: string[];
+  email?: string;
+  showOrcid?: boolean;
+}
+
+export type TableStyleId = 'academic' | 'striped' | 'grid' | 'minimal';
+
+export interface TableSpec {
+  /** Cell text, row by row. Plain text only (newlines allowed), never HTML. */
+  rows: string[][];
+  /** Treat the first row as column headings. */
+  headerRow: boolean;
+  style: TableStyleId;
+  fontSize: number; // pt
+  /** 'auto' right-aligns columns of numbers and left-aligns the rest. */
+  align: 'auto' | 'left' | 'center';
+  /** Optional relative column widths (any positive numbers); missing = sized to fit the text. */
+  colWidths?: number[];
+}
+
+/** A typeset maths equation written in LaTeX. */
+export interface EquationSpec {
+  /** LaTeX source, without surrounding $ signs, e.g. "E = mc^2". */
+  latex: string;
+  fontSize: number; // pt; 1 em of the maths
+  color: ColorValue;
+  align: 'left' | 'center' | 'right';
 }
 
 export interface PosterElement {
@@ -84,10 +131,29 @@ export interface PosterElement {
   qr?: string;
   fit?: 'contain' | 'cover' | 'fill';
   chart?: ChartSpec;
+  table?: TableSpec;
+  equation?: EquationSpec;
   shape?: ShapeKind;
   /** which way an arrow points */
   direction?: 'right' | 'left' | 'up' | 'down';
   locked?: boolean;
+  /**
+   * What this element is for in a starter layout (title, section body, logo, …).
+   * Lets "Apply layout" move content into the matching place in another layout.
+   */
+  role?: ElementRole;
+  /** Elements of one section (its heading, text and figure) share a group id. */
+  group?: string;
+  /** set when the text was built with the authors and affiliations tool */
+  authors?: AuthorList;
+  /** elements sharing a group id move, resize, copy and select together */
+  groupId?: string;
+  /** This text box is the poster's reference list; its text is generated from `Poster.references`. */
+  refList?: boolean;
+  /** Heading shown above the reference list ("" for none). */
+  refTitle?: string;
+  /** Description of an image or graph for screen readers and exported files (alt text). */
+  alt?: string;
   /** clockwise rotation in degrees, around the element's centre */
   rotation?: number;
   /** part of the image to show, as fractions of the original (0–1) */
@@ -99,6 +165,61 @@ export interface CropRect {
   y: number;
   w: number;
   h: number;
+}
+
+export type ElementRole =
+  | 'title' | 'subtitle' | 'heading' | 'number' | 'body' | 'figure' | 'caption'
+  | 'logo' | 'qr' | 'qrCaption' | 'references' | 'summary' | 'summaryHeading' | 'keyFinding' | 'decor';
+
+export type RefKind = 'article' | 'book' | 'chapter' | 'conference' | 'thesis' | 'report' | 'web' | 'other';
+
+/** A person or organisation. Organisations have only `family`. */
+export interface RefName {
+  family: string;
+  given?: string;
+}
+
+/** One entry in the poster's reference library. Every field is plain text (never HTML). */
+export interface Reference {
+  id: string;
+  kind: RefKind;
+  authors: RefName[];
+  editors?: RefName[];
+  title: string;
+  /** journal, book title (for a chapter), proceedings or website name */
+  container?: string;
+  year?: string;
+  volume?: string;
+  issue?: string;
+  pages?: string;
+  publisher?: string;
+  place?: string;
+  edition?: string;
+  doi?: string;
+  url?: string;
+  /** BibTeX key, kept so re-importing the same file doesn't create duplicates */
+  key?: string;
+}
+
+export type CitationStyle = 'apa' | 'harvard' | 'chicago' | 'vancouver' | 'ieee' | 'nature';
+
+/**
+ * A sticky note left by a supervisor or co-author. Notes live beside the
+ * elements (never inside them), so they travel with the .poster.json file
+ * but are never drawn into a PDF, PowerPoint, PNG or copied image.
+ * `text` is plain text and must always be rendered as text, never as HTML.
+ */
+export interface ReviewNote {
+  id: string;
+  /** position of the note's pin, in mm from the poster's top-left corner */
+  x: number;
+  y: number;
+  text: string;
+  author: string;
+  createdAt: number;
+  resolved: boolean;
+  /** the element the note was left on, if any */
+  elementId?: string;
 }
 
 export interface Poster {
@@ -117,7 +238,16 @@ export interface Poster {
   margin: number; // mm
   gutter: number; // mm
   backgroundImage?: string;
+  /** Reference library; cited in text with numbered or author–year markers. */
+  references?: Reference[];
+  citationStyle?: CitationStyle;
   elements: PosterElement[];
+  /** words the spelling check should accept on this poster (names, jargon) */
+  ignoredWords?: string[];
+  /** optional word limit set by a conference; the check warns when the poster goes over it */
+  wordLimit?: number;
+  /** review notes; optional so older files load unchanged */
+  notes?: ReviewNote[];
   createdAt: number;
   updatedAt: number;
   thumbnail?: string;

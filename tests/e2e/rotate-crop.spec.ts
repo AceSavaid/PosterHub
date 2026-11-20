@@ -78,7 +78,7 @@ test('rotates by dragging the handle, snapping to a right angle', async ({ page 
   await newPoster(page);
   await page.getByRole('button', { name: 'Box / panel', exact: true }).click();
   const box = (await page.locator('.sel-box').boundingBox())!;
-  const handle = (await page.getByRole('button', { name: 'Rotate' }).or(page.locator('.rotate-handle')).first().boundingBox())!;
+  const handle = (await page.locator('.rotate-handle').boundingBox())!;
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
@@ -117,6 +117,7 @@ test('a resized rotated box keeps its opposite corner in place', async ({ page }
 test('rotated elements export to PowerPoint and PDF', async ({ page }) => {
   await newPoster(page, 'Rotated export');
   await page.getByRole('button', { name: 'Title', exact: true }).click();
+  await field(page, 'Y').fill('200'); // keep the turned title on the page
   await page.getByRole('button', { name: 'Rotate 90° right' }).click();
   await page.getByRole('button', { name: 'Triangle', exact: true }).click();
   await page.getByLabel('Rotation (°)').fill('-30');

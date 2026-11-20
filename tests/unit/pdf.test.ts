@@ -188,7 +188,7 @@ describe('vector charts', () => {
     fontSize: 12,
   };
 
-  for (const kind of ['bar', 'horizontalBar', 'line', 'scatter', 'pie', 'doughnut'] as const) {
+  for (const kind of ['bar', 'horizontalBar', 'stackedBar', 'line', 'scatter', 'pie', 'doughnut', 'histogram', 'box'] as const) {
     it(`draws a ${kind} chart as shapes and text, not a picture`, async () => {
       const poster = createPoster({ name: 'c', width: 210, height: 297, sizePreset: 'A4', columns: 2, palette: PALETTES[0], headingFont: 'Open Sans', bodyFont: 'Open Sans', template: 'blank' });
       const { fonts, painter, finish } = await setup();
@@ -199,7 +199,7 @@ describe('vector charts', () => {
       const bytes = await finish();
       const text = await pdfText(bytes);
       expect(text).toContain('Mean score');
-      if (kind !== 'scatter') expect(text).toContain('Control');
+      if (kind !== 'scatter' && kind !== 'histogram' && kind !== 'box') expect(text).toContain('Control');
       if (kind === 'bar') {
         expect(text).toContain('Condition');
         expect(text).toContain('Points');
@@ -207,6 +207,29 @@ describe('vector charts', () => {
       expect((await inspectPdf(bytes)).images).toHaveLength(0);
     });
   }
+
+  it('draws box plot whiskers and the scatter trend line equation as vectors', async () => {
+    const poster = createPoster({ name: 'c', width: 210, height: 297, sizePreset: 'A4', columns: 2, palette: PALETTES[0], headingFont: 'Open Sans', bodyFont: 'Open Sans', template: 'blank' });
+    const rows = [['1', '2'], ['2', '4'], ['3', '5'], ['4', '4'], ['5', '5'], ['6', '40']];
+    const base = { ...spec, columns: ['Dose', 'Score'], rows, rowEnd: rows.length - 1 };
+    const glyphs = 'Mean score Dose Score Condition Points 0123456789.−+ y=x²R:';
+
+    const box = await setup();
+    await box.fonts.prepare('Open Sans', 400, false, glyphs);
+    await box.fonts.prepare('Open Sans', 700, false, glyphs);
+    drawChart(box.painter, box.fonts, { id: 'b', type: 'chart', x: 0, y: 0, w: 100, h: 80, chart: { ...base, kind: 'box', boxGroups: 'columns' } }, poster, 20, 20, 500, 400);
+    // the outlier (40) is drawn as a circle, which only the box plot layer adds
+    expect(box.painter.ops.map(String).filter((o) => o.endsWith(' c')).length).toBeGreaterThanOrEqual(4);
+    expect((await inspectPdf(await box.finish())).images).toHaveLength(0);
+
+    const sc = await setup();
+    await sc.fonts.prepare('Open Sans', 400, false, glyphs);
+    await sc.fonts.prepare('Open Sans', 700, false, glyphs);
+    drawChart(sc.painter, sc.fonts, { id: 's', type: 'chart', x: 0, y: 0, w: 100, h: 80, chart: { ...base, kind: 'scatter', trendline: true } }, poster, 20, 20, 500, 400);
+    const text = await pdfText(await sc.finish());
+    expect(text).toMatch(/R²\s*=\s*0\.\d+/);
+    expect(text).toMatch(/y\s*=/);
+  });
 });
 
 describe('canvas geometry', () => {

@@ -37,7 +37,12 @@ test('inserts every simple shape and exports them to PowerPoint', async ({ page 
 
 test('poster check lists problems and selects them', async ({ page }) => {
   await newPoster(page, 'Classic columns');
-  await expect(page.locator('.check-btn .badge')).toBeVisible();
+  // leftover example text is a to-do, not an error: no badge on a fresh poster…
+  await expect(page.locator('.check-btn .badge')).toHaveCount(0);
+  // …but the Export menu points it out
+  await page.getByRole('button', { name: 'Export ▾' }).click();
+  await expect(page.locator('.menu-note')).toContainText('still have example text or no picture');
+  await page.getByRole('button', { name: 'Export ▾' }).click();
   await page.getByRole('button', { name: /^Check/ }).click();
   const panel = page.getByRole('dialog', { name: 'Poster check' });
   await expect(panel).toContainText('still has example text');
@@ -85,7 +90,7 @@ test('formats only the selected words', async ({ page }) => {
   await page.getByRole('button', { name: 'Text box', exact: true }).click();
   await page.keyboard.type('plain then special');
   await page.keyboard.press('Shift+ControlOrMeta+ArrowLeft');
-  await page.getByRole('button', { name: 'Make selected words larger' }).click();
+  await page.getByRole('button', { name: 'A+ larger' }).click();
   await page.getByRole('button', { name: 'Colour selected words accent' }).click();
   await page.keyboard.press('Escape');
   const html = await page.locator('.poster .el-body').innerHTML();
@@ -96,13 +101,13 @@ test('formats only the selected words', async ({ page }) => {
 });
 
 test('duplicates and deletes the open poster from its options menu', async ({ page }) => {
-  page.on('dialog', (d) => d.accept());
   await newPoster(page, 'Blank', 'Lab meeting');
   await page.getByRole('button', { name: 'Poster options' }).click();
   await page.getByRole('menuitem', { name: 'Duplicate this poster' }).click();
   await expect(page.locator('.toast')).toContainText('Lab meeting (copy)');
   await page.getByRole('button', { name: 'Poster options' }).click();
   await page.getByRole('menuitem', { name: 'Delete this poster…' }).click();
+  await page.getByRole('alertdialog', { name: 'Delete “Lab meeting”?' }).getByRole('button', { name: 'Delete poster' }).click();
   await expect(page.getByRole('heading', { name: 'My posters' })).toBeVisible();
   await expect(page.locator('.poster-card', { hasText: 'Lab meeting (copy)' })).toBeVisible();
   await expect(page.locator('.card-name', { hasText: /^Lab meeting$/ })).toHaveCount(0);

@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react';
 import Papa from 'papaparse';
 import type { ChartKind, ChartSpec, Poster } from '../types';
 import { resolveColor, resolveFont, typeScale } from '../model';
-import { toNumber } from '../lib/chart';
+import { toNumber, usesXColumn, xColumnRepeats, defaultYColumns, scaleMismatch } from '../lib/chart';
+import { useEscape } from '../lib/useEscape';
 import { pickFile } from '../lib/storage';
 import ChartView from './ChartView';
+import { useDialog } from '../lib/useDialog';
 
 interface Props {
   poster: Poster;
@@ -14,13 +16,16 @@ interface Props {
   onCancel: () => void;
 }
 
-const KINDS: { id: ChartKind; label: string }[] = [
-  { id: 'bar', label: 'Bar (vertical)' },
-  { id: 'horizontalBar', label: 'Bar (horizontal)' },
-  { id: 'line', label: 'Line' },
-  { id: 'scatter', label: 'Scatter' },
-  { id: 'pie', label: 'Pie' },
-  { id: 'doughnut', label: 'Doughnut' },
+const KINDS: { id: ChartKind; label: string; hint: string }[] = [
+  { id: 'bar', label: 'Bar (vertical)', hint: 'Compare values across categories.' },
+  { id: 'horizontalBar', label: 'Bar (horizontal)', hint: 'Like a bar graph, with room for long category names.' },
+  { id: 'stackedBar', label: 'Bar (stacked)', hint: 'Stacks the ticked columns to show parts of a total.' },
+  { id: 'line', label: 'Line', hint: 'Show change over time or along an ordered axis.' },
+  { id: 'scatter', label: 'Scatter', hint: 'Plot one number against another. Add a trend line to show the fit and R².' },
+  { id: 'histogram', label: 'Histogram', hint: 'Counts how many measurements fall in each range. Tick the columns of raw values.' },
+  { id: 'box', label: 'Box plot', hint: 'Shows the median, quartiles, range and outliers of raw measurements.' },
+  { id: 'pie', label: 'Pie', hint: 'Show shares of a whole (best with a few slices).' },
+  { id: 'doughnut', label: 'Doughnut', hint: 'A pie with a hole in the middle.' },
 ];
 
 export function parseCsv(text: string): { columns: string[]; rows: string[][] } {
@@ -30,19 +35,21 @@ export function parseCsv(text: string): { columns: string[]; rows: string[][] } 
   return { columns: header.map((h, i) => h.trim() || `Column ${i + 1}`), rows };
 }
 
-function defaultSpec(columns: string[], rows: string[][], fontSize: number): ChartSpec {
+export function defaultSpec(columns: string[], rows: string[][], fontSize: number): ChartSpec {
   const numeric = columns.map((_, c) => rows.slice(0, 20).filter((r) => toNumber(r[c]) != null).length >= Math.min(rows.length, 20) * 0.7);
   const xColumn = numeric.findIndex((n) => !n) >= 0 ? numeric.findIndex((n) => !n) : 0;
-  const ys = numeric.map((n, i) => (n && i !== xColumn ? i : -1)).filter((i) => i >= 0);
+  const numericCols = numeric.map((n, i) => (n && i !== xColumn ? i : -1)).filter((i) => i >= 0);
+  const rowEnd = Math.min(rows.length - 1, 49);
+  const ys = defaultYColumns({ rows, rowStart: 0, rowEnd }, numericCols);
   return {
     kind: 'bar',
     title: '',
     columns,
     rows,
     xColumn,
-    yColumns: ys.length ? ys.slice(0, 3) : [Math.min(1, columns.length - 1)],
+    yColumns: ys.length ? ys : [Math.min(1, columns.length - 1)],
     rowStart: 0,
-    rowEnd: Math.min(rows.length - 1, 49),
+    rowEnd,
     xLabel: columns[xColumn] ?? '',
     yLabel: ys.length === 1 ? columns[ys[0]] : '',
     showLegend: ys.length > 1,
@@ -66,6 +73,25 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
   const [error, setError] = useState('');
   const set = (p: Partial<ChartSpec>) => setSpec((s) => (s ? { ...s, ...p } : s));
 
+  /** Switches graph type and fills in sensible labels for the new type. */
+  function changeKind(kind: ChartKind) {
+    setSpec((s) => {
+      if (!s) return s;
+      const next: ChartSpec = { ...s, kind };
+      if (kind === 'histogram') {
+        if (!s.yLabel) next.yLabel = 'Count';
+        if (s.kind !== 'histogram' && s.yColumns.length) next.xLabel = s.columns[s.yColumns[0]] ?? s.xLabel;
+      } else if (s.kind === 'histogram') {
+        if (s.yLabel === 'Count') next.yLabel = '';
+        next.xLabel = s.columns[s.xColumn] ?? '';
+      }
+      if (kind === 'box' && !s.boxGroups) next.boxGroups = xColumnRepeats(s) ? 'category' : 'columns';
+      // The X column can be ticked while hidden (histograms); untick it once it is the X axis again.
+      if (usesXColumn(next) && next.yColumns.length > 1) next.yColumns = next.yColumns.filter((c) => c !== next.xColumn);
+      return next;
+    });
+  }
+
   function load(text: string) {
     try {
       const { columns, rows } = parseCsv(text);
@@ -82,12 +108,15 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
     if (f) load(await f.text());
   }
 
+  const dialog = useDialog(onCancel, 'chart-dialog-title');
   const preview = useMemo(() => spec && { ...spec, fontSize: 11 }, [spec]);
+  const mismatch = useMemo(() => spec && scaleMismatch(spec), [spec]);
+  useEscape(onCancel);
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="modal xwide chart-dialog">
-        <h2>{initial ? 'Edit graph' : 'Graph from CSV'}</h2>
+      <div {...dialog} className="modal xwide chart-dialog">
+        <h2 id="chart-dialog-title">{initial ? 'Edit graph' : 'Graph from CSV'}</h2>
         {!spec ? (
           <div className="csv-load">
             <button className="btn primary big" onClick={upload}>Choose a CSV file…</button>
@@ -104,25 +133,41 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
             <div className="chart-controls">
               <label>
                 Graph type
-                <select value={spec.kind} onChange={(e) => set({ kind: e.target.value as ChartKind })}>
+                <select value={spec.kind} onChange={(e) => changeKind(e.target.value as ChartKind)}>
                   {KINDS.map((k) => (
                     <option key={k.id} value={k.id}>{k.label}</option>
                   ))}
                 </select>
               </label>
+              <p className="hint">{KINDS.find((k) => k.id === spec.kind)?.hint}</p>
+              {spec.kind === 'box' && (
+                <div role="radiogroup" aria-label="Boxes">
+                  <div className="field-label">Boxes</div>
+                  <label className="check">
+                    <input type="radio" name="box-groups" checked={spec.boxGroups !== 'category'} onChange={() => set({ boxGroups: 'columns' })} /> One box per ticked column
+                  </label>
+                  <label className="check">
+                    <input type="radio" name="box-groups" checked={spec.boxGroups === 'category'} onChange={() => set({ boxGroups: 'category', yColumns: spec.yColumns.length > 1 ? spec.yColumns.filter((c) => c !== spec.xColumn) : spec.yColumns })} /> Group rows by a column (e.g. condition)
+                  </label>
+                </div>
+              )}
+              {usesXColumn(spec) && (
               <label>
-                {spec.kind === 'pie' || spec.kind === 'doughnut' ? 'Slice labels from' : spec.kind === 'scatter' ? 'X values (numbers) from' : 'Categories / X axis from'}
+                {spec.kind === 'pie' || spec.kind === 'doughnut' ? 'Slice labels from' : spec.kind === 'scatter' ? 'X values (numbers) from' : spec.kind === 'box' ? 'Group rows by' : 'Categories / X axis from'}
                 <select value={spec.xColumn} onChange={(e) => set({ xColumn: +e.target.value, xLabel: spec.columns[+e.target.value] })}>
                   {spec.columns.map((c, i) => (
                     <option key={i} value={i}>{c}</option>
                   ))}
                 </select>
               </label>
+              )}
               <div>
-                <div className="field-label">{spec.kind === 'pie' || spec.kind === 'doughnut' ? 'Values from (first ticked column)' : 'Plot these columns'}</div>
+                <div className="field-label">
+                  {spec.kind === 'pie' || spec.kind === 'doughnut' ? 'Values from (first ticked column)' : spec.kind === 'histogram' || spec.kind === 'box' ? 'Measurements from these columns' : 'Plot these columns'}
+                </div>
                 <div className="col-checks">
                   {spec.columns.map((c, i) =>
-                    i === spec.xColumn ? null : (
+                    i === spec.xColumn && usesXColumn(spec) ? null : (
                       <label key={i} className="check">
                         <input
                           type="checkbox"
@@ -135,6 +180,11 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
                   )}
                 </div>
               </div>
+              {mismatch && (
+                <p className="hint warn" role="status">
+                  “{mismatch.small}” is much smaller than “{mismatch.large}”, so it will look almost flat on the same axis. Untick one, or make a separate graph for each.
+                </p>
+              )}
               <div className="row2">
                 <label>
                   From row
@@ -146,6 +196,24 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
                 </label>
               </div>
               <p className="hint">{spec.rows.length} data rows in the file.</p>
+              {spec.kind === 'scatter' && (
+                <label className="check">
+                  <input type="checkbox" checked={!!spec.trendline} onChange={(e) => set({ trendline: e.target.checked })} /> Trend line with equation and R²
+                </label>
+              )}
+              {spec.kind === 'histogram' && (
+                <label>
+                  Number of bars
+                  <input
+                    type="number"
+                    min={1}
+                    max={200}
+                    placeholder="Auto"
+                    value={spec.bins ?? ''}
+                    onChange={(e) => set({ bins: e.target.value === '' ? undefined : Math.min(200, Math.max(1, Math.round(+e.target.value) || 1)) })}
+                  />
+                </label>
+              )}
               <label>
                 Graph title
                 <input value={spec.title} onChange={(e) => set({ title: e.target.value })} />
@@ -187,7 +255,7 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
                     <tr>
                       <th>#</th>
                       {spec.columns.map((c, i) => (
-                        <th key={i} className={i === spec.xColumn ? 'x' : spec.yColumns.includes(i) ? 'y' : ''}>{c}</th>
+                        <th key={i} className={i === spec.xColumn && usesXColumn(spec) ? 'x' : spec.yColumns.includes(i) ? 'y' : ''}>{c}</th>
                       ))}
                     </tr>
                   </thead>

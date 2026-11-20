@@ -75,12 +75,17 @@ test.describe('library', () => {
   });
 
   test('duplicates and deletes posters', async ({ page }) => {
-    page.on('dialog', (d) => d.accept());
     await newPoster(page, { name: 'Original' });
     await backToLibrary(page);
     await page.locator('.poster-card', { hasText: 'Original' }).getByRole('button', { name: 'Duplicate' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
     await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
+    // an in-app "are you sure?" box, where Cancel keeps the poster
+    const confirm = page.getByRole('alertdialog', { name: 'Delete “Original (copy)”?' });
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
+    await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
+    await confirm.getByRole('button', { name: 'Delete poster' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toHaveCount(0);
   });
 });
@@ -188,18 +193,77 @@ test.describe('templates', () => {
   });
 
   test('rebuilds an existing poster with another layout', async ({ page }) => {
-    page.on('dialog', (d) => d.accept());
     await newPoster(page);
     await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(0);
-    await page.getByRole('button', { name: 'Layout' }).click();
+    await page.getByRole('tab', { name: 'Layout' }).click();
     await page.getByRole('combobox', { name: 'Layout' }).selectOption('boxed');
     await expect(page.getByText('Logos either side of the title')).toBeVisible();
     await page.getByRole('button', { name: /^Apply to/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
     await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(2);
   });
 });
 
+test.describe('switching layouts', () => {
+  test('keeps the title and section text when switching to another layout', async ({ page }) => {
+    await newPoster(page);
+    const typeInto = async (locator: ReturnType<Page['locator']>, text: string) => {
+      await locator.dblclick();
+      await page.keyboard.press('ControlOrMeta+a');
+      await page.keyboard.type(text);
+      await page.keyboard.press('Escape');
+      await expect(locator).toHaveText(text);
+    };
+    await typeInto(page.locator('.poster .el-title .el-body'), 'Sleep and memory');
+    // the text box just below the "Methods" heading
+    const bodyIndex = await page.locator('.poster').evaluate((poster) => {
+      const els = Array.from(poster.querySelectorAll<HTMLElement>(':scope > .el'));
+      const h = els.find((e) => e.classList.contains('el-heading') && e.textContent === 'Methods')!;
+      const texts = els.filter((e) => e.classList.contains('el-text'));
+      const below = texts.filter((t) => Math.abs(t.offsetLeft - h.offsetLeft) < 1 && t.offsetTop > h.offsetTop).sort((x, y) => x.offsetTop - y.offsetTop)[0];
+      return texts.indexOf(below);
+    });
+    const methodsBody = page.locator('.poster .el-text .el-body').nth(bodyIndex);
+    await typeInto(methodsBody, 'Forty-two adults slept in the lab.');
+
+    await page.getByRole('tab', { name: 'Layout' }).click();
+    await page.getByRole('combobox', { name: 'Layout' }).selectOption('sidebar');
+    await page.getByRole('button', { name: /^Apply to/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
+    await expect(page.locator('.toast')).toContainText('Moved your 1 section');
+
+    await expect(page.locator('.poster .el-title .el-body')).toHaveText('Sleep and memory');
+    await expect(page.locator('.poster .el-body', { hasText: 'At a glance' })).toBeVisible(); // the new layout is in place
+    const moved = page.locator('.poster .el-text .el-body', { hasText: 'Forty-two adults slept in the lab.' });
+    await expect(moved).toHaveCount(1);
+    // it sits under the Methods heading in the new layout
+    const [h, b] = await Promise.all([
+      page.locator('.poster .el-heading', { hasText: /^Methods$/ }).boundingBox(),
+      moved.locator('..').boundingBox(),
+    ]);
+    expect(b!.y).toBeGreaterThan(h!.y);
+    expect(Math.abs(b!.x - h!.x)).toBeLessThan(2);
+
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.locator('.poster .el-body', { hasText: 'At a glance' })).toHaveCount(0);
+  });
+});
+
 test.describe('editing', () => {
+  test('applies a layout after asking first', async ({ page }) => {
+    await newPoster(page);
+    const before = await elements(page).count();
+    expect(before).toBeGreaterThan(0);
+    await page.locator('.panel.left .tabs').getByRole('tab', { name: 'Layout' }).click();
+    await page.locator('.panel.left label', { hasText: /^Layout/ }).locator('select').selectOption({ label: 'Blank' });
+    await page.getByRole('button', { name: /^Apply to/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+    await expect(elements(page)).toHaveCount(before);
+    await page.getByRole('button', { name: /^Apply to/ }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
+    await expect(elements(page)).toHaveCount(0);
+  });
+
   test('types into text, with undo and redo', async ({ page }) => {
     await newPoster(page);
     const title = page.locator('.poster .el-title .el-body');
@@ -243,7 +307,7 @@ test.describe('editing', () => {
 
   test('inserts every element type from the Insert panel', async ({ page }) => {
     await newPoster(page, { template: 'Blank' });
-    for (const name of ['Title', 'Subtitle / authors', 'Section header', 'Text box', 'Box / panel', 'Circle', 'Line']) {
+    for (const name of ['Title', 'Subtitle', 'Section header', 'Text box', 'Box / panel', 'Circle', 'Line']) {
       await page.getByRole('button', { name, exact: true }).click();
       await page.keyboard.press('Escape');
     }
@@ -280,18 +344,18 @@ test.describe('editing', () => {
     await newPoster(page);
     const band = elements(page).first();
     const before = await band.evaluate((el) => getComputedStyle(el).backgroundColor);
-    await page.getByRole('button', { name: 'Design' }).click();
+    await page.getByRole('tab', { name: 'Design' }).click();
     await page.getByRole('button', { name: 'Crimson' }).click();
     await expect.poll(() => band.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(before);
     expect(await band.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(139, 30, 45)');
-    await page.getByRole('button', { name: 'Layout' }).click();
+    await page.getByRole('tab', { name: 'Layout' }).click();
     await page.locator('.seg button', { hasText: /^5$/ }).click();
     await expect(page.locator('.grid-col')).toHaveCount(5);
   });
 
   test('switches orientation and scales content', async ({ page }) => {
     await newPoster(page);
-    await page.getByRole('button', { name: 'Layout' }).click();
+    await page.getByRole('tab', { name: 'Layout' }).click();
     await page.getByRole('button', { name: 'Landscape' }).click();
     const box = await page.locator('.poster').evaluate((el: HTMLElement) => ({ w: el.offsetWidth, h: el.offsetHeight }));
     expect(box.w).toBeGreaterThan(box.h);
@@ -309,7 +373,7 @@ test.describe('editing', () => {
 test.describe('fonts', () => {
   test('uploads a custom font and uses it', async ({ page }) => {
     await newPoster(page);
-    await page.getByRole('button', { name: 'Design' }).click();
+    await page.getByRole('tab', { name: 'Design' }).click();
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /Upload your own font/ }).click();
     await (await chooser).setFiles(path.join(FIXTURES, 'Italiana-Regular.ttf'));
@@ -363,10 +427,50 @@ test.describe('graphs', () => {
     expect(await chart.boundingBox()).toEqual(before);
   });
 
+  test('makes box plots, histograms and scatter trend lines from raw measurements', async ({ page }) => {
+    await newPoster(page, { template: 'Blank' });
+    const rows = ['Condition\tScore\tDose', ...['Control\t10\t1', 'Control\t12\t2', 'Control\t11\t3', 'Control\t30\t4', 'Drug\t20\t5', 'Drug\t22\t6', 'Drug\t21\t7', 'Drug\t24\t8']];
+    await paste(page, { 'text/plain': rows.join('\n') });
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+
+    // Box plot: repeated conditions mean rows are grouped by them automatically.
+    await page.getByLabel('Graph type').selectOption('box');
+    await expect(page.getByText('Shows the median, quartiles')).toBeVisible();
+    await expect(page.getByRole('radio', { name: /Group rows by a column/ })).toBeChecked();
+    await expect(page.getByRole('combobox', { name: 'Group rows by', exact: true })).toHaveValue('0');
+    await page.getByRole('checkbox', { name: 'Dose' }).uncheck();
+    await expect(page.locator('.chart-preview canvas')).toBeVisible();
+
+    // Histogram: no X axis column, and the Y axis is labelled as counts.
+    await page.getByLabel('Graph type').selectOption('histogram');
+    await expect(page.getByLabel('Categories / X axis from')).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Group rows by', exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Y axis label')).toHaveValue('Count');
+    await expect(page.getByLabel('X axis label')).toHaveValue('Score');
+    await page.getByLabel('Number of bars').fill('4');
+
+    // Scatter with a trend line.
+    await page.getByLabel('Graph type').selectOption('scatter');
+    await expect(page.getByLabel('Y axis label')).toHaveValue('');
+    await page.getByLabel('X values (numbers) from').selectOption({ label: 'Dose' });
+    await page.getByRole('checkbox', { name: 'Score' }).check();
+    await page.getByRole('checkbox', { name: /Trend line/ }).check();
+    await page.getByRole('button', { name: 'Add graph to poster' }).click();
+    await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
+    await page.getByRole('button', { name: 'Edit data and graph…' }).click();
+    await expect(page.getByRole('checkbox', { name: /Trend line/ })).toBeChecked();
+    expect(errors).toEqual([]);
+  });
+
   test('builds a graph from pasted spreadsheet data', async ({ page }) => {
     await newPoster(page, { template: 'Blank' });
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1\nB\t3\nC\t2' });
+    // Pasted cells become a table first; one click turns them into a graph instead.
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
     await expect(page.getByRole('heading', { name: 'Graph from CSV' })).toBeVisible();
+    await expect(page.locator('.poster .poster-table')).toHaveCount(0);
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
     await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
   });
@@ -387,6 +491,7 @@ test.describe('export, import and sharing', () => {
     await newPoster(page, { name: 'Export test', size: 'A3' });
     // add a chart so the PowerPoint has one
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1\nB\t3\nC\t2' });
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
 
     const pdf = await download(page, /^PDF/);
@@ -425,7 +530,7 @@ test.describe('export, import and sharing', () => {
   test('PDF is vector: real text, embedded fonts, vector charts, true page size', async ({ page }) => {
     await newPoster(page, { name: 'Vector', size: 'A3' });
     // custom font for headings
-    await page.getByRole('button', { name: 'Design' }).click();
+    await page.getByRole('tab', { name: 'Design' }).click();
     const chooser = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: /Upload your own font/ }).click();
     await (await chooser).setFiles(path.join(FIXTURES, 'Italiana-Regular.ttf'));
@@ -435,6 +540,7 @@ test.describe('export, import and sharing', () => {
       el.innerHTML = 'Mean <b>reaction time</b> fell, <i>p</i> &lt; 0.05, H<sub>2</sub>O, αβγ ± 2.<ul><li>First finding</li><li>Second finding</li></ul>';
     });
     await paste(page, { 'text/plain': 'Group\tScore\nControl\t1\nDrug\t3' });
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
 
     const pdf = await download(page, /^PDF/);
@@ -541,7 +647,7 @@ test.describe('export, import and sharing', () => {
 
   test('view mode shows the poster read-only', async ({ page }) => {
     await newPoster(page);
-    await page.getByRole('button', { name: 'View' }).click();
+    await page.getByRole('button', { name: 'Preview', exact: true }).click();
     await expect(page.locator('.view-mode')).toBeVisible();
     await expect(page.locator('.view-mode .el-title')).toContainText('Your Poster Title');
     await expect(page.locator('.view-mode .sel-box, .view-mode .grid-col')).toHaveCount(0);

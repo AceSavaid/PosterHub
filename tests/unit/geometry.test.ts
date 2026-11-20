@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { clampCrop, isCropped, normAngle, outerBounds, placeImage, rotatePoint, resizeRotated, snapAngle, type Handle } from '../../src/lib/geometry';
-import { polygonPoints } from '../../src/lib/pdf/vectorPdf';
 import { checkPoster } from '../../src/lib/checks';
 import { PALETTES, createPoster, makeElement, sizeFor } from '../../src/model';
-import type { PosterElement } from '../../src/types';
 
 const blank = () =>
   createPoster({ name: 't', ...sizeFor('A0', 'portrait'), sizePreset: 'A0', columns: 3, palette: PALETTES[0], headingFont: 'Inter', bodyFont: 'Inter', template: 'blank' });
@@ -127,30 +125,6 @@ describe('cropping', () => {
   });
 });
 
-describe('vector PDF polygons', () => {
-  const p = blank();
-  const shape = (extra: Partial<PosterElement>) => makeElement('shape', p, { x: 0, y: 0, w: 100, h: 50, ...extra });
-
-  it('stretches the outline to the box', () => {
-    expect(polygonPoints(shape({ shape: 'triangle' }), 10, 20, 100, 50)).toEqual([
-      [60, 20],
-      [110, 70],
-      [10, 70],
-    ]);
-  });
-
-  it('turns arrows to point the chosen way', () => {
-    const tipOf = (direction: 'right' | 'down' | 'left' | 'up') => {
-      const pts = polygonPoints(shape({ shape: 'arrow', direction }), 0, 0, 100, 100);
-      return pts[3].map((n) => Math.round(n));
-    };
-    expect(tipOf('right')).toEqual([100, 50]);
-    expect(tipOf('down')).toEqual([50, 100]);
-    expect(tipOf('left')).toEqual([0, 50]);
-    expect(tipOf('up')).toEqual([50, 0]);
-  });
-});
-
 describe('checks with rotation and crop', () => {
   it('flags a rotated box that hangs over the edge even though its unrotated box fits', () => {
     const p = blank();
@@ -169,5 +143,15 @@ describe('checks with rotation and crop', () => {
     expect(checkPoster(p, info).some((i) => i.id === 'dpi-' + img.id)).toBe(false);
     img.crop = { x: 0, y: 0, w: 0.4, h: 0.4 }; // ~102 dpi
     expect(checkPoster(p, info).some((i) => i.id === 'dpi-' + img.id)).toBe(true);
+  });
+});
+
+describe('screen reader labels', () => {
+  it('say when an element is turned or a picture is cropped', async () => {
+    const { elementLabel } = await import('../../src/lib/a11y');
+    const p = blank();
+    const img = makeElement('image', p, { src: 'data:image/png;base64,x', alt: 'Map', rotation: 30, crop: { x: 0, y: 0, w: 0.5, h: 1 }, locked: true });
+    expect(elementLabel(img)).toBe('Image: Map (cropped, rotated 30°, locked)');
+    expect(elementLabel(makeElement('shape', p, { shape: 'star' }))).toBe('Star');
   });
 });

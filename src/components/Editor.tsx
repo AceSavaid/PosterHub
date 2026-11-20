@@ -27,6 +27,8 @@ import { replaceAllInPoster } from '../lib/textTools';
 import { ignoreKey } from '../lib/spelling';
 import AppearanceMenu from './AppearanceMenu';
 import AuthorsDialog from './AuthorsDialog';
+import AbstractDialog from './AbstractDialog';
+import { describeFill, fillPoster, type FillPlan } from '../lib/abstractImport';
 import { PLACEHOLDER_TEXT } from '../lib/checks';
 import type { AuthorList } from '../types';
 import ConfirmDialog from './ConfirmDialog';
@@ -97,6 +99,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [snap, setSnap] = useState(true);
   const [viewing, setViewing] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
+  const [abstractOpen, setAbstractOpen] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
   const [cropFor, setCropFor] = useState<string | null>(null);
   const [eqDialog, setEqDialog] = useState<{ id?: string; spec: EquationSpec } | null>(null);
@@ -447,6 +450,14 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       const n = target ? textNode(target) : null;
       if (n && n.scrollHeight > n.clientHeight + 1) (isNew ? growToFit : shrinkToFit)(target);
     }, 50);
+  }
+
+  /** Drops the parts of an abstract into the poster's sections (one undo step). */
+  function fillFromAbstract(plan: FillPlan) {
+    setAbstractOpen(false);
+    let report = { sections: 0, title: false };
+    update((d) => void (report = fillPoster(d, plan)));
+    notify(describeFill(report));
   }
 
   function openEquation(el?: PosterElement) {
@@ -1253,6 +1264,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             onInsertReferences={() => setRefsOpen(true)}
             onInsertTable={() => insert('table')}
             onInsertEquation={() => openEquation()}
+            onFillFromAbstract={() => setAbstractOpen(true)}
             notify={notify}
           />
         ) : (
@@ -1462,6 +1474,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         />
       )}
       {eqDialog && <EquationDialog poster={poster} initial={eqDialog.spec} isNew={!eqDialog.id} onSave={saveEquation} onCancel={() => setEqDialog(null)} />}
+      {abstractOpen && <AbstractDialog poster={poster} onFill={fillFromAbstract} onCancel={() => setAbstractOpen(false)} />}
       {authorsDialog && <AuthorsDialog initial={authorsDialog.initial} replacing={authorsDialog.replacing} onSave={saveAuthors} onCancel={() => setAuthorsDialog(null)} />}
       {templateDialog && <SaveTemplateDialog poster={poster} onSave={saveTemplate} onCancel={() => setTemplateDialog(false)} />}
       {confirmDelete && (

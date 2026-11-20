@@ -604,6 +604,19 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 
+/* Fill from abstract */
+.abstract-dialog textarea { width: 100%; font: inherit; resize: vertical; }
+.abstract-dialog .banner.warn { background: #fff4d6; color: #6b4a00; }
+.abstract-dialog .modal-actions.spread { justify-content: space-between; flex-wrap: wrap; }
+.abstract-parts { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 12px; }
+.abstract-parts li { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.abstract-parts li.left-out { border-style: dashed; }
+.abstract-part-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.abstract-part-head .tag { margin-left: 8px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); }
+.abstract-title-row { margin: 8px 0; }
+.abstract-replace { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; }
+.abstract-replace legend { font-weight: 600; padding: 0 4px; }
+
 /* ---- My templates (saved from posters) */
 .my-templates-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .template-card.mine { padding: 0 0 8px; cursor: default; }

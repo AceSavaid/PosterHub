@@ -134,7 +134,7 @@ test('notes can be dragged, and hidden or shown on the poster', async ({ page })
   await expect(pins(page)).toHaveCount(0);
   // the choice is remembered after a reload
   await page.waitForTimeout(800); // let autosave run
-  await page.reload();
+  await page.goto('/'); // My posters, not the poster's own link (which reopens it by itself)
   await page.getByRole('button', { name: 'Open Notes test preview' }).click();
   await expect(page.locator('.poster')).toBeVisible();
   await expect(page.locator('.notes-btn .badge')).toHaveText('1');

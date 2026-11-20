@@ -148,7 +148,7 @@ test.describe('tables', () => {
     expect((await cells(page))[0].length).toBe(3);
     // keeps working after a reload
     await page.waitForTimeout(800);
-    await page.reload();
+    await page.goto('/'); // My posters, not the poster's own link (which reopens it by itself)
     await page.locator('.poster-card').first().getByRole('button', { name: 'Open', exact: true }).click();
     expect((await cells(page)).length).toBe(5);
   });

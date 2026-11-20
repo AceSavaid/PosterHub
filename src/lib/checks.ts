@@ -6,6 +6,7 @@ import { resolveColor, typeScale } from '../model';
 import { boundsOf, intersects } from './arrange';
 import { wordCount } from './textTools';
 import { citeCounts } from './refs/citations';
+import { dullColorIssues } from './printColor';
 
 export type Severity = 'problem' | 'warning' | 'tip';
 
@@ -17,6 +18,8 @@ export interface Issue {
   detail: string;
   /** Example text or an empty figure box left over from the layout: a to-do, not a mistake. */
   leftover?: boolean;
+  /** A one-click fix the Check panel can offer: swap one colour for another everywhere. */
+  fix?: { label: string; from: string; to: string };
 }
 
 export const PLACEHOLDER_TEXT = ['Your Poster Title Goes Here', 'Replace this text with your own', 'Type or paste your text here', 'Section Heading', 'Author One, Author Two', 'Describe what the figure shows', 'State your main result in one clear sentence', 'Author, A. (2025). Title of work'];
@@ -194,6 +197,8 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
       issues.push({ id: 'word-limit', severity: 'warning', title: `${total - p.wordLimit} words over the limit`, detail: `The poster has ${total} words and the limit is ${p.wordLimit}. The Words tab shows which sections are longest.` });
     }
   }
+  // ---- colours that screens can show but ink cannot
+  issues.push(...dullColorIssues(p));
 
   const order: Record<Severity, number> = { problem: 0, warning: 1, tip: 2 };
   return issues.sort((a, b) => order[a.severity] - order[b.severity]);

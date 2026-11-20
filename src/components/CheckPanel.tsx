@@ -20,6 +20,8 @@ interface Props {
   onFixWord: (word: string, replacement: string) => void;
   onIgnoreWord: (word: string) => void;
   onWordLimit: (limit: number | undefined) => void;
+  /** Applies an issue's one-click fix (e.g. swap a colour for a printable one). */
+  onFix?: (issue: Issue) => void;
   onClose: () => void;
 }
 
@@ -52,7 +54,7 @@ export default function CheckPanel(props: Props) {
   );
 }
 
-function Problems({ issues, onPick }: Props) {
+function Problems({ issues, onPick, onFix }: Props) {
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const warnings = issues.filter((i) => i.severity === 'warning').length;
   if (issues.length === 0)
@@ -81,6 +83,12 @@ function Problems({ issues, onPick }: Props) {
                 <span className="issue-detail">{i.detail}</span>
               </span>
             </button>
+            {i.fix && onFix && (
+              <button className="issue-fix" onClick={() => onFix(i)}>
+                <span className="swatch" style={{ background: i.fix.from }} aria-hidden />→<span className="swatch" style={{ background: i.fix.to }} aria-hidden />
+                {i.fix.label}
+              </button>
+            )}
           </li>
         ))}
       </ul>

@@ -242,6 +242,13 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .menu button { text-align: left; padding: 8px 10px; border: none; background: none; border-radius: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
 .menu button:hover { background: var(--bg2); }
 .menu button span { color: var(--muted); font-size: 12px; }
+.menu-print { border-top: 1px solid var(--line); margin-top: 6px; padding: 10px 10px 4px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.menu-print > strong { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.menu-print label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.menu-print label.check { justify-content: flex-start; }
+.menu-print small { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.menu .menu-note { background: #fff4e0; margin-bottom: 4px; }
+.menu .menu-note:hover { background: #ffe9c2; }
 .menu-dpi { border-top: 1px solid var(--line); margin-top: 6px; padding: 10px 10px 4px; }
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: #1d2330; color: #fff; padding: 10px 16px; border-radius: 8px; box-shadow: var(--shadow); z-index: 100; max-width: min(560px, calc(100vw - 32px)); }
 
@@ -321,6 +328,8 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .issue.warning button { border-left: 4px solid #f29900; }
 .issue.tip button { border-left: 4px solid var(--accent); }
 .issue strong { display: block; font-size: 13px; }
+.issue .issue-fix { width: auto; margin: 4px 0 2px 34px; padding: 4px 10px; align-items: center; gap: 6px; font-size: 12px; border-left: 1px solid var(--line) !important; }
+.issue-fix .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); display: inline-block; }
 .issue-detail { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 2px; }
 .menu .menu-warn { background: #fdecea; margin-bottom: 4px; }
 .menu .menu-warn:hover { background: #fbd9d5; }

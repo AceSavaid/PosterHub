@@ -56,3 +56,19 @@ export function localFontsource(url: string): Uint8Array | null {
 }
 
 export const fixture = (name: string) => new Uint8Array(fs.readFileSync(path.join(root, 'tests', 'fixtures', name)));
+
+/** The decoded drawing instructions of page 1, for checking what was painted. */
+export async function pageContent(bytes: Uint8Array): Promise<string> {
+  const { decodePDFRawStream, PDFArray, PDFRef } = await import('pdf-lib');
+  const doc = await PDFDocument.load(bytes);
+  const page = doc.getPage(0);
+  const contents = page.node.get(PDFName.of('Contents'));
+  const refs = contents instanceof PDFArray ? contents.asArray() : [contents];
+  let out = '';
+  for (const r of refs) {
+    const s = r instanceof PDFRef ? doc.context.lookup(r) : r;
+    if (s instanceof PDFRawStream) out += new TextDecoder().decode(decodePDFRawStream(s).decode()) + '\n';
+    else if (s instanceof PDFStream) out += new TextDecoder().decode(s.getContents()) + '\n';
+  }
+  return out;
+}

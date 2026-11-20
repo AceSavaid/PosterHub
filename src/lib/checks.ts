@@ -4,6 +4,7 @@
 import type { Poster, PosterElement } from '../types';
 import { resolveColor, typeScale } from '../model';
 import { boundsOf, intersects } from './arrange';
+import { normalizeTable } from './table';
 
 export type Severity = 'problem' | 'warning' | 'tip';
 
@@ -63,7 +64,7 @@ export function backgroundBehind(p: Poster, el: PosterElement): string | null {
 
 const plain = (html = '') => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
-const NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape' };
+const NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', table: 'Table' };
 function label(el: PosterElement) {
   const t = plain(el.html);
   return t ? `${NAMES[el.type]} “${t.length > 32 ? t.slice(0, 30) + '…' : t}”` : NAMES[el.type];
@@ -149,6 +150,21 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
             });
           }
         }
+      }
+    }
+    if (el.type === 'table') {
+      const t = normalizeTable(el.table);
+      const filled = t.rows.flat().filter((c) => c.trim()).length;
+      if (!filled) issues.push({ id: 'blank-' + el.id, elementId: el.id, severity: 'warning', title: 'An empty table', detail: 'Double-click a cell to type, paste cells from a spreadsheet, or delete the table.' });
+      if (filled && t.fontSize < minPt * 0.85) {
+        issues.push({
+          id: 'small-' + el.id, elementId: el.id, severity: t.fontSize < minPt * 0.6 ? 'problem' : 'warning',
+          title: 'Table text may be too small to read',
+          detail: `It is ${t.fontSize} pt. On a poster this size, aim for at least ${Math.round(minPt * 0.85)} pt (Text size in the side panel), or move detail to a handout.`,
+        });
+      }
+      if (overflowing.has(el.id)) {
+        issues.push({ id: 'overflow-' + el.id, elementId: el.id, severity: 'problem', title: 'Table: some rows are hidden', detail: 'Select it and use “Make box taller” or “Shrink text to fit”.' });
       }
     }
     if (el.type === 'chart' && el.chart && el.chart.fontSize < minPt * 0.75) {

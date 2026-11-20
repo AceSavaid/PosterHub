@@ -1,7 +1,8 @@
 import { forwardRef, useEffect, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from 'react';
-import type { Poster, PosterElement } from '../types';
+import type { Poster, PosterElement, TableSpec } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth, fontStack, resolveColor, resolveFont } from '../model';
 import ChartView from './ChartView';
+import TableView from './TableView';
 import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
 
 const px = (mm: number) => mm * MM_TO_PX;
@@ -61,12 +62,14 @@ interface ElementProps {
   poster: Poster;
   editing?: boolean;
   onCommitText?: (html: string) => void;
+  onCommitTable?: (t: TableSpec) => void;
+  onActiveCell?: (cell: { r: number; c: number } | null) => void;
   onEditDone?: () => void;
   className?: string;
   wrapperProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
-export function ElementView({ el, poster, editing, onCommitText, onEditDone, className, wrapperProps }: ElementProps) {
+export function ElementView({ el, poster, editing, onCommitText, onCommitTable, onActiveCell, onEditDone, className, wrapperProps }: ElementProps) {
   const pal = poster.palette;
   const box: CSSProperties = {
     left: px(el.x),
@@ -131,6 +134,9 @@ export function ElementView({ el, poster, editing, onCommitText, onEditDone, cla
       );
       break;
     }
+    case 'table':
+      inner = <TableView el={el} poster={poster} editing={!!editing} onCommit={onCommitTable} onDone={onEditDone} onActiveCell={onActiveCell} />;
+      break;
     default:
       inner = <TextBody el={el} poster={poster} editing={!!editing} onCommit={onCommitText} onDone={onEditDone} />;
   }

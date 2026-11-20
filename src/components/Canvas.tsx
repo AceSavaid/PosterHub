@@ -1,5 +1,5 @@
 import { forwardRef, useRef, useState } from 'react';
-import type { Poster, PosterElement } from '../types';
+import type { Poster, PosterElement, TableSpec } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth } from '../model';
 import { ElementView, Surface } from './Surface';
 
@@ -18,6 +18,8 @@ interface Props {
   onEdit: (id: string | null) => void;
   onChange: (id: string, patch: Partial<PosterElement>, coalesce?: string) => void;
   onCommitText: (id: string, html: string) => void;
+  onCommitTable: (id: string, t: TableSpec) => void;
+  onActiveCell: (cell: { r: number; c: number } | null) => void;
   onActivate: (el: PosterElement) => void; // double-click on image/chart
   onContextMenu: (el: PosterElement, x: number, y: number) => void;
 }
@@ -28,7 +30,7 @@ interface Guide {
 }
 
 export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, ref) {
-  const { poster, zoom, showGrid, snap, selectedIds, editingId, onSelect, onMoveMany, onEdit, onChange, onCommitText, onActivate, onContextMenu } = props;
+  const { poster, zoom, showGrid, snap, selectedIds, editingId, onSelect, onMoveMany, onEdit, onChange, onCommitText, onCommitTable, onActiveCell, onActivate, onContextMenu } = props;
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
   const [guides, setGuides] = useState<Guide[]>([]);
   const dragging = useRef(false);
@@ -192,7 +194,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       showGrid={showGrid}
       renderElement={(el) => {
         const isEditing = editingId === el.id;
-        const isText = el.style != null;
+        const isText = el.style != null || el.type === 'table';
         return (
           <ElementView
             key={el.id}
@@ -200,6 +202,8 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
             poster={poster}
             editing={isEditing}
             onCommitText={(html) => onCommitText(el.id, html)}
+            onCommitTable={(t) => onCommitTable(el.id, t)}
+            onActiveCell={onActiveCell}
             onEditDone={() => onEdit(null)}
             className={(selectedIds.includes(el.id) ? 'selected ' : '') + (el.locked ? 'locked ' : '') + (isEditing ? 'editing' : '')}
             wrapperProps={{

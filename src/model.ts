@@ -109,6 +109,11 @@ export function makeElement(type: ElementType, poster: Poster, at?: Partial<Post
     case 'shape':
       Object.assign(base, { h: 60 * s, fill: '@surface', shape: 'rect', radius: 0 });
       break;
+    case 'table': {
+      const table = defaultTable(Math.max(6, Math.round(28 * s)));
+      Object.assign(base, { table, h: tableHeightMm(table.rows.length, table.fontSize) });
+      break;
+    }
   }
   return { ...base, ...at };
 }
@@ -141,6 +146,12 @@ export interface NewPosterOptions {
 
 export { TEMPLATES, buildTemplate, templateDef, type TemplateId, type TemplateDef } from './templates';
 import { buildTemplate, type TemplateId } from './templates';
+import { CELL_PAD, defaultTable } from './lib/table';
+
+/** Height a table of `rows` single-line rows needs at `fontSize` pt (1.2 line height plus cell padding). */
+export function tableHeightMm(rows: number, fontSize: number) {
+  return rows * fontSize * (1.2 + 2 * CELL_PAD.v) * (25.4 / 72) + 1;
+}
 
 export function createPoster(o: NewPosterOptions): Poster {
   const now = Date.now();

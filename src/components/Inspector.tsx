@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import type { Poster, PosterElement, TextStyle } from '../types';
+import type { Poster, PosterElement, TableSpec, TableStyleId, TextStyle } from '../types';
+import { TABLE_STYLES, cellLook, normalizeTable } from '../lib/table';
+import type { TableAction } from './Editor';
 import { QR_MAX_LENGTH, normaliseLink, qrDataUrl } from '../lib/qr';
 import { FontSelect } from './FontSelect';
 import { ColorInput } from './ColorInput';
@@ -25,6 +27,11 @@ interface Props {
   onAlign: (mode: AlignMode) => void;
   onDistribute: (axis: 'x' | 'y') => void;
   onMatchSize: (dim: 'w' | 'h') => void;
+  activeCell?: { r: number; c: number } | null;
+  onTableAction?: (a: TableAction) => void;
+  onTableGraph?: () => void;
+  onEditTable?: () => void;
+  onConvertTable?: () => void;
 }
 
 const ALIGN: { mode: AlignMode; label: string; icon: string }[] = [
@@ -65,7 +72,7 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: 
   );
 }
 
-const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape' };
+const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', table: 'Table' };
 
 export default function Inspector(props: Props) {
   const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart, multi, overflow, onShrinkText, onGrowBox } = props;
@@ -131,10 +138,10 @@ export default function Inspector(props: Props) {
           </div>
         </div>
 
-        {st && overflow && (
+        {(st || el.type === 'table') && overflow && (
           <section className="warn-box" role="status">
             <strong>Some text is hidden</strong>
-            <span>The text is longer than its box.</span>
+            <span>{el.type === 'table' ? 'The table is taller than its box.' : 'The text is longer than its box.'}</span>
             <div className="toolbar-row">
               <button className="btn small-btn" onClick={onShrinkText}>Shrink text to fit</button>
               <button className="btn small-btn" onClick={onGrowBox}>Make box taller</button>
@@ -210,6 +217,16 @@ export default function Inspector(props: Props) {
             )}
           </section>
         )}
+
+        {st && el.html?.includes('<table') && props.onConvertTable && (
+          <section>
+            <h4>Table</h4>
+            <button className="btn" onClick={props.onConvertTable}>Convert to editable table</button>
+            <p className="hint">Imported tables keep their PowerPoint formatting. Convert to type in cells, add rows and pick a table style.</p>
+          </section>
+        )}
+
+        {el.type === 'table' && <TableSection {...props} el={el} />}
 
         {el.type === 'image' && (
           <section>
@@ -403,5 +420,98 @@ function QrSection({ el, onChange }: { el: PosterElement; onChange: Props['onCha
         <p className="hint">Paste a link to your paper, data, code or lab page. The QR code is made on your computer and updates as you type.</p>
       )}
     </section>
+  );
+}
+
+function TableSection({ poster, el, editing, onChange, activeCell, onTableAction, onTableGraph, onEditTable }: Props & { el: PosterElement }) {
+  const t = normalizeTable(el.table);
+  const set = (patch: Partial<TableSpec>, key?: string) => onChange((e) => void (e.table = { ...normalizeTable(e.table), ...patch }), key);
+  // Buttons keep the cursor in the cell being edited.
+  const keep = (e: React.MouseEvent) => e.preventDefault();
+  const act = (a: TableAction) => onTableAction?.(a);
+  const where = activeCell ? `row ${activeCell.r + 1}, column ${activeCell.c + 1}` : null;
+  return (
+    <section>
+      <h4>Table</h4>
+      {!editing && (
+        <button className="btn primary" onClick={onEditTable}>Edit cells</button>
+      )}
+      <p className="hint">
+        {editing
+          ? 'Type in the cells. Tab moves to the next cell (and adds a row at the end), Enter moves down. Paste cells from Excel or Google Sheets to fill the table.'
+          : 'Double-click a cell to type. Paste cells from Excel or Google Sheets onto the poster to make a new table.'}
+      </p>
+      <div className="field-label">Style</div>
+      <div className="table-styles" role="radiogroup" aria-label="Table style">
+        {TABLE_STYLES.map((s) => (
+          <button key={s.id} role="radio" aria-checked={t.style === s.id} className={t.style === s.id ? 'on' : ''} title={s.hint} onMouseDown={keep} onClick={() => set({ style: s.id })}>
+            <StylePreview style={s.id} poster={poster} />
+            {s.label}
+          </button>
+        ))}
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={t.headerRow} onChange={(e) => set({ headerRow: e.target.checked })} /> First row is a header
+      </label>
+      <div className="row2">
+        <label>
+          Text size (pt)
+          <input type="number" min={4} max={400} value={t.fontSize} onChange={(e) => set({ fontSize: Math.max(4, +e.target.value || 4) }, 'tfs')} />
+        </label>
+        <label>
+          Align columns
+          <select value={t.align} onChange={(e) => set({ align: e.target.value as TableSpec['align'] })}>
+            <option value="auto">Numbers right</option>
+            <option value="left">All left</option>
+            <option value="center">All centred</option>
+          </select>
+        </label>
+      </div>
+      <div className="field-label">
+        Rows and columns{where ? ` (at ${where})` : ''}: {t.rows.length} × {t.rows[0].length}
+      </div>
+      <div className="toolbar-row">
+        <button className="btn small-btn" onMouseDown={keep} onClick={() => act('rowAbove')}>+ Row above</button>
+        <button className="btn small-btn" onMouseDown={keep} onClick={() => act('rowBelow')}>+ Row below</button>
+        <button className="btn small-btn" onMouseDown={keep} onClick={() => act('colLeft')}>+ Column left</button>
+        <button className="btn small-btn" onMouseDown={keep} onClick={() => act('colRight')}>+ Column right</button>
+      </div>
+      <div className="toolbar-row">
+        <button className="btn small-btn" disabled={t.rows.length <= 1} onMouseDown={keep} onClick={() => act('deleteRow')}>− Delete row</button>
+        <button className="btn small-btn" disabled={t.rows[0].length <= 1} onMouseDown={keep} onClick={() => act('deleteCol')}>− Delete column</button>
+      </div>
+      {!where && <p className="hint">Click into a cell first to add or delete next to it; otherwise changes apply at the end.</p>}
+      <button className="btn" onClick={onTableGraph}>Make a graph from this table…</button>
+    </section>
+  );
+}
+
+/** A tiny drawing of a table in the given style, using the poster's colours. */
+function StylePreview({ style, poster }: { style: TableStyleId; poster: Poster }) {
+  const t: TableSpec = { rows: [['', '', ''], ['', '', ''], ['', '', ''], ['', '', '']], headerRow: true, style, fontSize: 10, align: 'auto' };
+  const W = 60;
+  const H = 30;
+  const rw = W / 3;
+  const rh = H / 4;
+  const out: React.ReactNode[] = [];
+  t.rows.forEach((row, r) =>
+    row.forEach((_, c) => {
+      const l = cellLook(t, poster.palette, r, c);
+      const x = c * rw;
+      const y = r * rh;
+      if (l.fill) out.push(<rect key={`f${r}${c}`} x={x} y={y} width={rw} height={rh} fill={l.fill} />);
+      out.push(<rect key={`t${r}${c}`} x={x + 3} y={y + rh / 2 - 0.8} width={rw - 8} height={1.6} rx={0.8} fill={l.color} opacity={l.bold ? 0.95 : 0.45} />);
+      const line = (b: typeof l.top, x1: number, y1: number, x2: number, y2: number, k: string) =>
+        b && out.push(<line key={k + r + c} x1={x1} y1={y1} x2={x2} y2={y2} stroke={b.color} strokeWidth={b.pt * 0.9} />);
+      line(l.top, x, y + 0.5, x + rw, y + 0.5, 'a');
+      line(l.bottom, x, y + rh - 0.5, x + rw, y + rh - 0.5, 'b');
+      line(l.left, x + 0.4, y, x + 0.4, y + rh, 'c');
+      line(l.right, x + rw - 0.4, y, x + rw - 0.4, y + rh, 'd');
+    }),
+  );
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} aria-hidden style={{ background: poster.palette.background, borderRadius: 3 }}>
+      {out}
+    </svg>
   );
 }

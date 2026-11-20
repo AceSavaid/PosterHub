@@ -366,7 +366,10 @@ test.describe('graphs', () => {
   test('builds a graph from pasted spreadsheet data', async ({ page }) => {
     await newPoster(page, { template: 'Blank' });
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1\nB\t3\nC\t2' });
+    // Pasted cells become a table first; one click turns them into a graph instead.
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
     await expect(page.getByRole('heading', { name: 'Graph from CSV' })).toBeVisible();
+    await expect(page.locator('.poster .poster-table')).toHaveCount(0);
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
     await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
   });
@@ -387,6 +390,7 @@ test.describe('export, import and sharing', () => {
     await newPoster(page, { name: 'Export test', size: 'A3' });
     // add a chart so the PowerPoint has one
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1\nB\t3\nC\t2' });
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
 
     const pdf = await download(page, /^PDF/);
@@ -435,6 +439,7 @@ test.describe('export, import and sharing', () => {
       el.innerHTML = 'Mean <b>reaction time</b> fell, <i>p</i> &lt; 0.05, H<sub>2</sub>O, αβγ ± 2.<ul><li>First finding</li><li>Second finding</li></ul>';
     });
     await paste(page, { 'text/plain': 'Group\tScore\nControl\t1\nDrug\t3' });
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
 
     const pdf = await download(page, /^PDF/);

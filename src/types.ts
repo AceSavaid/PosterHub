@@ -27,7 +27,7 @@ export interface CustomFont {
 
 export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'triangle' | 'diamond' | 'arrow' | 'star';
 
-export type ElementType = 'title' | 'subtitle' | 'heading' | 'text' | 'image' | 'chart' | 'shape';
+export type ElementType = 'title' | 'subtitle' | 'heading' | 'text' | 'image' | 'chart' | 'shape' | 'table';
 
 export interface TextStyle {
   fontFamily: string; // "@heading" | "@body" | a concrete family
@@ -59,6 +59,21 @@ export interface ChartSpec {
   fontSize: number; // pt
 }
 
+export type TableStyleId = 'academic' | 'striped' | 'grid' | 'minimal';
+
+export interface TableSpec {
+  /** Cell text, row by row. Plain text only (newlines allowed), never HTML. */
+  rows: string[][];
+  /** Treat the first row as column headings. */
+  headerRow: boolean;
+  style: TableStyleId;
+  fontSize: number; // pt
+  /** 'auto' right-aligns columns of numbers and left-aligns the rest. */
+  align: 'auto' | 'left' | 'center';
+  /** Optional relative column widths (any positive numbers); missing = sized to fit the text. */
+  colWidths?: number[];
+}
+
 export interface PosterElement {
   id: string;
   type: ElementType;
@@ -84,6 +99,7 @@ export interface PosterElement {
   qr?: string;
   fit?: 'contain' | 'cover' | 'fill';
   chart?: ChartSpec;
+  table?: TableSpec;
   shape?: ShapeKind;
   /** which way an arrow points */
   direction?: 'right' | 'left' | 'up' | 'down';

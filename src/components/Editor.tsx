@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { ChartSpec, ElementType, Poster, PosterElement } from '../types';
-import { MM_TO_PX, makeElement, uid } from '../model';
+import type { ChartSpec, ElementType, Poster, PosterElement, TableSpec } from '../types';
+import { MM_TO_PX, makeElement, tableHeightMm, uid } from '../model';
+import { cellsFromClipboard, deleteColumn, deleteRow, insertColumn, insertRow, normalizeTable, tableFromHtml, tableToCsv, tableToTsv } from '../lib/table';
 import { usePosterHistory } from '../lib/usePoster';
 import { align, distribute, intersects, matchSize } from '../lib/arrange';
 import { deletePoster, exportPosterFile, fileToDataUrl, pickFile, savePoster } from '../lib/storage';
@@ -21,6 +22,16 @@ import { useUiPrefs } from '../lib/uiPrefs';
 
 const CLIP_MIME = 'application/x-posterhub-element';
 let internalClipboard: PosterElement | null = null;
+
+/** The plain text an element puts on the clipboard: its words, or tab-separated cells for a table. */
+function plainTextOf(el: PosterElement) {
+  if (el.type === 'table') return tableToTsv(normalizeTable(el.table));
+  const div = document.createElement('div');
+  div.innerHTML = el.html ?? '';
+  return div.innerText || div.textContent || '';
+}
+
+export type TableAction = 'rowAbove' | 'rowBelow' | 'colLeft' | 'colRight' | 'deleteRow' | 'deleteCol';
 
 async function imageFileToDataUrl(file: Blob, maxSide = 4000): Promise<{ src: string; ratio: number }> {
   const src = await fileToDataUrl(file);
@@ -62,17 +73,18 @@ export default function Editor({ initial, onClose }: Props) {
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [dpi, setDpi] = useState(200);
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState<{ msg: string; action?: { label: string; run: () => void } } | null>(null);
+  const [activeCell, setActiveCell] = useState<{ r: number; c: number } | null>(null);
   const [saved, setSaved] = useState(true);
   const posterNode = useRef<HTMLDivElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<number>(undefined);
   const [prefs, setPrefs] = useUiPrefs();
 
-  const notify = useCallback((msg: string) => {
-    setToast(msg);
+  const notify = useCallback((msg: string, action?: { label: string; run: () => void }) => {
+    setToast({ msg, action });
     clearTimeout(toastTimer.current);
-    toastTimer.current = window.setTimeout(() => setToast(''), 4000);
+    toastTimer.current = window.setTimeout(() => setToast(null), action ? 8000 : 4000);
   }, []);
 
   // ---- fit to screen on open
@@ -157,7 +169,73 @@ export default function Editor({ initial, onClose }: Props) {
   function insert(type: ElementType, extra?: Partial<PosterElement>) {
     const el = makeElement(type, posterRef.current, extra);
     addElement(el);
-    if (el.style) setEditingId(el.id);
+    if (el.style || el.type === 'table') setEditingId(el.id);
+  }
+
+  /** Adds a table holding pasted spreadsheet cells, sized to fit them. */
+  function insertTableFromCells(cells: string[][]) {
+    const el = makeElement('table', posterRef.current);
+    const t = normalizeTable({ ...el.table, rows: cells });
+    // Wide tables get two columns' width (or the full width), and a height that fits every row.
+    const p = posterRef.current;
+    const cols = t.rows[0].length;
+    if (cols > 3) el.w = Math.min(p.width - 2 * p.margin, el.w * 2 + p.gutter);
+    el.table = t;
+    el.h = Math.min(p.height - 2 * p.margin, tableHeightMm(t.rows.length, t.fontSize));
+    addElement(el);
+    fitTable(el.id);
+    return el;
+  }
+
+  /** Grows a table's box when its rows no longer fit (after typing, pasting or adding rows). */
+  function fitTable(id: string) {
+    requestAnimationFrame(() => {
+      const n = textNode(id);
+      if (n && n.scrollHeight > n.clientHeight + 1) growToFit(id);
+    });
+  }
+
+  function commitTable(id: string, t: TableSpec, key?: string) {
+    updateElement(id, { table: t }, key);
+    fitTable(id);
+  }
+
+  function tableAction(el: PosterElement, action: TableAction) {
+    const t = normalizeTable(el.table);
+    const at = activeCell ?? { r: t.rows.length - 1, c: t.rows[0].length - 1 };
+    const next =
+      action === 'rowAbove' ? insertRow(t, at.r)
+      : action === 'rowBelow' ? insertRow(t, at.r + 1)
+      : action === 'colLeft' ? insertColumn(t, at.c)
+      : action === 'colRight' ? insertColumn(t, at.c + 1)
+      : action === 'deleteRow' ? deleteRow(t, at.r)
+      : deleteColumn(t, at.c);
+    if (action === 'deleteRow' && activeCell) setActiveCell({ r: Math.min(at.r, next.rows.length - 1), c: at.c });
+    if (action === 'deleteCol' && activeCell) setActiveCell({ r: at.r, c: Math.min(at.c, next.rows[0].length - 1) });
+    // Rows added with the buttons keep the box growing; removed rows leave the height to the person.
+    commitTable(el.id, next);
+  }
+
+  function tableToGraph(el: PosterElement) {
+    setChartDialog({ text: tableToCsv(normalizeTable(el.table)) });
+  }
+
+  /** Turns a table imported from PowerPoint (formatted text) into an editable table. */
+  function convertToTable(el: PosterElement) {
+    const parsed = tableFromHtml(el.html ?? '');
+    if (!parsed) return;
+    const fontSize = el.style?.fontSize ?? 24;
+    const table = normalizeTable({ ...parsed, headerRow: true, style: 'grid', fontSize, align: 'auto' });
+    update((d) => {
+      const i = d.elements.findIndex((e) => e.id === el.id);
+      if (i < 0) return;
+      const { html: _h, style: _s, ...rest } = d.elements[i];
+      void _h;
+      void _s;
+      d.elements[i] = { ...rest, type: 'table', table };
+    });
+    fitTable(el.id);
+    notify('Converted to an editable table. Double-click a cell to type.');
   }
 
   async function insertImageFile(file: Blob, at?: { x: number; y: number }, replaceId?: string) {
@@ -234,7 +312,7 @@ export default function Editor({ initial, onClose }: Props) {
 
   /** Text that doesn't fit its box: measured from the rendered poster. */
   function textNode(id: string) {
-    return posterNode.current?.querySelector<HTMLElement>(`[data-id="${id}"] .el-body`) ?? null;
+    return posterNode.current?.querySelector<HTMLElement>(`[data-id="${id}"] :is(.el-body, .el-table-wrap)`) ?? null;
   }
 
   useLayoutEffect(() => {
@@ -242,10 +320,10 @@ export default function Editor({ initial, onClose }: Props) {
     setOverflow(!!n && n.scrollHeight > n.clientHeight + 1);
   });
 
-  function growToFit() {
-    const n = selectedId && textNode(selectedId);
+  function growToFit(id = selectedId) {
+    const n = id && textNode(id);
     if (!n) return;
-    const el = posterRef.current.elements.find((e) => e.id === selectedId)!;
+    const el = posterRef.current.elements.find((e) => e.id === id)!;
     const extra = el.h * MM_TO_PX - n.clientHeight; // padding + border
     updateElement(el.id, { h: (n.scrollHeight + extra) / MM_TO_PX + 0.5 });
   }
@@ -255,13 +333,16 @@ export default function Editor({ initial, onClose }: Props) {
     if (!n) return;
     const el = posterRef.current.elements.find((e) => e.id === selectedId)!;
     const original = n.style.fontSize;
-    let size = el.style!.fontSize;
+    let size = el.type === 'table' ? normalizeTable(el.table).fontSize : el.style!.fontSize;
     while (size > 4 && n.scrollHeight > n.clientHeight + 1) {
       size = Math.round((size - Math.max(0.5, size * 0.03)) * 2) / 2;
       n.style.fontSize = `${size}pt`;
     }
     n.style.fontSize = original;
-    updateElement(el.id, (e) => void (e.style!.fontSize = size));
+    updateElement(el.id, (e) => {
+      if (e.type === 'table') e.table = { ...normalizeTable(e.table), fontSize: size };
+      else e.style!.fontSize = size;
+    });
   }
 
   /** Rubber-band selection: drag on an empty part of the poster or the grey area. */
@@ -346,7 +427,7 @@ export default function Editor({ initial, onClose }: Props) {
         setSelectedIds(posterRef.current.elements.filter((x) => !x.locked).map((x) => x.id));
       } else if (e.key === 'Enter' && selectedId) {
         const el = posterRef.current.elements.find((x) => x.id === selectedId);
-        if (el?.style) {
+        if (el?.style || el?.type === 'table') {
           e.preventDefault();
           setEditingId(el.id);
         }
@@ -380,9 +461,7 @@ export default function Editor({ initial, onClose }: Props) {
       if (!el) return;
       e.preventDefault();
       internalClipboard = structuredClone(el);
-      const div = document.createElement('div');
-      div.innerHTML = el.html ?? '';
-      e.clipboardData?.setData('text/plain', div.innerText || div.textContent || '');
+      e.clipboardData?.setData('text/plain', plainTextOf(el));
       e.clipboardData?.setData(CLIP_MIME, JSON.stringify(el));
       if (e.type === 'cut') removeSelected();
     };
@@ -407,18 +486,34 @@ export default function Editor({ initial, onClose }: Props) {
         return;
       }
       const text = dt.getData('text/plain');
-      if (text && internalClipboard && text === (() => { const d = document.createElement('div'); d.innerHTML = internalClipboard.html ?? ''; return d.innerText || d.textContent || ''; })()) {
+      if (text && internalClipboard && text === plainTextOf(internalClipboard)) {
         e.preventDefault();
         duplicate(internalClipboard);
         return;
       }
-      if (text) {
+      // Cells copied from Excel, Google Sheets, Word or a web page become a table,
+      // or a graph when an empty figure placeholder is selected.
+      const cells = cellsFromClipboard(dt.getData('text/html'), text);
+      if (cells) {
         e.preventDefault();
-        // Tab-separated text with several lines looks like spreadsheet cells: offer a graph.
-        if (/\t/.test(text) && text.trim().split('\n').length > 2) {
-          setChartDialog({ text: text.replace(/\t/g, ',') });
+        const csv = tableToCsv(normalizeTable({ rows: cells }));
+        if (selectedPlaceholder()) {
+          setChartDialog({ text: csv });
           return;
         }
+        const el = insertTableFromCells(cells);
+        notify(`Pasted ${cells.length} × ${cells[0].length} cells as a table.`, {
+          label: 'Make a graph instead',
+          run: () => {
+            update((d) => void (d.elements = d.elements.filter((x) => x.id !== el.id)));
+            setSelectedId(null);
+            setChartDialog({ text: csv });
+          },
+        });
+        return;
+      }
+      if (text) {
+        e.preventDefault();
         const el = makeElement('text', posterRef.current);
         const div = document.createElement('div');
         div.textContent = text;
@@ -526,9 +621,7 @@ export default function Editor({ initial, onClose }: Props) {
 
   function copyElement(el: PosterElement) {
     internalClipboard = structuredClone(el);
-    const div = document.createElement('div');
-    div.innerHTML = el.html ?? '';
-    navigator.clipboard?.writeText(div.innerText || div.textContent || '').catch(() => {});
+    navigator.clipboard?.writeText(plainTextOf(el)).catch(() => {});
     notify('Copied. Press Ctrl/⌘ V on the poster to paste it.');
   }
 
@@ -538,6 +631,11 @@ export default function Editor({ initial, onClose }: Props) {
     if (!many && el.style) items.push({ label: 'Edit text', shortcut: 'Enter', onClick: () => setEditingId(el.id) });
     if (!many && el.type === 'image') items.push({ label: el.src ? 'Replace image…' : 'Choose image…', onClick: () => chooseImage(el.id) });
     if (!many && el.type === 'chart') items.push({ label: 'Edit graph…', onClick: () => setChartDialog({ id: el.id, spec: el.chart }) });
+    if (!many && el.type === 'table') {
+      items.push({ label: 'Edit cells', shortcut: 'Enter', onClick: () => setEditingId(el.id) });
+      items.push({ label: 'Make a graph from this table…', onClick: () => tableToGraph(el) });
+    }
+    if (!many && el.style && el.html?.includes('<table')) items.push({ label: 'Convert to editable table', onClick: () => convertToTable(el) });
     if (items.length) items.push('-');
     if (!many) items.push({ label: 'Copy', shortcut: '⌘/Ctrl C', onClick: () => copyElement(el) });
     if (!many && internalClipboard) items.push({ label: 'Paste', shortcut: '⌘/Ctrl V', onClick: () => duplicate(internalClipboard!) });
@@ -680,6 +778,7 @@ export default function Editor({ initial, onClose }: Props) {
             onInsertImage={() => chooseImage()}
             onInsertChart={() => setChartDialog({})}
             onInsertQr={insertQr}
+            onInsertTable={() => insert('table')}
             notify={notify}
           />
         ) : (
@@ -720,6 +819,8 @@ export default function Editor({ initial, onClose }: Props) {
               onEdit={setEditingId}
               onChange={(id, patch, key) => updateElement(id, patch, key)}
               onCommitText={(id, html) => updateElement(id, { html })}
+              onCommitTable={(id, t) => commitTable(id, t)}
+              onActiveCell={setActiveCell}
               onContextMenu={(el, x, y) => setMenu({ x, y, el })}
               onActivate={(el) => {
                 if (el.type === 'image' && (el.qr || el.placeholder === 'QR code')) focusQrLink();
@@ -736,7 +837,7 @@ export default function Editor({ initial, onClose }: Props) {
             multi={selectedIds.length}
             overflow={overflow}
             onShrinkText={shrinkToFit}
-            onGrowBox={growToFit}
+            onGrowBox={() => growToFit()}
             onAlign={(mode) => arrange((els, d) => align(els, mode, { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin }))}
             onDistribute={(axis) => arrange((els) => distribute(els, axis))}
             onMatchSize={(dim) => arrange((els) => matchSize(els, dim))}
@@ -747,6 +848,11 @@ export default function Editor({ initial, onClose }: Props) {
             onLayer={layer}
             onReplaceImage={() => selected && chooseImage(selected.id)}
             onEditChart={() => selected && setChartDialog({ id: selected.id, spec: selected.chart })}
+            activeCell={editingId === selectedId ? activeCell : null}
+            onTableAction={(a) => selected && tableAction(selected, a)}
+            onTableGraph={() => selected && tableToGraph(selected)}
+            onEditTable={() => selected && setEditingId(selected.id)}
+            onConvertTable={() => selected && convertToTable(selected)}
           />
         ) : (
           <button className="panel-reveal props" title="Show properties panel" aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>
@@ -770,7 +876,22 @@ export default function Editor({ initial, onClose }: Props) {
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
-      {toast && <div className="toast">{toast}</div>}
+      {toast && (
+        <div className="toast" role="status">
+          {toast.msg}
+          {toast.action && (
+            <button
+              className="toast-action"
+              onClick={() => {
+                toast.action!.run();
+                setToast(null);
+              }}
+            >
+              {toast.action.label}
+            </button>
+          )}
+        </div>
+      )}
       {marquee && (
         <div
           className="marquee"

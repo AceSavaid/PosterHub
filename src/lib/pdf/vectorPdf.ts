@@ -10,7 +10,8 @@ import { parseColor, type RGBA } from './color';
 import { FontRegistry, fontkit, type Fetcher } from './fonts';
 import { Painter } from './painter';
 import { PdfCanvasContext, RecordingPath2D } from './canvas2d';
-import { extractText, frameOf, type TextPiece } from './domText';
+import { extractText, frameOf, type Frame, type TextPiece } from './domText';
+import { cellLook, normalizeTable, type Border } from '../table';
 
 Chart.register(...registerables);
 
@@ -61,6 +62,11 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
     if (!isTextType(e)) continue;
     const body = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"] .el-body`);
     if (body) textByEl.set(e.id, extractText(body, frame));
+  }
+  for (const e of p.elements) {
+    if (e.type !== 'table') continue;
+    const wrap = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"] .el-table-wrap`);
+    if (wrap) textByEl.set(e.id, extractText(wrap, frame));
   }
 
   // 2. Load the fonts that text needs.
@@ -154,6 +160,9 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
       }
     } else if (isTextType(e)) {
       drawText(painter, fonts, textByEl.get(e.id) ?? []);
+    } else if (e.type === 'table') {
+      const wrap = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"] .el-table-wrap`);
+      if (wrap) drawTable(painter, fonts, e, p, wrap, frame, textByEl.get(e.id) ?? []);
     }
     painter.restore();
 
@@ -205,6 +214,47 @@ export function drawText(painter: Painter, fonts: FontRegistry, pieces: TextPiec
     const th = Math.max(0.5, l.face.underlineThickness * l.size);
     painter.rect(l.x0, l.y - th / 2, l.x1 - l.x0, th);
     painter.fill(l.color);
+  }
+}
+
+// ---------------------------------------------------------------- tables
+
+/** Cell shading and rules as vector shapes, placed where the browser laid out each cell, with the text on top. */
+export function drawTable(painter: Painter, fonts: FontRegistry, e: PosterElement, p: Poster, wrap: HTMLElement, frame: Frame, text: TextPiece[]) {
+  const t = normalizeTable(e.table);
+  const cells = Array.from(wrap.querySelectorAll<HTMLElement>('[data-r]')).map((td) => {
+    const r = td.getBoundingClientRect();
+    const row = +td.dataset.r!;
+    const col = +td.dataset.c!;
+    return {
+      look: cellLook(t, p.palette, row, col),
+      x: (r.left - frame.left) / frame.scale,
+      y: (r.top - frame.top) / frame.scale,
+      w: r.width / frame.scale,
+      h: r.height / frame.scale,
+    };
+  });
+  for (const c of cells) {
+    const fill = c.look.fill && parseColor(c.look.fill);
+    if (fill) {
+      painter.rect(c.x, c.y, c.w, c.h);
+      painter.fill(fill);
+    }
+  }
+  drawText(painter, fonts, text);
+  const rule = (b: Border | null, x: number, y: number, w: number, h: number) => {
+    const col = b && parseColor(b.color);
+    if (!b || !col) return;
+    painter.rect(x, y, w, h);
+    painter.fill(col);
+  };
+  for (const c of cells) {
+    const px = (b: Border | null) => ((b?.pt ?? 0) * 96) / 72;
+    const { top, bottom, left, right } = c.look;
+    rule(top, c.x, c.y - px(top) / 2, c.w, px(top));
+    rule(bottom, c.x, c.y + c.h - px(bottom) / 2, c.w, px(bottom));
+    rule(left, c.x - px(left) / 2, c.y, px(left), c.h);
+    rule(right, c.x + c.w - px(right) / 2, c.y, px(right), c.h);
   }
 }
 

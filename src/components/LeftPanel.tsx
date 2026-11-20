@@ -18,10 +18,11 @@ interface Props {
   onInsertImage: () => void;
   onInsertChart: () => void;
   onInsertQr: () => void;
+  onInsertTable: () => void;
   notify: (msg: string) => void;
 }
 
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, notify }: Props) {
+export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertTable, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
     <aside className="panel left">
@@ -33,7 +34,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
         ))}
       </div>
       <div className="panel-body">
-        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} />}
+        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertTable={onInsertTable} />}
         {tab === 'layout' && <LayoutTab poster={poster} update={update} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
       </div>
@@ -41,7 +42,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
   );
 }
 
-function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr'>) {
+function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertTable }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertTable'>) {
   return (
     <>
       <h3>Text</h3>
@@ -64,6 +65,9 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<
         <button className="insert-btn" onClick={onInsertImage}>
           <span aria-hidden className="ib-icon">🖼</span>Image…
         </button>
+        <button className="insert-btn" onClick={onInsertTable}>
+          <span aria-hidden className="ib-icon">▤</span>Table
+        </button>
         <button className="insert-btn" onClick={onInsertChart}>
           <span aria-hidden className="ib-icon">📊</span>Graph from CSV…
         </button>
@@ -81,7 +85,7 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr }: Pick<
         ))}
       </div>
       <p className="hint">
-        Tip: paste text or images straight onto the poster with Ctrl/⌘ + V, or drag image and CSV files in. Double-click any text to edit it.
+        Tip: paste text, images or cells from Excel / Google Sheets straight onto the poster with Ctrl/⌘ + V, or drag image and CSV files in. Double-click any text to edit it.
       </p>
     </>
   );
@@ -104,6 +108,7 @@ function LayoutTab({ poster, update }: Pick<Props, 'poster' | 'update'>) {
           e.h *= sy;
           if (e.style) e.style.fontSize = Math.max(4, Math.round(e.style.fontSize * fs * 10) / 10);
           if (e.chart) e.chart.fontSize = Math.max(4, Math.round(e.chart.fontSize * fs));
+          if (e.table) e.table.fontSize = Math.max(4, Math.round(e.table.fontSize * fs * 10) / 10);
         }
         d.margin *= Math.min(sx, sy);
         d.gutter *= Math.min(sx, sy);

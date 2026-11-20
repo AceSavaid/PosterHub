@@ -109,6 +109,7 @@ test('edits an equation by double-click and from the side panel, and it survives
   await expect(el.locator('img')).toBeVisible();
 
   await page.getByRole('button', { name: /My posters/ }).click(); // saves
+  await expect(page.getByRole('heading', { name: 'My posters' })).toBeVisible();
   await page.reload();
   await page.locator('.poster-card', { hasText: 'Maths poster' }).getByRole('button', { name: 'Open', exact: true }).click();
   await expect(equation(page).locator('img')).toHaveAttribute('alt', '\\sqrt{x}');

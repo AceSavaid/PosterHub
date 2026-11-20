@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { EquationSpec, Poster } from '../types';
 import { resolveColor } from '../model';
 import { SNIPPETS, insertSnippet, mathSvg, svgDataUrl, typesetLatex } from '../lib/math';
@@ -27,6 +27,17 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
   const [latex, setLatex] = useState(initial.latex);
   const [fontSize, setFontSize] = useState(initial.fontSize);
   const area = useRef<HTMLTextAreaElement>(null);
+  /** Where to put the caret once a snippet insert has rendered. */
+  const caret = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    const t = area.current;
+    if (t && caret.current != null) {
+      t.focus();
+      t.setSelectionRange(caret.current, caret.current);
+      caret.current = null;
+    }
+  }, [latex]);
 
   useEffect(() => {
     const t = area.current;
@@ -45,11 +56,8 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
     const start = t?.selectionStart ?? latex.length;
     const end = t?.selectionEnd ?? latex.length;
     const next = insertSnippet(latex, start, end, snippet);
+    caret.current = next.caret;
     setLatex(next.text);
-    requestAnimationFrame(() => {
-      t?.focus();
-      t?.setSelectionRange(next.caret, next.caret);
-    });
   }
 
   const save = () => canSave && onSave({ ...initial, latex: latex.trim(), fontSize });
@@ -91,7 +99,7 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
         </label>
         <div className="eq-snippets" role="toolbar" aria-label="Insert a symbol">
           {SNIPPETS.map((s) => (
-            <button key={s.title} type="button" className="fmt" title={s.title} aria-label={'Insert ' + s.title} onClick={() => add(s.tex)}>
+            <button key={s.title} type="button" className="fmt" title={s.title} aria-label={'Insert ' + s.title} onMouseDown={(e) => e.preventDefault()} onClick={() => add(s.tex)}>
               {s.label}
             </button>
           ))}

@@ -4,6 +4,7 @@
 import type { Poster, PosterElement } from '../types';
 import { resolveColor, typeScale } from '../model';
 import { boundsOf, intersects } from './arrange';
+import { wordCount } from './textTools';
 
 export type Severity = 'problem' | 'warning' | 'tip';
 
@@ -162,6 +163,14 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
     const b = boundsOf(content);
     if (b.y + b.h < p.height * 0.6) {
       issues.push({ id: 'empty-bottom', severity: 'tip', title: 'The bottom of the poster is empty', detail: 'Spread your sections down the columns, or make figures larger.' });
+    }
+  }
+
+  // ---- word limit (set in the Words tab)
+  if (p.wordLimit && p.wordLimit > 0) {
+    const total = wordCount(p).total;
+    if (total > p.wordLimit) {
+      issues.push({ id: 'word-limit', severity: 'warning', title: `${total - p.wordLimit} words over the limit`, detail: `The poster has ${total} words and the limit is ${p.wordLimit}. The Words tab shows which sections are longest.` });
     }
   }
 

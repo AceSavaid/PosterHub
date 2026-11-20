@@ -13,9 +13,12 @@ import ChartDialog from './ChartDialog';
 import ViewMode from './ViewMode';
 import { chartCanvases } from './ChartView';
 import { Logo } from './Library';
-import CheckPanel from './CheckPanel';
+import CheckPanel, { type CheckTab } from './CheckPanel';
+import FindPanel from './FindPanel';
 import ContextMenu, { type MenuItem } from './ContextMenu';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
+import { replaceAllInPoster } from '../lib/textTools';
+import { ignoreKey } from '../lib/spelling';
 import AppearanceMenu from './AppearanceMenu';
 import { useUiPrefs } from '../lib/uiPrefs';
 
@@ -57,7 +60,21 @@ export default function Editor({ initial, onClose }: Props) {
   const [viewing, setViewing] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [checkOpen, setCheckOpen] = useState(false);
+  const [checkOpen, setCheckOpenRaw] = useState(false);
+  const [checkTab, setCheckTab] = useState<CheckTab>('problems');
+  const [findOpen, setFindOpenRaw] = useState(false);
+  // The check and find panels sit in the same spot, so only one is open at a time.
+  const setCheckOpen = useCallback((v: boolean | ((o: boolean) => boolean)) => {
+    setCheckOpenRaw((o) => {
+      const n = typeof v === 'function' ? v(o) : v;
+      if (n) setFindOpenRaw(false);
+      return n;
+    });
+  }, []);
+  const setFindOpen = useCallback((v: boolean) => {
+    setFindOpenRaw(v);
+    if (v) setCheckOpenRaw(false);
+  }, []);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -323,6 +340,12 @@ export default function Editor({ initial, onClose }: Props) {
         setPrefs({ showTools: !anyShown, showProperties: !anyShown });
         return;
       }
+      if (mod && (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'h') && !e.altKey) {
+        e.preventDefault();
+        setEditingId(null);
+        setFindOpen(true);
+        return;
+      }
       if (isTyping(e.target)) return;
       if (mod && e.key.toLowerCase() === 'z') {
         e.preventDefault();
@@ -556,8 +579,9 @@ export default function Editor({ initial, onClose }: Props) {
     return items;
   }
 
-  function pickIssue(id: string) {
-    setSelectedId(id);
+  function pickIssue(id: string, ids?: string[]) {
+    if (ids) setSelectedIds(ids);
+    else setSelectedId(id);
     posterNode.current?.querySelector(`[data-id="${id}"]`)?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
   }
 
@@ -623,6 +647,7 @@ export default function Editor({ initial, onClose }: Props) {
           Check
           {issues.filter((i) => i.severity !== 'tip').length > 0 && <span className="badge">{issues.filter((i) => i.severity !== 'tip').length}</span>}
         </button>
+        <button className={'btn' + (findOpen ? ' active' : '')} onClick={() => setFindOpen(!findOpen)} title="Find and replace words on the poster (Ctrl/⌘ F)">Find</button>
         <button className="btn" onClick={() => setViewing(true)}>View</button>
         <button className="btn" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
         <div className="menu-wrap">
@@ -634,6 +659,7 @@ export default function Editor({ initial, onClose }: Props) {
                   className="menu-warn"
                   onClick={() => {
                     setExportOpen(false);
+                    setCheckTab('problems');
                     setCheckOpen(true);
                   }}
                 >
@@ -768,7 +794,45 @@ export default function Editor({ initial, onClose }: Props) {
         />
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
-      {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
+      {checkOpen && (
+        <CheckPanel
+          issues={issues}
+          poster={poster}
+          tab={checkTab}
+          onTab={setCheckTab}
+          onPick={pickIssue}
+          onPickMany={(ids) => ids[0] && pickIssue(ids[0], ids)}
+          onFixWord={(word, replacement) => {
+            setEditingId(null);
+            let n = 0;
+            update((d) => {
+              n = replaceAllInPoster(d, word, replacement, { matchCase: true, wholeWord: true });
+            });
+            notify(`Changed “${word}” to “${replacement}”${n > 1 ? ` in ${n} places` : ''}.`);
+          }}
+          onIgnoreWord={(word) =>
+            update((d) => {
+              const list = d.ignoredWords ?? [];
+              if (!list.some((w) => ignoreKey(w) === ignoreKey(word))) d.ignoredWords = [...list, word];
+            })
+          }
+          onWordLimit={(n) => update((d) => void (d.wordLimit = n), 'word-limit')}
+          onClose={() => setCheckOpen(false)}
+        />
+      )}
+      {findOpen && (
+        <FindPanel
+          poster={poster}
+          posterNode={posterNode.current}
+          onPick={(id) => pickIssue(id)}
+          onChange={(fn) => {
+            setEditingId(null);
+            update(fn);
+          }}
+          onNotify={notify}
+          onClose={() => setFindOpen(false)}
+        />
+      )}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
       {toast && <div className="toast">{toast}</div>}
       {marquee && (

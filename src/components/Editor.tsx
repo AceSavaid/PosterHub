@@ -34,6 +34,8 @@ import { replaceColor } from '../lib/printColor';
 import { BLEED_CHOICES } from '../lib/print';
 import { NotesLayer, NotesPanel } from './ReviewNotes';
 import { cleanText, createNote, loadReviewerName, MAX_NOTE_LENGTH, notePositionFor, openNotes, saveReviewerName } from '../lib/notes';
+import VisionMenu, { VisionBanner, VisionFilters, visionFilter } from './VisionFilters';
+import type { VisionMode } from '../lib/colorVision';
 
 /** Start of the example reference in starter templates. */
 const EXAMPLE_REFS = 'Author, A. (2025). Title of work';
@@ -99,6 +101,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       setNotesOpen(false);
     }
   }, []);
+  const [vision, setVision] = useState<VisionMode>('normal');
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -873,7 +876,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const badge = { count: problems || issues.filter((i) => i.severity === 'warning' && !i.leftover).length, urgent: problems > 0 };
 
-  if (viewing) return <ViewMode poster={poster} onClose={() => setViewing(false)} />;
+  if (viewing) return <ViewMode poster={poster} vision={vision} onVision={setVision} onClose={() => setViewing(false)} />;
 
   return (
     <div className="editor" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
@@ -911,6 +914,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap while dragging
           </label>
         </AppearanceMenu>
+        <VisionMenu mode={vision} onChange={setVision} />
         <span className="sep" />
         <button
           className={'btn check-btn notes-btn' + (notesOpen ? ' active' : '')}
@@ -1070,7 +1074,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             setZoom((z) => Math.max(0.02, Math.min(4, z * (e.deltaY < 0 ? 1.1 : 1 / 1.1))));
           }}
         >
-          <div className="stage-inner">
+          <VisionBanner mode={vision} onChange={setVision} />
+          <div className="stage-inner" style={{ filter: visionFilter(vision) }}>
             <Canvas
               ref={posterNode}
               poster={poster}
@@ -1176,6 +1181,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           onTab={setCheckTab}
           onPick={pickIssue}
           onPickNote={pickNote}
+          onPreview={setVision}
           onFix={fixIssue}
           onPickMany={(ids) => ids[0] && pickIssue(ids[0], ids)}
           onFixWord={(word, replacement) => {
@@ -1232,6 +1238,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           onClose={() => setNotesOpen(false)}
         />
       )}
+      <VisionFilters />
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
       {authorsDialog && <AuthorsDialog initial={authorsDialog.initial} replacing={authorsDialog.replacing} onSave={saveAuthors} onCancel={() => setAuthorsDialog(null)} />}
       {confirmDelete && (

@@ -3,9 +3,18 @@ import type { Poster } from '../types';
 import { MM_TO_PX } from '../model';
 import { ElementView, Surface } from './Surface';
 import { DISTANCES, distanceZoom, hardToReadAt, readablePtAt } from '../lib/distance';
+import { VISION_MODES, type VisionMode } from '../lib/colorVision';
+import { VisionFilters, visionFilter } from './VisionFilters';
 
 /** Read-only presentation of the poster, fitted to the screen. Click to toggle 100% zoom. */
-export default function ViewMode({ poster, onClose }: { poster: Poster; onClose: () => void }) {
+interface Props {
+  poster: Poster;
+  onClose: () => void;
+  vision?: VisionMode;
+  onVision?: (m: VisionMode) => void;
+}
+
+export default function ViewMode({ poster, onClose, vision = 'normal', onVision }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const [fit, setFit] = useState(0.2);
   const [zoomed, setZoomed] = useState(false);
@@ -49,9 +58,19 @@ export default function ViewMode({ poster, onClose }: { poster: Poster; onClose:
             ))}
           </select>
         </label>
+        {onVision && (
+          <select className="vision-select" aria-label="See the poster as" value={vision} onChange={(e) => onVision(e.target.value as VisionMode)}>
+            {VISION_MODES.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.id === 'normal' ? 'Normal colours' : `${m.label} (${m.plain.split(',')[0].toLowerCase()})`}
+              </option>
+            ))}
+          </select>
+        )}
         <button className="btn" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : ref.current?.requestFullscreen())}>Full screen</button>
         <button className="btn primary" onClick={onClose}>Back to editing</button>
       </div>
+      <VisionFilters />
       {distance > 0 && (
         <div className="distance-note" role="status">
           <span>
@@ -63,7 +82,7 @@ export default function ViewMode({ poster, onClose }: { poster: Poster; onClose:
           </label>
         </div>
       )}
-      <div className={'view-stage' + (distance ? ' distance' : zoomed ? ' zoomed' : '')} onClick={() => !distance && setZoomed((z) => !z)}>
+      <div className={'view-stage' + (distance ? ' distance' : zoomed ? ' zoomed' : '')} style={{ filter: visionFilter(vision) }} onClick={() => !distance && setZoomed((z) => !z)}>
         <Surface poster={poster} zoom={zoom} renderElement={(el) => <ElementView key={el.id} el={el} poster={poster} className={small.has(el.id) ? 'too-small' : undefined} />} />
       </div>
     </div>

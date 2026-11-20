@@ -156,7 +156,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 /* ---------------- Editor layout */
 .editor { height: 100%; display: flex; flex-direction: column; background: var(--bg); }
 .topbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--bg); flex-wrap: wrap; position: relative; z-index: 26; } /* above the Check and Notes panels so the Export menu opens over them */
-.poster-name { width: 200px; flex: 0 1 200px; min-width: 110px; border-color: transparent; font-weight: 600; font-size: 15px; }
+.poster-name { width: 160px; flex: 0 1 160px; min-width: 110px; border-color: transparent; font-weight: 600; font-size: 15px; }
 .poster-name:hover, .poster-name:focus { border-color: var(--line); }
 .save-state { min-width: 52px; }
 .zoom-label { min-width: 56px; }
@@ -331,6 +331,16 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .issue .issue-fix { width: auto; margin: 4px 0 2px 34px; padding: 4px 10px; align-items: center; gap: 6px; font-size: 12px; border-left: 1px solid var(--line) !important; }
 .issue-fix .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line); display: inline-block; }
 .issue-detail { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 2px; }
+.issue .issue-preview { display: inline-flex; width: auto; margin: 2px 0 2px 34px; padding: 3px 8px; border: 1px solid var(--line); border-left-width: 1px !important; border-radius: 6px; font-size: 12px; color: var(--fg); background: var(--bg2); }
+
+/* ---------------- Colour vision preview */
+.icon-btn.active { background: var(--accent-soft); border-color: var(--accent); }
+.vision-menu { width: 280px; padding: 10px; gap: 2px; }
+.vision-menu .vision-option { width: 100%; }
+.vision-menu .vision-option.active { background: var(--accent-soft); }
+.vision-menu .hint { margin: 6px 4px 0; }
+.vision-banner { position: sticky; top: 0; left: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 6px 12px; background: var(--accent-soft); border-bottom: 1px solid var(--accent); color: var(--fg); font-size: 13px; }
+.view-bar .vision-select { font-size: 13px; }
 .menu .menu-warn { background: #fdecea; margin-bottom: 4px; }
 .menu .menu-warn:hover { background: #fbd9d5; }
 .menu .menu-warn strong { color: #8a1c1c; }

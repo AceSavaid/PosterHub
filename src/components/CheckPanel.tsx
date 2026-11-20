@@ -4,10 +4,13 @@ import type { Poster } from '../types';
 import { findMisspellings, loadSpeller, type Misspelling, type Speller } from '../lib/spelling';
 import { htmlToText, wordCount } from '../lib/textTools';
 import { visionInfo, type VisionMode } from '../lib/colorVision';
+import { conferenceResults, hasRules } from '../lib/conference';
+import { SIZE_PRESETS, IN_TO_MM } from '../model';
+import type { ConferenceRules } from '../types';
 
 const ICON = { problem: '⛔', warning: '⚠️', tip: '💡' };
 
-export type CheckTab = 'problems' | 'spelling' | 'words';
+export type CheckTab = 'problems' | 'spelling' | 'words' | 'conference';
 
 interface Props {
   issues: Issue[];
@@ -23,6 +26,8 @@ interface Props {
   onFixWord: (word: string, replacement: string) => void;
   onIgnoreWord: (word: string) => void;
   onWordLimit: (limit: number | undefined) => void;
+  /** set or clear the conference's rules; `key` merges typing into one undo step */
+  onConference?: (rules: ConferenceRules | undefined, key?: string) => void;
   /** Applies an issue's one-click fix (e.g. swap a colour for a printable one). */
   onFix?: (issue: Issue) => void;
   onClose: () => void;
@@ -38,6 +43,7 @@ export default function CheckPanel(props: Props) {
     { id: 'problems', label: problems ? `Problems (${problems})` : 'Problems' },
     { id: 'spelling', label: 'Spelling' },
     { id: 'words', label: 'Words' },
+    { id: 'conference', label: 'Conference' },
   ];
   return (
     <div className="check-panel" role="dialog" aria-label="Poster check">
@@ -55,6 +61,7 @@ export default function CheckPanel(props: Props) {
       {tab === 'problems' && <Problems {...props} />}
       {tab === 'spelling' && <Spelling {...props} />}
       {tab === 'words' && <Words {...props} />}
+      {tab === 'conference' && <Conference {...props} />}
     </div>
   );
 }
@@ -229,6 +236,162 @@ function Words({ poster, onPickMany, onWordLimit }: Props) {
       <p className="muted small">
         A section is a header and the text boxes below it in the same column. Graph labels and text inside images are not counted. If your conference sets a limit, enter it and the check will warn you when you go over.
       </p>
+    </div>
+  );
+}
+
+type Unit = 'mm' | 'in';
+
+/** The conference's rules for posters, and a tick or cross for each. */
+function Conference({ poster, onConference, onPickMany, onWordLimit }: Props) {
+  const rules: ConferenceRules = poster.conference ?? {};
+  // inches when the rule (or the poster) is a US size, else mm
+  const [unit, setUnit] = useState<Unit>(() => {
+    const w = rules.width ?? poster.width;
+    return Math.abs(w / IN_TO_MM - Math.round(w / IN_TO_MM)) < 0.02 ? 'in' : 'mm';
+  });
+  const set = (patch: Partial<ConferenceRules>, key = 'conference') => {
+    const next: ConferenceRules = { ...rules, ...patch };
+    for (const k of Object.keys(next) as (keyof ConferenceRules)[]) if (next[k] === undefined || next[k] === '' || next[k] === false) delete next[k];
+    onConference?.(Object.keys(next).length ? next : undefined, key);
+  };
+  const results = conferenceResults(poster);
+  const preset = rules.width && rules.height ? SIZE_PRESETS.find((p) => Math.abs(p.w - Math.min(rules.width!, rules.height!)) < 1 && Math.abs(p.h - Math.max(rules.width!, rules.height!)) < 1)?.id ?? 'custom' : '';
+  const toUnit = (v?: number) => (v == null ? '' : unit === 'in' ? +(v / IN_TO_MM).toFixed(2) : Math.round(v));
+  const fromUnit = (s: string) => {
+    const n = parseFloat(s);
+    return Number.isFinite(n) && n > 0 ? (unit === 'in' ? n * IN_TO_MM : n) : undefined;
+  };
+  const num = (s: string) => {
+    const n = parseFloat(s);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  const passed = results.filter((r) => r.ok).length;
+
+  return (
+    <div className="conference-tab">
+      <p className="muted small">Copy the rules from the conference's poster instructions. Only what you fill in is checked, and anything not met shows up under Problems.</p>
+      <label>
+        Conference name
+        <input placeholder="e.g. ISMB 2026" value={rules.name ?? ''} onChange={(e) => set({ name: e.target.value }, 'conf-name')} />
+      </label>
+
+      <fieldset className="conf-group">
+        <legend>Size</legend>
+        <label>
+          Required size
+          <select
+            value={preset}
+            onChange={(e) => {
+              const p = SIZE_PRESETS.find((x) => x.id === e.target.value);
+              if (e.target.value === '') set({ width: undefined, height: undefined, sizeMode: undefined });
+              else if (p) set({ width: p.w, height: p.h, sizeMode: rules.sizeMode ?? 'exact' });
+              else set({ width: rules.width ?? poster.width, height: rules.height ?? poster.height, sizeMode: rules.sizeMode ?? 'exact' });
+            }}
+          >
+            <option value="">No size rule</option>
+            {SIZE_PRESETS.map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+            <option value="custom">Custom…</option>
+          </select>
+        </label>
+        {rules.width && rules.height && (
+          <>
+            <div className="row2">
+              <label>
+                Width ({unit})
+                <input type="number" min={1} step={unit === 'in' ? 0.5 : 1} value={toUnit(rules.width)} onChange={(e) => set({ width: fromUnit(e.target.value) }, 'conf-w')} />
+              </label>
+              <label>
+                Height ({unit})
+                <input type="number" min={1} step={unit === 'in' ? 0.5 : 1} value={toUnit(rules.height)} onChange={(e) => set({ height: fromUnit(e.target.value) }, 'conf-h')} />
+              </label>
+            </div>
+            <div className="row2">
+              <label>
+                Units
+                <select value={unit} onChange={(e) => setUnit(e.target.value as Unit)}>
+                  <option value="mm">mm</option>
+                  <option value="in">inches</option>
+                </select>
+              </label>
+              <label>
+                Size must be
+                <select value={rules.sizeMode ?? 'exact'} onChange={(e) => set({ sizeMode: e.target.value as 'exact' | 'max' })}>
+                  <option value="exact">Exactly this</option>
+                  <option value="max">This or smaller</option>
+                </select>
+              </label>
+            </div>
+          </>
+        )}
+        <label>
+          Orientation
+          <select value={rules.orientation ?? ''} onChange={(e) => set({ orientation: (e.target.value || undefined) as ConferenceRules['orientation'] })}>
+            <option value="">Either</option>
+            <option value="portrait">Portrait (tall)</option>
+            <option value="landscape">Landscape (wide)</option>
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset className="conf-group">
+        <legend>Content</legend>
+        <div className="row2">
+          <label>
+            Smallest text (pt)
+            <input type="number" min={1} placeholder="None" value={rules.minFontPt ?? ''} onChange={(e) => set({ minFontPt: num(e.target.value) }, 'conf-pt')} />
+          </label>
+          <label>
+            Word limit
+            <input
+              type="number"
+              min={0}
+              step={50}
+              placeholder="None"
+              value={poster.wordLimit ?? ''}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10);
+                onWordLimit(Number.isFinite(n) && n > 0 ? n : undefined);
+              }}
+            />
+          </label>
+        </div>
+        <div className="row2">
+          <label>
+            Poster number
+            <input placeholder="e.g. P-142" value={rules.posterNumber ?? ''} onChange={(e) => set({ posterNumber: e.target.value }, 'conf-num')} />
+          </label>
+          <label>
+            Logos needed
+            <input type="number" min={0} max={20} placeholder="None" value={rules.logos ?? ''} onChange={(e) => set({ logos: num(e.target.value) && Math.round(num(e.target.value)!) }, 'conf-logos')} />
+          </label>
+        </div>
+        <label className="toggle">
+          <input type="checkbox" checked={!!rules.requireQr} onChange={(e) => set({ requireQr: e.target.checked })} /> A QR code is required
+        </label>
+      </fieldset>
+
+      {hasRules(poster.conference) ? (
+        <>
+          <h4 className="conf-summary">{passed === results.length ? `All ${results.length} rules met` : `${passed} of ${results.length} rules met`}</h4>
+          <ul className="conf-results" aria-label="Conference rules">
+            {results.map((r) => (
+              <li key={r.id} className={r.ok ? 'ok' : 'fail'}>
+                <button disabled={!r.elementIds?.length} onClick={() => r.elementIds?.length && onPickMany(r.elementIds)}>
+                  <span className="conf-mark" aria-label={r.ok ? 'Met' : 'Not met'}>{r.ok ? '✓' : '✕'}</span>
+                  <span>
+                    <strong>{r.rule}</strong>
+                    <span className="issue-detail">{r.detail}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button className="btn small-btn" onClick={() => onConference?.(undefined)}>Clear conference rules</button>
+        </>
+      ) : null}
     </div>
   );
 }

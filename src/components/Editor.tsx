@@ -1388,6 +1388,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             })
           }
           onWordLimit={(n) => update((d) => void (d.wordLimit = n), 'word-limit')}
+          onConference={(rules, key) => update((d) => void (rules ? (d.conference = rules) : delete d.conference), key)}
           onClose={() => setCheckOpen(false)}
         />
       )}

@@ -11,6 +11,7 @@ import { authorName, openNotes, preview } from './notes';
 import { seriesColors, seriesData } from './chart';
 import { confusablePairs, visionInfo, type VisionMode } from './colorVision';
 import { normalizeTable } from './table';
+import { conferenceIssues } from './conference';
 
 export type Severity = 'problem' | 'warning' | 'tip';
 
@@ -161,6 +162,8 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
 
   if (!p.elements.length) {
     issues.push({ id: 'empty', severity: 'tip', title: 'The poster is empty', detail: 'Add a title from the Insert panel, or pick a layout under Layout → Switch layout.' });
+    // size and orientation rules apply before anything is on the page
+    issues.push(...conferenceIssues(p));
     return issues;
   }
 
@@ -287,6 +290,8 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
       issues.push({ id: 'word-limit', severity: 'warning', title: `${total - p.wordLimit} words over the limit`, detail: `The poster has ${total} words and the limit is ${p.wordLimit}. The Words tab shows which sections are longest.` });
     }
   }
+  // ---- the conference's own rules (set in the Conference tab)
+  issues.push(...conferenceIssues(p));
   // ---- colours that screens can show but ink cannot
   issues.push(...dullColorIssues(p));
 

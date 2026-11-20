@@ -2,6 +2,7 @@
 // imported PowerPoints, the clipboard) so a booby-trapped file cannot run
 // code or pull things in from the web when a poster is shown.
 import DOMPurify from 'dompurify';
+import { cleanRules } from './conference';
 import type { Poster, PosterElement } from '../types';
 
 /** The formatting tags text boxes use. Anything else is dropped, keeping its text. */
@@ -75,5 +76,10 @@ export function sanitizePoster(p: Poster): Poster {
   p.googleFonts = (Array.isArray(p.googleFonts) ? p.googleFonts : []).map(fontName).filter(Boolean);
   if (p.backgroundImage != null && !safeImageUrl(p.backgroundImage)) delete p.backgroundImage;
   if (p.thumbnail != null && !safeImageUrl(p.thumbnail)) delete p.thumbnail;
+  if (p.conference != null) {
+    const rules = cleanRules(p.conference);
+    if (rules) p.conference = rules;
+    else delete p.conference;
+  }
   return p;
 }

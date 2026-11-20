@@ -16,7 +16,7 @@ Make research and academic posters in your browser. No account, no install: ever
 - **PowerPoint templates**: import a `.pptx` or `.potx` template; its size, colours, fonts, background, shapes, text and pictures come across.
 - **My posters**: every poster autosaves to a library in your browser, with thumbnails, rename, duplicate and delete.
 - **Export**: print-quality vector PDF (real, selectable text with embedded fonts, vector shapes and charts, full-resolution photos, so it stays sharp at A0 and beyond), PowerPoint (editable text, shapes and native charts), PNG, or a `.poster.json` project file you can back up or open on another computer.
-- **Share and present**: copy the poster as an image to paste anywhere, or open View mode to present it full screen.
+- **Share and present**: copy the poster as an image to paste anywhere, or open View mode to present it full screen. View mode can also show the poster as it looks from 1, 2 or 3 m away and mark text too small to read from there.
 
 ## Development
 

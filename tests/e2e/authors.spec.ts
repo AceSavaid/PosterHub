@@ -69,10 +69,15 @@ test("fills a template's author line instead of adding a new box", async ({ page
   await page.getByRole('button', { name: 'Authors and affiliations…' }).click();
   await dialog(page).getByLabel('Institution 1', { exact: true }).fill('University A');
   await dialog(page).getByLabel('Author 1 name', { exact: true }).fill('Ana Silva');
+  await dialog(page).getByLabel('Contact email', { exact: true }).fill('ana@univ-a.edu');
   await dialog(page).getByRole('button', { name: 'Add to poster' }).click();
   await expect(page.locator('.poster > .el')).toHaveCount(count);
   await expect(placeholder).toHaveCount(0);
-  await expect(page.locator('.poster > .el', { hasText: 'Ana Silva*' })).toHaveCount(1);
+  const filled = page.locator('.poster > .el', { hasText: 'Ana Silva*' });
+  await expect(filled).toHaveCount(1);
+  // the box grows so the affiliation and contact lines aren't cut off
+  await expect(filled).toContainText('*Contact: ana@univ-a.edu');
+  await expect(filled).not.toHaveAttribute('data-overflow', 'true');
 });
 
 test('Escape closes the dialog without changes', async ({ page }) => {

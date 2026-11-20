@@ -54,7 +54,7 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
           <span aria-hidden className="ib-icon t-sub">T</span>Subtitle
         </button>
         <button className="insert-btn" onClick={onInsertAuthors}>
-          <span aria-hidden className="ib-icon t-sub">¹²</span>Authors and affiliations…
+          <span aria-hidden className="ib-icon t-sub">A¹</span>Authors and affiliations…
         </button>
         <button className="insert-btn" onClick={() => onInsert('heading')}>
           <span aria-hidden className="ib-icon t-head">H</span>Section header

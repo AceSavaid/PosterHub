@@ -228,6 +228,7 @@ export default function Editor({ initial, onClose }: Props) {
 
   function saveAuthors(list: AuthorList, html: string) {
     const id = authorsDialog?.id;
+    let target = id;
     if (id && posterRef.current.elements.some((e) => e.id === id)) {
       updateElement(id, { authors: list, html });
       setSelectedId(id);
@@ -237,8 +238,16 @@ export default function Editor({ initial, onClose }: Props) {
       el.html = html;
       el.h = el.h * 1.6; // room for the affiliation and contact lines
       addElement(el);
+      target = el.id;
     }
     setAuthorsDialog(null);
+    // Make the affiliation and contact lines fit: a new box grows, while a box that
+    // sits in a template slot (e.g. a header band) keeps its size and its text shrinks.
+    const isNew = target !== id;
+    setTimeout(() => {
+      const n = target ? textNode(target) : null;
+      if (n && n.scrollHeight > n.clientHeight + 1) (isNew ? growToFit : shrinkToFit)(target);
+    }, 50);
   }
 
   function removeSelected() {
@@ -291,18 +300,18 @@ export default function Editor({ initial, onClose }: Props) {
     setOverflow(!!n && n.scrollHeight > n.clientHeight + 1);
   });
 
-  function growToFit() {
-    const n = selectedId && textNode(selectedId);
+  function growToFit(id = selectedId) {
+    const n = id && textNode(id);
     if (!n) return;
-    const el = posterRef.current.elements.find((e) => e.id === selectedId)!;
+    const el = posterRef.current.elements.find((e) => e.id === id)!;
     const extra = el.h * MM_TO_PX - n.clientHeight; // padding + border
     updateElement(el.id, { h: (n.scrollHeight + extra) / MM_TO_PX + 0.5 });
   }
 
-  function shrinkToFit() {
-    const n = selectedId && textNode(selectedId);
+  function shrinkToFit(id = selectedId) {
+    const n = id && textNode(id);
     if (!n) return;
-    const el = posterRef.current.elements.find((e) => e.id === selectedId)!;
+    const el = posterRef.current.elements.find((e) => e.id === id)!;
     const original = n.style.fontSize;
     let size = el.style!.fontSize;
     while (size > 4 && n.scrollHeight > n.clientHeight + 1) {
@@ -807,8 +816,8 @@ export default function Editor({ initial, onClose }: Props) {
             onGroup={canGroup(selectedIds, poster.elements) ? groupSelected : undefined}
             onUngroup={canUngroup(selectedIds, poster.elements) ? ungroupSelected : undefined}
             overflow={overflow}
-            onShrinkText={shrinkToFit}
-            onGrowBox={growToFit}
+            onShrinkText={() => shrinkToFit()}
+            onGrowBox={() => growToFit()}
             onAlign={(mode) => arrange((els, d) => align(els, mode, { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin }))}
             onDistribute={(axis) => arrange((els) => distribute(els, axis))}
             onMatchSize={(dim) => arrange((els) => matchSize(els, dim))}

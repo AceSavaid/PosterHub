@@ -1,17 +1,35 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Orientation, Palette, PosterElement } from '../types';
 import { PALETTES, SIZE_PRESETS, TEMPLATES, columnLefts, columnWidth, createPoster, resolveColor, sizeFor, type TemplateId, POPULAR_GOOGLE_FONTS, SYSTEM_FONTS } from '../model';
 import type { Poster } from '../types';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
 import { useDialog } from '../lib/useDialog';
+import { addKitFonts, fillLogoSpots, kitPalette, useBrandKit, type BrandKit } from '../lib/brandKit';
+import { kitFontChoices } from './BrandKitDialog';
 
 interface Props {
   onCreate: (p: Poster) => void;
   onCancel: () => void;
+  /** opens the brand kit editor (shown when no kit is set up yet) */
+  onSetUpKit?: () => void;
 }
 
-export default function NewPosterDialog({ onCreate, onCancel }: Props) {
+const DEFAULT_LOOK = { palette: PALETTES[0], headingFont: 'Montserrat', bodyFont: 'Open Sans' };
+
+/** Builds the poster the dialog describes, starting it with the brand kit's fonts and logos when one is used. */
+export function buildNewPoster(o: Parameters<typeof createPoster>[0], kit: BrandKit | null) {
+  const p = createPoster(o);
+  if (kit) {
+    addKitFonts(p, kit);
+    fillLogoSpots(p, kit);
+  }
+  return p;
+}
+
+export default function NewPosterDialog({ onCreate, onCancel, onSetUpKit }: Props) {
+  const [kit] = useBrandKit();
+  const [useKit, setUseKit] = useState(false);
   const [name, setName] = useState('');
   const [orientation, setOrientation] = useState<Orientation>('portrait');
   const [preset, setPreset] = useState('A0');
@@ -22,7 +40,21 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
   const [headingFont, setHeadingFont] = useState('Montserrat');
   const [bodyFont, setBodyFont] = useState('Open Sans');
 
-  const fonts = [...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS];
+  // When a kit has been set up, new posters start with it.
+  useEffect(() => {
+    if (kit) applyLook(true);
+  }, [kit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function applyLook(on: boolean) {
+    setUseKit(on);
+    const look = on && kit ? { palette: kitPalette(kit), headingFont: kit.headingFont, bodyFont: kit.bodyFont } : DEFAULT_LOOK;
+    setPalette(look.palette);
+    setHeadingFont(look.headingFont);
+    setBodyFont(look.bodyFont);
+  }
+
+  const fonts = kit ? kitFontChoices(kit) : [...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS];
+  const activeKit = useKit && kit ? kit : null;
   const dialog = useDialog<HTMLFormElement>(onCancel, 'new-poster-title');
 
   return (
@@ -34,7 +66,7 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
         aria-label="New poster"
         onSubmit={(e) => {
           e.preventDefault();
-          onCreate(createPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }));
+          onCreate(buildNewPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }, activeKit));
         }}
       >
         <h2 id="new-poster-title">New poster</h2>
@@ -43,6 +75,27 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
             Name
             <input autoFocus value={name} placeholder="e.g. Conference 2026 – Sleep and memory" onChange={(e) => setName(e.target.value)} />
           </label>
+          {kit && (
+            <div className="span2 kit-choice">
+              <div className="kit-logo-row">
+                {kit.logos.slice(0, 3).map((l) => <img key={l.id} src={l.src} alt="" />)}
+              </div>
+              <div className="kit-text">
+                <label className="check">
+                  <input type="checkbox" checked={useKit} onChange={(e) => applyLook(e.target.checked)} /> Start with my brand kit{kit.name ? ` (${kit.name})` : ''}
+                </label>
+                <span className="hint">
+                  Colours, fonts{kit.logos.length ? ` and ${kit.logos.length} logo${kit.logos.length > 1 ? 's' : ''}` : ''}. You can still change anything below.
+                </span>
+              </div>
+            </div>
+          )}
+          {kit === null && onSetUpKit && (
+            <p className="span2 hint">
+              Always use the same university colours and logos?{' '}
+              <button type="button" className="link" onClick={onSetUpKit}>Set up a brand kit</button>
+            </p>
+          )}
           <div className="span2">
             <div className="field-label">Layout <span className="muted">· previews follow the colours, size and columns you pick below</span></div>
             <div className="template-grid">
@@ -57,7 +110,7 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
           </div>
           <div className="span2">
             <div className="field-label">Colour palette</div>
-            <PaletteSwatches value={palette.name} onPick={setPalette} />
+            <PaletteSwatches value={palette.name} onPick={setPalette} extra={kit ? [kitPalette(kit)] : []} />
           </div>
           <SizeFields
             orientation={orientation}

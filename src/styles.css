@@ -593,3 +593,18 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Brand kit */
+.kit-roles { margin: 10px 0 8px; }
+.kit-roles .hex { width: 76px; font-family: ui-monospace, monospace; font-size: 12px; padding: 3px 6px; }
+.kit-logos { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 6px; }
+.kit-logos li { display: flex; align-items: center; gap: 6px; }
+.kit-logos img { width: 64px; height: 40px; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 6px; flex: none; }
+.kit-actions { flex-wrap: wrap; }
+.btn.ghost.danger { background: transparent; border-color: transparent; color: var(--danger); font-weight: 400; }
+.btn.ghost.danger:hover { background: var(--bg3); }
+.kit-choice { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg2); }
+.kit-choice .kit-logo-row { display: flex; gap: 4px; }
+.kit-choice .kit-logo-row img { height: 26px; max-width: 70px; object-fit: contain; background: #fff; border-radius: 4px; }
+.kit-choice .kit-text { flex: 1; min-width: 0; }
+.inline.wrap { flex-wrap: wrap; }

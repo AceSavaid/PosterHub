@@ -10,6 +10,7 @@ import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fon
 import { importPptx } from '../lib/pptxImport';
 import { askConfirm } from '../lib/dialogs';
 import { SHAPE_CHOICES } from '../lib/shapes';
+import { applyBrandKit, brandKitFromPoster, emptyLogoSpots, useBrandKit } from '../lib/brandKit';
 
 type Tab = 'insert' | 'layout' | 'design';
 
@@ -219,6 +220,29 @@ function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
 
 function DesignTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' | 'notify'>) {
   const [gfont, setGfont] = useState('');
+  const [kit, saveKit] = useBrandKit();
+
+  function applyKit() {
+    if (!kit) return;
+    const spots = emptyLogoSpots(poster).length;
+    kit.customFonts.forEach(registerCustomFont);
+    update((d) => void applyBrandKit(d, kit));
+    const filled = Math.min(spots, kit.logos.length);
+    notify(`Applied your brand kit${filled ? ` and filled ${filled} logo spot${filled > 1 ? 's' : ''}` : ''}. Press Undo to go back.`);
+  }
+
+  async function saveAsKit() {
+    if (kit && !(await askConfirm('Replace your brand kit?', `Your brand kit will take this poster's colours, fonts and any logos in its logo spots. New posters will start with them.`, 'Replace kit'))) return;
+    try {
+      const next = brandKitFromPoster(poster, kit?.name ?? '');
+      // A poster with empty logo spots shouldn't wipe the kit's logos.
+      if (!next.logos.length && kit) next.logos = kit.logos;
+      await saveKit(next);
+      notify('Saved as your brand kit. New posters can now start with this look.');
+    } catch (e) {
+      notify('Could not save the brand kit: ' + String(e));
+    }
+  }
 
   async function addGoogle() {
     const name = gfont.trim().replace(/\s+/g, ' ');
@@ -326,6 +350,19 @@ function DesignTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
           )}
         </div>
       </div>
+
+      <h3>Brand kit</h3>
+      <div className="inline wrap">
+        {kit && (
+          <button className="btn" onClick={applyKit}>
+            Apply my brand kit
+          </button>
+        )}
+        <button className="btn" onClick={saveAsKit}>
+          {kit ? 'Update kit from this poster' : 'Save this look as my brand kit'}
+        </button>
+      </div>
+      <p className="hint">{kit ? `Your kit${kit.name ? ` “${kit.name}”` : ''}: colours, fonts and ${kit.logos.length} logo${kit.logos.length === 1 ? '' : 's'}. Set it up from My posters → Brand kit.` : 'Keep your university colours, fonts and logos for every new poster.'}</p>
 
       <h3>Background</h3>
       <div className="inline">

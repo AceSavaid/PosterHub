@@ -156,7 +156,9 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 /* ---------------- Editor layout */
 .editor { height: 100%; display: flex; flex-direction: column; background: var(--bg); }
 .topbar { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--bg); flex-wrap: wrap; position: relative; z-index: 26; } /* above the Check and Notes panels so the Export menu opens over them */
-.poster-name { width: 160px; flex: 0 1 160px; min-width: 110px; border-color: transparent; font-weight: 600; font-size: 15px; }
+/* On laptop-size screens and up, keep one row: the poster name narrows instead of Export wrapping onto a second line. */
+@media (min-width: 1240px) { .topbar { flex-wrap: nowrap; } .topbar > * { flex-shrink: 0; } .topbar > .poster-name { flex-shrink: 1; } }
+.poster-name { width: 160px; flex: 0 1 160px; min-width: 90px; border-color: transparent; font-weight: 600; font-size: 15px; }
 .poster-name:hover, .poster-name:focus { border-color: var(--line); }
 .save-state { min-width: 52px; }
 .zoom-label { min-width: 56px; }

@@ -14,6 +14,8 @@ async function pasteTable(page: Page, text: string, alsoPlot: string[] = []) {
     dt.setData('text/plain', t);
     document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
   }, text);
+  // pasted cells become a table; the toast offers a graph instead
+  await page.getByRole('button', { name: 'Make a graph instead' }).click();
   for (const c of alsoPlot) await page.getByRole('checkbox', { name: c, exact: true }).check();
   await page.getByRole('button', { name: 'Add graph to poster' }).click();
   await expect(page.locator('.poster .el-chart canvas')).toBeVisible();

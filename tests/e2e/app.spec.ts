@@ -431,6 +431,7 @@ test.describe('graphs', () => {
     await newPoster(page, { template: 'Blank' });
     const rows = ['Condition\tScore\tDose', ...['Control\t10\t1', 'Control\t12\t2', 'Control\t11\t3', 'Control\t30\t4', 'Drug\t20\t5', 'Drug\t22\t6', 'Drug\t21\t7', 'Drug\t24\t8']];
     await paste(page, { 'text/plain': rows.join('\n') });
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
 
@@ -466,7 +467,10 @@ test.describe('graphs', () => {
   test('builds a graph from pasted spreadsheet data', async ({ page }) => {
     await newPoster(page, { template: 'Blank' });
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1\nB\t3\nC\t2' });
+    // Pasted cells become a table first; one click turns them into a graph instead.
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
     await expect(page.getByRole('heading', { name: 'Graph from CSV' })).toBeVisible();
+    await expect(page.locator('.poster .poster-table')).toHaveCount(0);
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
     await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
   });
@@ -487,6 +491,7 @@ test.describe('export, import and sharing', () => {
     await newPoster(page, { name: 'Export test', size: 'A3' });
     // add a chart so the PowerPoint has one
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1\nB\t3\nC\t2' });
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
 
     const pdf = await download(page, /^PDF/);
@@ -535,6 +540,7 @@ test.describe('export, import and sharing', () => {
       el.innerHTML = 'Mean <b>reaction time</b> fell, <i>p</i> &lt; 0.05, H<sub>2</sub>O, αβγ ± 2.<ul><li>First finding</li><li>Second finding</li></ul>';
     });
     await paste(page, { 'text/plain': 'Group\tScore\nControl\t1\nDrug\t3' });
+    await page.getByRole('button', { name: 'Make a graph instead' }).click();
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
 
     const pdf = await download(page, /^PDF/);

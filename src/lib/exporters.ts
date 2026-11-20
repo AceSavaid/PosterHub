@@ -6,6 +6,7 @@ import { downloadBlob, safeFileName } from './storage';
 import { histogramData, seriesData } from './chart';
 import { cleanHtml } from './sanitize';
 import { cropMarkLines, MARK_WIDTH_PT, printGeometry, type PrintOptions } from './print';
+import { CELL_PAD, cellLook, columnAlign, columnWeights, normalizeTable, type Border } from './table';
 
 const MAX_SIDE = 16000;
 const MAX_AREA = 120_000_000;
@@ -188,6 +189,13 @@ function cssColorToHex(c: string): string | undefined {
 const PPT_MAX_IN = 56;
 
 export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
+  const { pptx, k } = await buildPptx(p, chartImages);
+  await pptx.writeFile({ fileName: safeFileName(p.name) + '.pptx' });
+  return k;
+}
+
+/** Builds the PowerPoint in memory; `k` is the scale applied to fit PowerPoint's 56 inch limit. */
+export async function buildPptx(p: Poster, chartImages: Map<string, string> = new Map()) {
   const { default: PptxGenJS } = await import('pptxgenjs');
   const pptx = new PptxGenJS();
   let wIn = p.width * MM_TO_IN;
@@ -246,6 +254,10 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
         }
         break;
       }
+      case 'table':
+        if (fill) slide.addShape(pptx.ShapeType.rect, { ...box, fill, line } as never);
+        addTable(slide, e, box, p, k);
+        break;
       default: {
         const st = e.style!;
         if (e.html?.includes('<table') && addNativeTable(slide, e, box, p, k)) break;
@@ -272,8 +284,46 @@ export async function exportPptx(p: Poster, chartImages: Map<string, string>) {
       }
     }
   }
-  await pptx.writeFile({ fileName: safeFileName(p.name) + '.pptx' });
-  return k;
+  return { pptx, k };
+}
+
+/** A table element as a real, editable PowerPoint table in the same style. */
+function addTable(slide: any, e: PosterElement, box: { x: number; y: number; w: number; h: number }, p: Poster, k: number) {
+  const t = normalizeTable(e.table);
+  const pad = (e.padding ?? 0) * MM_TO_IN * k;
+  const inner = { x: box.x + pad, y: box.y + pad, w: Math.max(0.1, box.w - 2 * pad), h: Math.max(0.1, box.h - 2 * pad) };
+  const aligns = columnAlign(t);
+  const fs = t.fontSize * k;
+  // Cell margins in points (PptxGenJS reads values of 1 or more as points).
+  const mv = Math.max(1, fs * CELL_PAD.v);
+  const mh = Math.max(1, fs * CELL_PAD.h);
+  const edge = (b: Border | null) => (b ? { type: 'solid', pt: Math.max(0.25, b.pt * k), color: hex(b.color) } : { type: 'none' });
+  const rows = t.rows.map((row, r) =>
+    row.map((text, c) => {
+      const look = cellLook(t, p.palette, r, c);
+      return {
+        text,
+        options: {
+          fill: look.fill ? { color: hex(look.fill) } : undefined,
+          color: hex(look.color),
+          bold: look.bold,
+          align: aligns[c],
+          valign: 'middle',
+          margin: [mv, mh, mv, mh],
+          border: [edge(look.top), edge(look.right), edge(look.bottom), edge(look.left)],
+        },
+      };
+    }),
+  );
+  const weights = columnWeights(t);
+  const total = weights.reduce((a, b) => a + b, 0);
+  slide.addTable(rows, {
+    ...inner,
+    colW: weights.map((w) => (w / total) * inner.w),
+    rowH: inner.h / t.rows.length,
+    fontFace: resolveFont('@body', p),
+    fontSize: fs,
+  });
 }
 
 /** Exports a text element holding an HTML table (e.g. imported from PowerPoint) as a real PowerPoint table. */

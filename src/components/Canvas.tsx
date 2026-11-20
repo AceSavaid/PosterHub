@@ -9,6 +9,8 @@ import { elementLabel } from '../lib/a11y';
 
 import { resizeRotated, snapAngle, type Handle } from '../lib/geometry';
 const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+/** Touch screens get bigger resize and rotate handles. */
+const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 
 interface Props {
   poster: Poster;
@@ -159,11 +161,13 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       setGuides([]);
       setTimeout(() => (dragging.current = false), 0);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   /** Drag the round handle above the selection to rotate around the centre. */
@@ -184,10 +188,12 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       setAngle(null);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   function startGroupDrag(e: React.PointerEvent, ids: string[]) {
@@ -218,10 +224,12 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       setGuides([]);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   /** Resizing a whole group scales every member inside the group's box. */
@@ -253,9 +261,11 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   const groupSel = wholeGroup(selectedIds, poster.elements);
@@ -263,7 +273,9 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
   const groupLocked = !!groupSel && poster.elements.some((x) => selectedIds.includes(x.id) && x.locked);
   const selected = poster.elements.find((e) => e.id === selectedId);
   const others = selectedIds.length > 1 ? poster.elements.filter((e) => selectedIds.includes(e.id)) : [];
-  const hs = 10 / zoom; // handle size in poster px, constant on screen
+  // Handle size in poster px, constant on screen. Bigger for fingers, but never so big that the handles cover a small box.
+  const boxPx = selected ? Math.min(selected.w, selected.h) * MM_TO_PX * zoom : Infinity;
+  const hs = (COARSE ? Math.max(10, Math.min(22, boxPx / 3)) : 10) / zoom;
   const rotBelow = !!selected && selected.y * MM_TO_PX < 40 / zoom;
 
   return (

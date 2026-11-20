@@ -18,6 +18,8 @@ import { drawSvgMarkup } from './svgDraw';
 import { PT_TO_PX, layoutEquation, loadMath, mathSvg, svgDataUrl, typesetLatex } from '../math';
 import { multiply, rotate, translate } from './matrix';
 import { isCropped, placeImage, rad } from '../geometry';
+import { iconArt, iconColors, loadIcons } from '../icons/library';
+import { drawIcon } from './iconDraw';
 
 Chart.register(...registerables);
 
@@ -113,6 +115,7 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
 
   // Equations are typeset again here (same engine and layout as the editor) and drawn as paths.
   if (p.elements.some((e) => e.type === 'equation' && e.equation)) await loadMath();
+  if (p.elements.some((e) => e.type === 'icon' && e.icon)) await loadIcons();
 
   // 3. Paint. Artwork is clipped to the bleed edge (the trim when there is no bleed); crop marks go outside it.
   painter.save();
@@ -232,6 +235,10 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
           warnings.push('An equation uses a symbol that was exported as a picture.');
         }
       } else warnings.push('An equation has a LaTeX mistake and was left out: ' + res.error);
+    } else if (e.type === 'icon' && e.icon) {
+      const art = iconArt(e.icon.id);
+      if (art) drawIcon(painter, art, iconColors(e.icon, pal), { x: cx, y: cy, w: cw, h: ch });
+      else warnings.push('An icon was not found in the icon library and was left out.');
     } else if (isTextType(e)) {
       drawText(painter, fonts, textByEl.get(e.id) ?? []);
     } else if (e.type === 'table') {

@@ -27,7 +27,7 @@ export interface CustomFont {
 
 export type ShapeKind = 'rect' | 'ellipse' | 'line' | 'triangle' | 'diamond' | 'arrow' | 'star';
 
-export type ElementType = 'title' | 'subtitle' | 'heading' | 'text' | 'image' | 'chart' | 'shape' | 'table' | 'equation';
+export type ElementType = 'title' | 'subtitle' | 'heading' | 'text' | 'image' | 'chart' | 'shape' | 'table' | 'equation' | 'icon';
 
 export interface TextStyle {
   fontFamily: string; // "@heading" | "@body" | a concrete family
@@ -106,6 +106,16 @@ export interface EquationSpec {
   align: 'left' | 'center' | 'right';
 }
 
+/** An icon from the built-in science icon library, drawn in the poster's colours. */
+export interface IconSpec {
+  /** library id, e.g. "health/dna" or "phosphor/flask" */
+  id: string;
+  /** main colour (usually a palette role such as "@primary") */
+  color: ColorValue;
+  /** colour of the light shading on two-tone icons; unset = a pale tint of the main colour */
+  color2?: ColorValue;
+}
+
 export interface PosterElement {
   id: string;
   type: ElementType;
@@ -133,6 +143,7 @@ export interface PosterElement {
   chart?: ChartSpec;
   table?: TableSpec;
   equation?: EquationSpec;
+  icon?: IconSpec;
   shape?: ShapeKind;
   /** which way an arrow points */
   direction?: 'right' | 'left' | 'up' | 'down';

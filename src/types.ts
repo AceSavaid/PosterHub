@@ -233,6 +233,24 @@ export interface ReviewNote {
   elementId?: string;
 }
 
+/** A conference's poster requirements. Every field is optional: only the rules filled in are checked. */
+export interface ConferenceRules {
+  name?: string;
+  /** required size in mm (width × height as printed; either way round unless orientation is set) */
+  width?: number;
+  height?: number;
+  /** 'exact': must match (within 2 mm); 'max': must fit inside */
+  sizeMode?: 'exact' | 'max';
+  orientation?: Orientation;
+  /** smallest text allowed anywhere on the poster, in pt */
+  minFontPt?: number;
+  /** poster or abstract number that must appear on the poster, e.g. "P-142" */
+  posterNumber?: string;
+  requireQr?: boolean;
+  /** how many logos must appear (institution, funder, conference) */
+  logos?: number;
+}
+
 export interface Poster {
   id: string;
   name: string;
@@ -257,6 +275,8 @@ export interface Poster {
   ignoredWords?: string[];
   /** optional word limit set by a conference; the check warns when the poster goes over it */
   wordLimit?: number;
+  /** rules from the conference call for posters; Check reports what doesn't meet them */
+  conference?: ConferenceRules;
   /** review notes; optional so older files load unchanged */
   notes?: ReviewNote[];
   createdAt: number;

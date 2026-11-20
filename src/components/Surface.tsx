@@ -9,6 +9,7 @@ import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
 import { cleanHtml } from '../lib/sanitize';
 import { PT_TO_PX, layoutEquation, mathSvg, svgDataUrl, typesetLatex } from '../lib/math';
 import { useMathReady } from '../lib/useMath';
+import { IconBody } from './IconBody';
 
 const px = (mm: number) => mm * MM_TO_PX;
 
@@ -156,6 +157,9 @@ export function ElementView({ el, poster, editing, onCommitText, onCommitTable, 
       inner = <EquationBody el={el} poster={poster} widthPx={px(el.w) - inset} heightPx={px(el.h) - inset} />;
       break;
     }
+    case 'icon':
+      inner = <IconBody el={el} poster={poster} />;
+      break;
     default:
       inner = <TextBody el={el} poster={poster} editing={!!editing} onCommit={onCommitText} onDone={onEditDone} />;
   }

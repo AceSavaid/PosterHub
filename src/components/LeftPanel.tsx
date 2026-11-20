@@ -10,6 +10,8 @@ import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fon
 import { importPptx } from '../lib/pptxImport';
 import { askConfirm } from '../lib/dialogs';
 import { SHAPE_CHOICES } from '../lib/shapes';
+import { IconPicker } from './IconPicker';
+import { ICON_SOURCES } from '../lib/icons/library';
 
 type Tab = 'insert' | 'layout' | 'design';
 
@@ -109,6 +111,11 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
           <span aria-hidden className="ib-icon">▦</span>QR code
         </button>
       </div>
+      <h3 id="icons-heading">Science icons</h3>
+      <IconPicker label="Search science icons" onPick={(icon) => onInsert('icon', { icon: { id: icon.id, color: '@primary' } })} />
+      <p className="hint">
+        Icons take your palette colours and stay sharp when printed. From {ICON_SOURCES.health.name} ({ICON_SOURCES.health.licence}) and {ICON_SOURCES.phosphor.name} ({ICON_SOURCES.phosphor.licence}); free to use on posters without credit.
+      </p>
       <h3>Shapes</h3>
       <div className="insert-list">
         {SHAPE_CHOICES.map((c) => (

@@ -117,6 +117,11 @@ export function makeElement(type: ElementType, poster: Poster, at?: Partial<Post
     case 'equation':
       Object.assign(base, { h: 40 * s, equation: { latex: 'E = mc^2', fontSize: Math.max(6, Math.round(40 * s)), color: '@text', align: 'center' } });
       break;
+    case 'icon': {
+      const size = Math.min(colW, 80 * s);
+      Object.assign(base, { w: size, h: size, icon: { id: 'phosphor/flask', color: '@primary' } });
+      break;
+    }
   }
   return { ...base, ...at };
 }

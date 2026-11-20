@@ -64,3 +64,63 @@ export function matchSize(els: PosterElement[], dim: 'w' | 'h') {
 export function intersects(a: Bounds, b: Bounds) {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
+
+interface Page {
+  width: number;
+  height: number;
+  margin: number;
+  elements: PosterElement[];
+}
+
+const isFigureSlot = (e: PosterElement) => e.type === 'image' && !e.src && !e.qr && e.placeholder !== 'Logo' && e.placeholder !== 'QR code';
+
+const centreDistance = (b: Bounds, p: { x: number; y: number }) => Math.hypot(b.x + b.w / 2 - p.x, b.y + b.h / 2 - p.y);
+
+/** The empty figure box (from a layout) closest to `near`, for a new graph or picture to drop into. */
+export function emptyFigureSlot(page: Page, near: { x: number; y: number }): PosterElement | null {
+  const slots = page.elements.filter(isFigureSlot);
+  if (!slots.length) return null;
+  return slots.reduce((best, e) => (centreDistance(e, near) < centreDistance(best, near) ? e : best));
+}
+
+/**
+ * Where to put a new w × h element so it covers nothing else: the free spot
+ * inside the margins closest to `near` (usually the middle of the screen).
+ * Background panels and other shapes may sit underneath; text, pictures and
+ * graphs may not. `usedHeight` can report how much of a text box its words
+ * fill, so the empty space under short text counts as free. Returns null when
+ * there is no room.
+ */
+export function findFreeSpot(
+  page: Page,
+  w: number,
+  h: number,
+  near: { x: number; y: number },
+  usedHeight: (e: PosterElement) => number = (e) => e.h,
+  gap = 4,
+): { x: number; y: number } | null {
+  const m = page.margin;
+  if (w > page.width - 2 * m || h > page.height - 2 * m) return null;
+  const blockers = page.elements
+    .filter((e) => e.type !== 'shape')
+    .map((e) => ({ x: e.x - gap, y: e.y - gap, w: e.w + 2 * gap, h: Math.min(e.h, usedHeight(e)) + 2 * gap }));
+  // Candidate edges: the margins, plus just right of / below every blocker.
+  const xs = new Set([m, page.width - m - w, ...blockers.map((b) => b.x + b.w), ...blockers.map((b) => b.x - w)]);
+  const ys = new Set([m, page.height - m - h, ...blockers.map((b) => b.y + b.h), ...blockers.map((b) => b.y - h)]);
+  let best: { x: number; y: number } | null = null;
+  let bestD = Infinity;
+  for (const x of xs) {
+    if (x < m - 0.01 || x + w > page.width - m + 0.01) continue;
+    for (const y of ys) {
+      if (y < m - 0.01 || y + h > page.height - m + 0.01) continue;
+      const box = { x, y, w, h };
+      if (blockers.some((b) => intersects(box, b))) continue;
+      const d = centreDistance(box, near);
+      if (d < bestD) {
+        bestD = d;
+        best = { x, y };
+      }
+    }
+  }
+  return best;
+}

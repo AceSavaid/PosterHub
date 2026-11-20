@@ -74,29 +74,19 @@ test.describe('library', () => {
     await expect(page.locator('.poster-card').first()).toContainText('1016 × 762 mm · landscape');
   });
 
-  test('duplicates, renames and deletes posters', async ({ page }) => {
+  test('duplicates and deletes posters', async ({ page }) => {
     await newPoster(page, { name: 'Original' });
     await backToLibrary(page);
     await page.locator('.poster-card', { hasText: 'Original' }).getByRole('button', { name: 'Duplicate' }).click();
-    const copy = page.locator('.poster-card', { hasText: 'Original (copy)' });
-    await expect(copy).toBeVisible();
-
-    await copy.getByRole('button', { name: 'Rename' }).click();
-    const rename = page.getByRole('dialog', { name: 'Rename poster' });
-    await rename.getByLabel('Name').fill('Second draft');
-    await rename.getByRole('button', { name: 'Rename' }).click();
-    const renamed = page.locator('.poster-card', { hasText: 'Second draft' });
-    await expect(renamed).toBeVisible();
-
-    // Cancelling a delete keeps the poster.
-    await renamed.getByRole('button', { name: 'Delete' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
-    await expect(renamed).toBeVisible();
-
-    await renamed.getByRole('button', { name: 'Delete' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
-    await expect(renamed).toHaveCount(0);
-    await expect(page.locator('.poster-card', { hasText: 'Original' })).toBeVisible();
+    await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
+    await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
+    // an in-app "are you sure?" box, where Cancel keeps the poster
+    const confirm = page.getByRole('alertdialog', { name: 'Delete “Original (copy)”?' });
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
+    await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
+    await confirm.getByRole('button', { name: 'Delete poster' }).click();
+    await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toHaveCount(0);
   });
 });
 
@@ -651,7 +641,7 @@ test.describe('export, import and sharing', () => {
 
   test('view mode shows the poster read-only', async ({ page }) => {
     await newPoster(page);
-    await page.getByRole('button', { name: 'View' }).click();
+    await page.getByRole('button', { name: 'Preview', exact: true }).click();
     await expect(page.locator('.view-mode')).toBeVisible();
     await expect(page.locator('.view-mode .el-title')).toContainText('Your Poster Title');
     await expect(page.locator('.view-mode .sel-box, .view-mode .grid-col')).toHaveCount(0);

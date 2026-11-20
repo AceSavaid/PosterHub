@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import Papa from 'papaparse';
 import type { ChartKind, ChartSpec, Poster } from '../types';
 import { resolveColor, resolveFont, typeScale } from '../model';
-import { toNumber, usesXColumn, xColumnRepeats } from '../lib/chart';
+import { toNumber, usesXColumn, xColumnRepeats, defaultYColumns, scaleMismatch } from '../lib/chart';
+import { useEscape } from '../lib/useEscape';
 import { pickFile } from '../lib/storage';
 import ChartView from './ChartView';
 
@@ -33,19 +34,21 @@ export function parseCsv(text: string): { columns: string[]; rows: string[][] } 
   return { columns: header.map((h, i) => h.trim() || `Column ${i + 1}`), rows };
 }
 
-function defaultSpec(columns: string[], rows: string[][], fontSize: number): ChartSpec {
+export function defaultSpec(columns: string[], rows: string[][], fontSize: number): ChartSpec {
   const numeric = columns.map((_, c) => rows.slice(0, 20).filter((r) => toNumber(r[c]) != null).length >= Math.min(rows.length, 20) * 0.7);
   const xColumn = numeric.findIndex((n) => !n) >= 0 ? numeric.findIndex((n) => !n) : 0;
-  const ys = numeric.map((n, i) => (n && i !== xColumn ? i : -1)).filter((i) => i >= 0);
+  const numericCols = numeric.map((n, i) => (n && i !== xColumn ? i : -1)).filter((i) => i >= 0);
+  const rowEnd = Math.min(rows.length - 1, 49);
+  const ys = defaultYColumns({ rows, rowStart: 0, rowEnd }, numericCols);
   return {
     kind: 'bar',
     title: '',
     columns,
     rows,
     xColumn,
-    yColumns: ys.length ? ys.slice(0, 3) : [Math.min(1, columns.length - 1)],
+    yColumns: ys.length ? ys : [Math.min(1, columns.length - 1)],
     rowStart: 0,
-    rowEnd: Math.min(rows.length - 1, 49),
+    rowEnd,
     xLabel: columns[xColumn] ?? '',
     yLabel: ys.length === 1 ? columns[ys[0]] : '',
     showLegend: ys.length > 1,
@@ -105,6 +108,8 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
   }
 
   const preview = useMemo(() => spec && { ...spec, fontSize: 11 }, [spec]);
+  const mismatch = useMemo(() => spec && scaleMismatch(spec), [spec]);
+  useEscape(onCancel);
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
@@ -173,6 +178,11 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
                   )}
                 </div>
               </div>
+              {mismatch && (
+                <p className="hint warn" role="status">
+                  “{mismatch.small}” is much smaller than “{mismatch.large}”, so it will look almost flat on the same axis. Untick one, or make a separate graph for each.
+                </p>
+              )}
               <div className="row2">
                 <label>
                   From row

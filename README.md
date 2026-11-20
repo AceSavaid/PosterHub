@@ -17,7 +17,7 @@ Make research and academic posters in your browser. No account, no install: ever
 - **Find, spelling and word count**: find and replace across every text box (Ctrl/⌘ F), keeping bold, colours and line breaks. The Check panel has a Spelling tab (US and UK English dictionaries bundled with the app, so it works offline; acronyms and gene names are skipped) and a Words tab with a count per section, a total, and an optional conference word limit.
 - **My posters**: every poster autosaves to a library in your browser, with thumbnails, rename, duplicate and delete.
 - **Export**: print-quality vector PDF (real, selectable text with embedded fonts, vector shapes and charts, full-resolution photos, so it stays sharp at A0 and beyond), PowerPoint (editable text, shapes and native charts), PNG, or a `.poster.json` project file you can back up or open on another computer.
-- **Share and present**: copy the poster as an image to paste anywhere, or open View mode to present it full screen. View mode can also show the poster as it looks from 1, 2 or 3 m away and mark text too small to read from there.
+- **Share and present**: copy the poster as an image to paste anywhere, or open Preview to present it full screen. Preview can also show the poster as it looks from 1, 2 or 3 m away and mark text too small to read from there.
 
 ## Desktop app
 

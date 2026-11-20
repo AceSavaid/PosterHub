@@ -89,12 +89,12 @@ test('desktop app keeps the library as files in Documents/PosterHub', async ({ p
   await expect.poll(() => page.evaluate(() => (window as any).__fakeCalls.some((c: any) => c.cmd === 'plugin:opener|open_path'))).toBe(true);
 
   // Exporting asks where to save instead of downloading.
-  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Download backup', exact: true }).click();
   await expect.poll(async () => Object.keys(await disk(page))).toContain('/home/ada/Desktop/Coral-reef-survey.poster.json');
 
   // Deleting removes the file.
   await page.getByRole('button', { name: 'Delete' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Delete poster' }).click();
   await expect(page.getByText('Make your first research poster')).toBeVisible();
   expect(Object.keys(await disk(page))).not.toContain(file);
 });

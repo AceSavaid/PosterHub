@@ -14,6 +14,8 @@ export interface Issue {
   severity: Severity;
   title: string;
   detail: string;
+  /** Example text or an empty figure box left over from the layout: a to-do, not a mistake. */
+  leftover?: boolean;
 }
 
 export const PLACEHOLDER_TEXT = ['Your Poster Title Goes Here', 'Replace this text with your own', 'Type or paste your text here', 'Section Heading', 'Author One, Author Two', 'Describe what the figure shows', 'State your main result in one clear sentence', 'Author, A. (2025). Title of work'];
@@ -86,7 +88,7 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
   const page = { x: 0, y: 0, w: p.width, h: p.height };
 
   if (!p.elements.length) {
-    issues.push({ id: 'empty', severity: 'tip', title: 'The poster is empty', detail: 'Add a title from the Insert panel, or pick a layout under Layout → Rebuild layout.' });
+    issues.push({ id: 'empty', severity: 'tip', title: 'The poster is empty', detail: 'Add a title from the Insert panel, or pick a layout under Layout → Start over with a layout.' });
     return issues;
   }
 
@@ -106,7 +108,7 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
       const text = plain(el.html);
       // ---- placeholder text
       if (PLACEHOLDER_TEXT.some((t) => text.includes(t))) {
-        issues.push({ id: 'ph-' + el.id, elementId: el.id, severity: 'warning', title: `${name} still has example text`, detail: 'Replace it with your own words, or delete the box.' });
+        issues.push({ id: 'ph-' + el.id, elementId: el.id, severity: 'warning', title: `${name} still has example text`, detail: 'Replace it with your own words, or delete the box.', leftover: true });
       } else if (!text) {
         issues.push({ id: 'blank-' + el.id, elementId: el.id, severity: 'tip', title: `An empty ${NAMES[el.type].toLowerCase()}`, detail: 'Type something in it or delete it.' });
       }
@@ -137,7 +139,7 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
 
     if (el.type === 'image') {
       if (!el.src) {
-        issues.push({ id: 'noimg-' + el.id, elementId: el.id, severity: 'warning', title: 'An empty image placeholder', detail: 'Double-click it to add a picture, select it and add a graph, or delete it.' });
+        issues.push({ id: 'noimg-' + el.id, elementId: el.id, severity: 'warning', title: 'An empty image placeholder', detail: 'Double-click it to add a picture, select it and add a graph, or delete it.', leftover: true });
       } else {
         const info = images.get(el.id);
         if (info) {

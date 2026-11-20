@@ -151,8 +151,12 @@ function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
         {num('Margin', 'margin')}
         {num('Gap between columns', 'gutter')}
       </div>
-      <p className="hint">Columns show as blue guides; elements snap to them while you drag. Hold Alt to drag without snapping.</p>
-      <h3>Rebuild layout</h3>
+      <p className="hint">
+        Columns show as blue guides, and elements snap to them while you drag (hold Alt to skip). Changing the number of columns moves the guides only; your
+        content stays where it is.
+      </p>
+      <h3>Switch layout</h3>
+      <p className="hint">Rearranges the poster into another layout with {poster.columns} column{poster.columns > 1 ? 's' : ''}. Your content moves into the matching places.</p>
       <div className="form-grid">
         <label className="span2">
           Layout

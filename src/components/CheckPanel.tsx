@@ -1,4 +1,5 @@
 import type { Issue } from '../lib/checks';
+import { visionInfo, type VisionMode } from '../lib/colorVision';
 
 const ICON = { problem: '⛔', warning: '⚠️', tip: '💡' };
 
@@ -6,10 +7,12 @@ interface Props {
   issues: Issue[];
   onPick: (elementId: string) => void;
   onClose: () => void;
+  /** show the poster as seen with this kind of vision */
+  onPreview?: (mode: VisionMode) => void;
 }
 
 /** List of poster problems; clicking one selects the element it is about. */
-export default function CheckPanel({ issues, onPick, onClose }: Props) {
+export default function CheckPanel({ issues, onPick, onClose, onPreview }: Props) {
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const warnings = issues.filter((i) => i.severity === 'warning').length;
   return (
@@ -42,6 +45,11 @@ export default function CheckPanel({ issues, onPick, onClose }: Props) {
                     <span className="issue-detail">{i.detail}</span>
                   </span>
                 </button>
+                {i.preview && onPreview && (
+                  <button className="issue-preview" onClick={() => onPreview(i.preview!)}>
+                    👁 Preview as {visionInfo(i.preview).label.toLowerCase()}
+                  </button>
+                )}
               </li>
             ))}
           </ul>

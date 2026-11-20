@@ -4,6 +4,8 @@
 import type { Poster, PosterElement } from '../types';
 import { resolveColor, typeScale } from '../model';
 import { boundsOf, intersects } from './arrange';
+import { seriesColors, seriesData } from './chart';
+import { confusablePairs, visionInfo, type VisionMode } from './colorVision';
 
 export type Severity = 'problem' | 'warning' | 'tip';
 
@@ -13,6 +15,8 @@ export interface Issue {
   severity: Severity;
   title: string;
   detail: string;
+  /** a colour-vision preview that shows the problem */
+  preview?: VisionMode;
 }
 
 export const PLACEHOLDER_TEXT = ['Your Poster Title Goes Here', 'Replace this text with your own', 'Type or paste your text here', 'Section Heading', 'Author One, Author Two', 'Describe what the figure shows', 'State your main result in one clear sentence', 'Author, A. (2025). Title of work'];
@@ -72,6 +76,57 @@ function label(el: PosterElement) {
 /** Smallest comfortable text for this poster: about 20 pt on A0 (body text ideally 24 pt+), scaled for smaller posters viewed closer. */
 export function minReadablePt(p: Poster) {
   return Math.max(9, Math.round(20 * typeScale(p)));
+}
+
+/** The colours a graph uses to tell its series (or pie slices) apart, with their names. */
+export function chartSeriesColors(el: PosterElement, p: Poster): { names: string[]; colors: string[] } {
+  if (!el.chart) return { names: [], colors: [] };
+  const d = seriesData(el.chart);
+  const pie = el.chart.kind === 'pie' || el.chart.kind === 'doughnut';
+  const names = pie ? d.labels.map((l, i) => l || `Slice ${i + 1}`) : d.series.map((s) => s.name);
+  const all = seriesColors(p.palette, Math.max(d.series.length, d.labels.length));
+  // the colour list repeats after ten; repeated colours are a different problem, so only compare the distinct ones
+  const n = Math.min(names.length, 10);
+  return { names: names.slice(0, n), colors: all.slice(0, n) };
+}
+
+const quote = (s: string) => `“${s.length > 24 ? s.slice(0, 22) + '…' : s}”`;
+
+/** Warn when a graph's colours become hard to tell apart for colour-blind readers or in black-and-white print. */
+export function chartColorIssue(el: PosterElement, p: Poster): Issue | null {
+  const { names, colors } = chartSeriesColors(el, p);
+  if (colors.length < 2) return null;
+  const pairs = confusablePairs(colors);
+  if (!pairs.length) return null;
+  const byMode = new Map<VisionMode, typeof pairs>();
+  for (const pr of pairs) byMode.set(pr.mode, [...(byMode.get(pr.mode) ?? []), pr]);
+  const order: VisionMode[] = ['normal', 'deuteranopia', 'protanopia', 'tritanopia', 'greyscale'];
+  const modes = order.filter((m) => byMode.has(m));
+  const colourBlind = modes.filter((m) => m !== 'normal' && m !== 'greyscale');
+  const pairText = (m: VisionMode) => {
+    const ps = byMode.get(m)!;
+    const first = ps[0];
+    return `${quote(names[first.i])} and ${quote(names[first.j])}${ps.length > 1 ? ` (and ${ps.length - 1} more pair${ps.length > 2 ? 's' : ''})` : ''}`;
+  };
+  const what = el.chart!.kind === 'pie' || el.chart!.kind === 'doughnut' ? 'slices' : 'series';
+  const parts: string[] = [];
+  if (byMode.has('normal')) parts.push(`${pairText('normal')} are almost the same colour for everyone.`);
+  if (colourBlind.length) {
+    const rg = colourBlind.filter((m) => m !== 'tritanopia').map((m) => visionInfo(m).label.toLowerCase());
+    const kinds = [rg.length ? `red-green colour blindness (${rg.join(', ')})` : '', colourBlind.includes('tritanopia') ? 'blue-yellow colour blindness (tritanopia)' : ''].filter(Boolean).join(' or ');
+    parts.push(`With ${kinds}, ${pairText(colourBlind[0])} look alike.`);
+  }
+  if (byMode.has('greyscale')) parts.push(`Printed in black and white, ${pairText('greyscale')} turn the same grey.`);
+  parts.push(`Pick a colour scheme whose colours differ in lightness (one dark, one light), or label the ${what} directly.`);
+  const severe = byMode.has('normal') || colourBlind.length > 0;
+  return {
+    id: 'cvd-' + el.id,
+    elementId: el.id,
+    severity: severe ? 'warning' : 'tip',
+    title: severe ? 'Graph colours may be hard to tell apart' : 'Graph colours look alike in black and white',
+    detail: parts.join(' '),
+    preview: colourBlind[0] ?? (byMode.has('greyscale') ? 'greyscale' : undefined),
+  };
 }
 
 export interface ImageInfo {
@@ -153,6 +208,10 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
     }
     if (el.type === 'chart' && el.chart && el.chart.fontSize < minPt * 0.75) {
       issues.push({ id: 'chartfont-' + el.id, elementId: el.id, severity: 'warning', title: 'Graph labels may be too small', detail: `They are ${el.chart.fontSize} pt; try at least ${Math.round(minPt * 0.75)} pt (Label size in the side panel).` });
+    }
+    if (el.type === 'chart' && el.chart) {
+      const cvd = chartColorIssue(el, p);
+      if (cvd) issues.push(cvd);
     }
   }
 

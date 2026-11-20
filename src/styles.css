@@ -317,6 +317,16 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .issue.tip button { border-left: 4px solid var(--accent); }
 .issue strong { display: block; font-size: 13px; }
 .issue-detail { display: block; color: var(--muted); font-size: 12px; line-height: 1.4; margin-top: 2px; }
+.issue .issue-preview { display: inline-flex; width: auto; margin: 2px 0 2px 34px; padding: 3px 8px; border: 1px solid var(--line); border-left-width: 1px !important; border-radius: 6px; font-size: 12px; color: var(--fg); background: var(--bg2); }
+
+/* ---------------- Colour vision preview */
+.icon-btn.active { background: var(--accent-soft); border-color: var(--accent); }
+.vision-menu { width: 280px; padding: 10px; gap: 2px; }
+.vision-menu .vision-option { width: 100%; }
+.vision-menu .vision-option.active { background: var(--accent-soft); }
+.vision-menu .hint { margin: 6px 4px 0; }
+.vision-banner { position: sticky; top: 0; left: 0; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 6px 12px; background: var(--accent-soft); border-bottom: 1px solid var(--accent); color: var(--fg); font-size: 13px; }
+.view-bar .vision-select { font-size: 13px; }
 .menu .menu-warn { background: #fdecea; margin-bottom: 4px; }
 .menu .menu-warn:hover { background: #fbd9d5; }
 .menu .menu-warn strong { color: #8a1c1c; }

@@ -18,6 +18,8 @@ import ContextMenu, { type MenuItem } from './ContextMenu';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import AppearanceMenu from './AppearanceMenu';
 import { useUiPrefs } from '../lib/uiPrefs';
+import VisionMenu, { VisionBanner, VisionFilters, visionFilter } from './VisionFilters';
+import type { VisionMode } from '../lib/colorVision';
 
 const CLIP_MIME = 'application/x-posterhub-element';
 let internalClipboard: PosterElement | null = null;
@@ -58,6 +60,7 @@ export default function Editor({ initial, onClose }: Props) {
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [checkOpen, setCheckOpen] = useState(false);
+  const [vision, setVision] = useState<VisionMode>('normal');
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -575,7 +578,7 @@ export default function Editor({ initial, onClose }: Props) {
 
   const selected = poster.elements.find((e) => e.id === selectedId) ?? null;
 
-  if (viewing) return <ViewMode poster={poster} onClose={() => setViewing(false)} />;
+  if (viewing) return <ViewMode poster={poster} vision={vision} onVision={setVision} onClose={() => setViewing(false)} />;
 
   return (
     <div className="editor" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
@@ -611,6 +614,7 @@ export default function Editor({ initial, onClose }: Props) {
           <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap
         </label>
         <AppearanceMenu panels />
+        <VisionMenu mode={vision} onChange={setVision} />
         <span className="sep" />
         <button
           className={'btn check-btn' + (checkOpen ? ' active' : '')}
@@ -697,7 +701,8 @@ export default function Editor({ initial, onClose }: Props) {
             setZoom((z) => Math.max(0.02, Math.min(4, z * (e.deltaY < 0 ? 1.1 : 1 / 1.1))));
           }}
         >
-          <div className="stage-inner">
+          <VisionBanner mode={vision} onChange={setVision} />
+          <div className="stage-inner" style={{ filter: visionFilter(vision) }}>
             <Canvas
               ref={posterNode}
               poster={poster}
@@ -768,7 +773,8 @@ export default function Editor({ initial, onClose }: Props) {
         />
       )}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
-      {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
+      {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onPreview={setVision} onClose={() => setCheckOpen(false)} />}
+      <VisionFilters />
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
       {toast && <div className="toast">{toast}</div>}
       {marquee && (

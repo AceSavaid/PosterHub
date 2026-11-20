@@ -32,6 +32,8 @@ import { describeFill, fillPoster, type FillPlan } from '../lib/abstractImport';
 import { PLACEHOLDER_TEXT } from '../lib/checks';
 import type { AuthorList } from '../types';
 import ConfirmDialog from './ConfirmDialog';
+import SaveTemplateDialog from './SaveTemplateDialog';
+import { saveAsTemplate } from '../lib/userTemplates';
 import { useUiPrefs } from '../lib/uiPrefs';
 import { sanitizeElement } from '../lib/sanitize';
 import ReferencesDialog from './ReferencesDialog';
@@ -151,6 +153,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     };
   }, [exportOpen]);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
+  const [templateDialog, setTemplateDialog] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [dpi, setDpi] = useState(200);
@@ -913,6 +916,16 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     notify(`Saved “${p.name} (copy)” to My posters. You are still editing the original.`);
   }
 
+  async function saveTemplate(name: string, keepPictures: string[]) {
+    setTemplateDialog(false);
+    try {
+      const t = await saveAsTemplate(posterRef.current, name, { keepPictures });
+      notify(`Saved “${t.name}” to My templates. Pick it under New poster → My templates.`);
+    } catch (e) {
+      notify('Could not save the template: ' + String(e));
+    }
+  }
+
   async function deleteThisPoster() {
     setConfirmDelete(false);
     closing.current = true;
@@ -1373,6 +1386,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           items={[
             { label: 'Duplicate this poster', onClick: duplicatePoster },
             { label: 'Download project file', onClick: () => exportPosterFile(posterRef.current) },
+            { label: 'Save as my template…', onClick: () => setTemplateDialog(true) },
             '-',
             { label: 'Delete this poster…', danger: true, onClick: () => setConfirmDelete(true) },
           ]}
@@ -1462,6 +1476,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       {eqDialog && <EquationDialog poster={poster} initial={eqDialog.spec} isNew={!eqDialog.id} onSave={saveEquation} onCancel={() => setEqDialog(null)} />}
       {abstractOpen && <AbstractDialog poster={poster} onFill={fillFromAbstract} onCancel={() => setAbstractOpen(false)} />}
       {authorsDialog && <AuthorsDialog initial={authorsDialog.initial} replacing={authorsDialog.replacing} onSave={saveAuthors} onCancel={() => setAuthorsDialog(null)} />}
+      {templateDialog && <SaveTemplateDialog poster={poster} onSave={saveTemplate} onCancel={() => setTemplateDialog(false)} />}
       {confirmDelete && (
         <ConfirmDialog
           title={`Delete “${poster.name}”?`}

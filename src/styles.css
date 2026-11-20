@@ -644,3 +644,4 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .keep-pic { flex-direction: row; align-items: center; gap: 6px; padding: 4px 6px; border: 1.5px solid var(--line); border-radius: 6px; cursor: pointer; }
 .keep-pic.on { border-color: var(--accent); background: var(--accent-soft); }
 .keep-pic img { width: 56px; height: 40px; object-fit: contain; background: #fff; border-radius: 3px; }
+.inline.wrap { flex-wrap: wrap; }

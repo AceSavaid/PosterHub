@@ -7,26 +7,57 @@ import { PaletteSwatches } from './PaletteSwatches';
 import { useDialog } from '../lib/useDialog';
 import MyTemplates from './MyTemplates';
 import { posterFromTemplate, type UserTemplate } from '../lib/userTemplates';
+import { addKitFonts, fillLogoSpots, kitPalette, type BrandKit } from '../lib/brandKit';
+import { BRAND_KITS, brandKitById } from '../brandKits';
+import { useUiPrefs } from '../lib/uiPrefs';
+import { loadGoogleFont } from '../lib/fonts';
 
 interface Props {
   onCreate: (p: Poster) => void;
   onCancel: () => void;
 }
 
+const DEFAULT_LOOK = { palette: PALETTES[0], headingFont: 'Montserrat', bodyFont: 'Open Sans' };
+const kitLook = (kit: BrandKit | null) => (kit ? { palette: kitPalette(kit), headingFont: kit.headingFont, bodyFont: kit.bodyFont } : DEFAULT_LOOK);
+
+/** Builds the poster the dialog describes, adding the brand kit's fonts and logos when one is chosen. */
+export function buildNewPoster(o: Parameters<typeof createPoster>[0], kit: BrandKit | null) {
+  const p = createPoster(o);
+  if (kit) {
+    addKitFonts(p, kit);
+    fillLogoSpots(p, kit);
+  }
+  return p;
+}
+
 export default function NewPosterDialog({ onCreate, onCancel }: Props) {
+  // The last brand kit picked is remembered, so it only has to be chosen once.
+  const [prefs, changePrefs] = useUiPrefs();
+  const [kit, setKit] = useState<BrandKit | null>(() => brandKitById(prefs.brandKit));
   const [name, setName] = useState('');
   const [orientation, setOrientation] = useState<Orientation>('portrait');
   const [preset, setPreset] = useState('A0');
   const [size, setSize] = useState(sizeFor('A0', 'portrait'));
   const [columns, setColumns] = useState(3);
-  const [palette, setPalette] = useState<Palette>(PALETTES[0]);
+  const [palette, setPalette] = useState<Palette>(() => kitLook(kit).palette);
   const [template, setTemplate] = useState<TemplateId>('classic');
-  const [headingFont, setHeadingFont] = useState('Montserrat');
-  const [bodyFont, setBodyFont] = useState('Open Sans');
+  const [headingFont, setHeadingFont] = useState(() => kitLook(kit).headingFont);
+  const [bodyFont, setBodyFont] = useState(() => kitLook(kit).bodyFont);
   /** A saved template from My templates; when set it supplies size, colours and fonts. */
   const [mine, setMine] = useState<UserTemplate | null>(null);
 
-  const fonts = [...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS];
+  function pickKit(id: string) {
+    const k = brandKitById(id);
+    setKit(k);
+    changePrefs({ brandKit: k?.id ?? '' });
+    const look = kitLook(k);
+    setPalette(look.palette);
+    setHeadingFont(look.headingFont);
+    setBodyFont(look.bodyFont);
+    if (k) [k.headingFont, k.bodyFont].forEach((f) => loadGoogleFont(f));
+  }
+
+  const fonts = [...new Set([...(kit ? [kit.headingFont, kit.bodyFont, ...(kit.googleFonts ?? [])] : []), ...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS])];
   const dialog = useDialog<HTMLFormElement>(onCancel, 'new-poster-title');
 
   return (
@@ -38,8 +69,13 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
         aria-label="New poster"
         onSubmit={(e) => {
           e.preventDefault();
-          if (mine) return onCreate(posterFromTemplate(mine, name || 'Untitled poster'));
-          onCreate(createPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }));
+          if (mine) {
+            // A saved template keeps its own look; the kit only fills logo spots it left empty.
+            const p = posterFromTemplate(mine, name || 'Untitled poster');
+            if (kit) fillLogoSpots(p, kit);
+            return onCreate(p);
+          }
+          onCreate(buildNewPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }, kit));
         }}
       >
         <h2 id="new-poster-title">New poster</h2>
@@ -48,6 +84,16 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
             Name
             <input autoFocus value={name} placeholder="e.g. Conference 2026 – Sleep and memory" onChange={(e) => setName(e.target.value)} />
           </label>
+          {BRAND_KITS.length > 0 && (
+            <label className="span2">
+              Brand kit
+              <select value={kit?.id ?? ''} onChange={(e) => pickKit(e.target.value)}>
+                <option value="">None</option>
+                {BRAND_KITS.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+              </select>
+              {kit && <span className="hint">{kit.name} colours and fonts{kit.logos.length ? `, with ${kit.logos.length > 1 ? 'its logos' : 'its logo'} in the layout’s logo spots` : ''}. You can still change anything below.</span>}
+            </label>
+          )}
           <MyTemplates selected={mine?.id ?? null} onSelect={setMine} />
           {mine && (
             <p className="span2 hint mine-note" role="status">
@@ -69,7 +115,7 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
           </div>
           <div className="span2">
             <div className="field-label">Colour palette</div>
-            <PaletteSwatches value={palette.name} onPick={setPalette} />
+            <PaletteSwatches value={palette.name} onPick={setPalette} extra={kit ? [kitPalette(kit)] : []} />
           </div>
           <SizeFields
             orientation={orientation}

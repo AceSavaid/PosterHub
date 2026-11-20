@@ -175,6 +175,10 @@ export function posterColors(p: Poster): ColorUse[] {
       if (e.borderWidth) add(e.borderColor ?? '@primary', e.id);
       continue;
     }
+    if (e.icon) {
+      add(e.icon.color, e.id);
+      if (e.icon.color2) add(e.icon.color2, e.id);
+    }
     if (e.type === 'shape') add(e.fill ?? (e.shape === 'line' ? '@primary' : undefined), e.id);
     else add(e.fill, e.id);
     if (e.borderWidth) add(e.borderColor ?? '@primary', e.id);
@@ -227,6 +231,7 @@ export function replaceColor(p: Poster, from: string, to: string): Poster {
       fill: same(e.fill) ? to : e.fill,
       borderColor: same(e.borderColor) ? to : e.borderColor,
       style: e.style && same(e.style.color) ? { ...e.style, color: to } : e.style,
+      icon: e.icon && (same(e.icon.color) || same(e.icon.color2)) ? { ...e.icon, color: same(e.icon.color) ? to : e.icon.color, color2: same(e.icon.color2) ? to : e.icon.color2 } : e.icon,
       html: html(e.html),
     })),
   };

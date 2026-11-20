@@ -10,6 +10,8 @@ import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fon
 import { importPptx } from '../lib/pptxImport';
 import { askConfirm } from '../lib/dialogs';
 import { SHAPE_CHOICES } from '../lib/shapes';
+import { IconPicker } from './IconPicker';
+import { ICON_SOURCES } from '../lib/icons/library';
 
 type Tab = 'insert' | 'layout' | 'design';
 
@@ -24,12 +26,13 @@ interface Props {
   onInsertReferences: () => void;
   onInsertTable: () => void;
   onInsertEquation: () => void;
+  onFillFromAbstract: () => void;
   notify: (msg: string) => void;
 }
 
 const TABS: Tab[] = ['insert', 'layout', 'design'];
 
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, notify }: Props) {
+export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, onFillFromAbstract, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
     <aside className="panel left" aria-label="Tools">
@@ -59,7 +62,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
         ))}
       </div>
       <div className="panel-body" id="tools-panel" role="tabpanel" aria-labelledby={'tab-' + tab}>
-        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} onInsertReferences={onInsertReferences} onInsertTable={onInsertTable} onInsertEquation={onInsertEquation} />}
+        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} onInsertReferences={onInsertReferences} onInsertTable={onInsertTable} onInsertEquation={onInsertEquation} onFillFromAbstract={onFillFromAbstract} />}
         {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
       </div>
@@ -67,7 +70,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
   );
 }
 
-function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors' | 'onInsertReferences' | 'onInsertTable' | 'onInsertEquation'>) {
+function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, onFillFromAbstract }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors' | 'onInsertReferences' | 'onInsertTable' | 'onInsertEquation' | 'onFillFromAbstract'>) {
   return (
     <>
       <h3>Text</h3>
@@ -93,6 +96,9 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
         <button className="insert-btn" onClick={onInsertEquation}>
           <span aria-hidden className="ib-icon t-eq">∑</span>Equation (LaTeX)…
         </button>
+        <button className="insert-btn" onClick={onFillFromAbstract}>
+          <span aria-hidden className="ib-icon">📄</span>Fill from abstract or Word…
+        </button>
       </div>
       <h3>Media and data</h3>
       <div className="insert-list">
@@ -109,6 +115,11 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
           <span aria-hidden className="ib-icon">▦</span>QR code
         </button>
       </div>
+      <h3 id="icons-heading">Science icons</h3>
+      <IconPicker label="Search science icons" onPick={(icon) => onInsert('icon', { icon: { id: icon.id, color: '@primary' } })} />
+      <p className="hint">
+        Icons take your palette colours and stay sharp when printed. From {ICON_SOURCES.health.name} ({ICON_SOURCES.health.licence}) and {ICON_SOURCES.phosphor.name} ({ICON_SOURCES.phosphor.licence}); free to use on posters without credit.
+      </p>
       <h3>Shapes</h3>
       <div className="insert-list">
         {SHAPE_CHOICES.map((c) => (

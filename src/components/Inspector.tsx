@@ -1,9 +1,12 @@
 import { useState } from 'react';
-import type { EquationSpec, Poster, PosterElement, TableSpec, TableStyleId, TextStyle } from '../types';
+import type { EquationSpec, IconSpec, Poster, PosterElement, TableSpec, TableStyleId, TextStyle } from '../types';
 import { TABLE_STYLES, cellLook, normalizeTable } from '../lib/table';
 import type { TableAction } from './Editor';
 import { typesetLatex } from '../lib/math';
 import { useMathReady } from '../lib/useMath';
+import { useIconsReady } from '../lib/useIcons';
+import { ICON_SOURCES, hasSecondTone, iconArt, iconInfo } from '../lib/icons/library';
+import { IconPicker } from './IconPicker';
 import { QR_MAX_LENGTH, normaliseLink, qrDataUrl } from '../lib/qr';
 import { FontSelect } from './FontSelect';
 import { ColorInput } from './ColorInput';
@@ -362,6 +365,8 @@ export default function Inspector(props: Props) {
           </section>
         )}
 
+        {el.type === 'icon' && el.icon && <IconSection key={el.id} poster={poster} el={el} onChange={onChange} />}
+
         {el.type === 'equation' && el.equation && <EquationSection key={el.id} poster={poster} el={el} onChange={onChange} onEdit={onEditEquation} />}
 
         {el.type === 'shape' && el.shape !== 'line' && (
@@ -635,6 +640,47 @@ function StylePreview({ style, poster }: { style: TableStyleId; poster: Poster }
     </svg>
   );
 }
+function IconSection({ poster, el, onChange }: { poster: Poster; el: PosterElement; onChange: Props['onChange'] }) {
+  const ic = el.icon!;
+  const ready = useIconsReady();
+  const info = iconInfo(ic.id);
+  const art = ready ? iconArt(ic.id) : undefined;
+  const source = ICON_SOURCES[ic.id.split('/')[0]];
+  const [changing, setChanging] = useState(false);
+  const set = (patch: Partial<IconSpec>) => onChange((e) => void Object.assign(e.icon!, patch));
+  return (
+    <section>
+      <h4>Icon{info ? ': ' + info.label : ''}</h4>
+      <div className="field-label">Colour</div>
+      <ColorInput value={ic.color} palette={poster.palette} onChange={(c) => set({ color: c ?? '@primary' })} />
+      {hasSecondTone(art) && (
+        <>
+          <div className="field-label">Shading colour</div>
+          <ColorInput
+            value={ic.color2}
+            palette={poster.palette}
+            allowNone
+            onChange={(c) => onChange((e) => {
+              if (c && c !== 'transparent') e.icon!.color2 = c;
+              else delete e.icon!.color2;
+            })}
+          />
+          <p className="hint">With no shading colour the icon uses a pale tint of its main colour.</p>
+        </>
+      )}
+      <button className="btn" aria-expanded={changing} onClick={() => setChanging(!changing)}>
+        {changing ? 'Done changing icon' : 'Change icon…'}
+      </button>
+      {changing && <IconPicker label="Search for a different icon" action="Use icon" selectedId={ic.id} onPick={(i) => set({ id: i.id })} />}
+      <label>
+        Description (alt text)
+        <textarea rows={2} value={el.alt ?? ''} placeholder={info ? info.label : 'What does it show?'} onChange={(e) => onChange({ alt: e.target.value || undefined }, 'alt')} />
+      </label>
+      {source && <p className="hint">From {source.name} ({source.licence}). Free to use without credit.</p>}
+    </section>
+  );
+}
+
 function EquationSection({ poster, el, onChange, onEdit }: { poster: Poster; el: PosterElement; onChange: Props['onChange']; onEdit: () => void }) {
   const eq = el.equation!;
   const ready = useMathReady();

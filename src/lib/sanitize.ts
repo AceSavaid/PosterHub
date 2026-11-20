@@ -51,10 +51,25 @@ export function safeFontDataUrl(url: unknown): string | undefined {
 /** Font names are used in CSS, so keep them to characters a font name needs. */
 const fontName = (f: unknown) => (typeof f === 'string' ? f.replace(/["'\\<>;{}()]/g, '') : '');
 
+/** A palette role ("@primary"), a hex colour or rgb()/rgba(); anything else is dropped. */
+export function safeColor(c: unknown): string | undefined {
+  if (typeof c !== 'string') return undefined;
+  const v = c.trim();
+  return /^@[a-z]+$/.test(v) || /^#[0-9a-f]{3,8}$/i.test(v) || /^rgba?\(\s*[\d.%\s,/]+\)$/i.test(v) ? v : undefined;
+}
+
 /** Cleans one element in place and returns it. */
 export function sanitizeElement(el: PosterElement): PosterElement {
   if (el.html != null) el.html = cleanHtml(el.html);
   if (el.style && typeof el.style === 'object') el.style.fontFamily = fontName(el.style.fontFamily) || '@body';
+  if (el.icon != null) {
+    const ic = el.icon as unknown as Record<string, unknown>;
+    if (ic && typeof ic === 'object' && typeof ic.id === 'string' && /^[a-z]+\/[a-z0-9_-]+$/.test(ic.id)) {
+      el.icon = { id: ic.id, color: safeColor(ic.color) ?? '@primary' };
+      const c2 = safeColor(ic.color2);
+      if (c2) el.icon.color2 = c2;
+    } else delete el.icon;
+  }
   if (el.src != null) {
     const s = safeImageUrl(el.src);
     if (s) el.src = s;

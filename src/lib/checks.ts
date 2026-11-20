@@ -80,7 +80,7 @@ export function backgroundBehind(p: Poster, el: PosterElement): string | null {
 
 export const plain = (html = '') => html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
-const NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', table: 'Table', equation: 'Equation' };
+const NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', table: 'Table', equation: 'Equation', icon: 'Icon' };
 function label(el: PosterElement) {
   const t = plain(el.html);
   return t ? `${NAMES[el.type]} “${t.length > 32 ? t.slice(0, 30) + '…' : t}”` : NAMES[el.type];

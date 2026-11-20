@@ -9,6 +9,7 @@ import { cropMarkLines, MARK_WIDTH_PT, printGeometry, type PrintOptions } from '
 import { CELL_PAD, cellLook, columnAlign, columnWeights, normalizeTable, type Border } from './table';
 import { PT_TO_PX, layoutEquation, loadMath, mathSvg, typesetLatex } from './math';
 import { isCropped } from './geometry';
+import { iconArt, iconColors, iconInfo, iconSvg, layoutIcon, loadIcons } from './icons/library';
 
 const MAX_SIDE = 16000;
 const MAX_AREA = 120_000_000;
@@ -235,6 +236,7 @@ export async function buildPptx(p: Poster, chartImages: Map<string, string> = ne
   const pos = (e: PosterElement) => ({ x: e.x * MM_TO_IN * k, y: e.y * MM_TO_IN * k, w: e.w * MM_TO_IN * k, h: e.h * MM_TO_IN * k, rotate: e.rotation ? ((e.rotation % 360) + 360) % 360 : undefined });
   slide.background = p.backgroundImage ? { data: p.backgroundImage } : { color: col('@background') };
   if (p.elements.some((e) => e.type === 'equation')) await loadMath();
+  if (p.elements.some((e) => e.type === 'icon')) await loadIcons();
 
   for (const e of p.elements) {
     const box = pos(e);
@@ -272,6 +274,12 @@ export async function buildPptx(p: Poster, chartImages: Map<string, string> = ne
         if (fill || line) slide.addShape(e.radius ? pptx.ShapeType.roundRect : pptx.ShapeType.rect, { ...box, fill: fill ?? { type: 'none' }, line, rectRadius: e.radius ? Math.min(0.5, e.radius / Math.min(e.w, e.h)) : undefined } as never);
         const img = equationImage(e, p);
         if (img) slide.addImage({ data: img.data, x: img.x * k, y: img.y * k, w: img.w * k, h: img.h * k, altText: e.equation!.latex } as never);
+        break;
+      }
+      case 'icon': {
+        if (fill || line) slide.addShape(e.radius ? pptx.ShapeType.roundRect : pptx.ShapeType.rect, { ...box, fill: fill ?? { type: 'none' }, line, rectRadius: e.radius ? Math.min(0.5, e.radius / Math.min(e.w, e.h)) : undefined } as never);
+        const img = iconImage(e, p);
+        if (img) slide.addImage({ data: img.data, x: img.x * k, y: img.y * k, w: img.w * k, h: img.h * k, altText: e.alt || iconInfo(e.icon!.id)?.label } as never);
         break;
       }
       case 'chart': {
@@ -374,6 +382,25 @@ export function equationImage(e: PosterElement, p: Poster): { data: string; x: n
   const px = Math.min(300 / 96, 4000 / Math.max(at.w, at.h));
   const svg = mathSvg(res.render, resolveColor(eq.color, p.palette), at.w * px, at.h * px);
   const data = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+  const toIn = 1 / 96;
+  return { data, x: at.x * toIn, y: at.y * toIn, w: at.w * toIn, h: at.h * toIn };
+}
+
+/**
+ * A library icon as an SVG picture placed where it sits on the poster (inches).
+ * Like equations, PowerPoint keeps the SVG as vectors and PptxGenJS adds a
+ * ~300 dpi PNG copy for older versions.
+ */
+export function iconImage(e: PosterElement, p: Poster): { data: string; x: number; y: number; w: number; h: number } | null {
+  const art = e.icon && iconArt(e.icon.id);
+  if (!art) return null;
+  const bw = ((e.borderWidth ?? 0) * 96) / 72;
+  const inset = (e.padding ?? 0) * MM_TO_PX + bw;
+  const at = layoutIcon(art, { x: e.x * MM_TO_PX + inset, y: e.y * MM_TO_PX + inset, w: e.w * MM_TO_PX - 2 * inset, h: e.h * MM_TO_PX - 2 * inset });
+  if (at.w <= 0 || at.h <= 0) return null;
+  const px = Math.min(300 / 96, 4000 / Math.max(at.w, at.h));
+  const svg = iconSvg(art, iconColors(e.icon!, p.palette), at.w * px, at.h * px);
+  const data = 'data:image/svg+xml;base64,' + btoa(svg);
   const toIn = 1 / 96;
   return { data, x: at.x * toIn, y: at.y * toIn, w: at.w * toIn, h: at.h * toIn };
 }

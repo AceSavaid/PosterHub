@@ -114,7 +114,7 @@ test('a poster can be edited with the keyboard alone', async ({ page }) => {
   const elements = page.locator('.poster > .el');
 
   // Tab from the last Insert button reaches the poster's elements, each with a spoken name.
-  await page.getByRole('button', { name: /Star/ }).focus();
+  await page.getByRole('button', { name: 'Star', exact: true }).focus();
   await page.keyboard.press('Tab');
   await expect(elements.first()).toBeFocused();
   let label = '';

@@ -18,6 +18,7 @@ interface Props {
   onLayer: (dir: 'front' | 'back' | 'up' | 'down') => void;
   onReplaceImage: () => void;
   onEditChart: () => void;
+  onEditAuthors?: () => void;
   multi: number;
   /** the selection is exactly one group */
   grouped?: boolean;
@@ -158,6 +159,13 @@ export default function Inspector(props: Props) {
               <button className="btn small-btn" onClick={onShrinkText}>Shrink text to fit</button>
               <button className="btn small-btn" onClick={onGrowBox}>Make box taller</button>
             </div>
+          </section>
+        )}
+
+        {st && props.onEditAuthors && (el.authors || el.type === 'subtitle') && (
+          <section>
+            <button className="btn primary" onClick={props.onEditAuthors}>{el.authors ? 'Edit authors and affiliations…' : 'Build author list…'}</button>
+            {el.authors && <p className="hint">Changes typed straight into this box are replaced when you update the list.</p>}
           </section>
         )}
 

@@ -59,6 +59,23 @@ export interface ChartSpec {
   fontSize: number; // pt
 }
 
+export interface Author {
+  name: string;
+  /** indexes into AuthorList.affiliations */
+  affiliations: number[];
+  presenter?: boolean;
+  corresponding?: boolean;
+  orcid?: string;
+}
+
+/** Structured author block; the element's html is generated from it. */
+export interface AuthorList {
+  authors: Author[];
+  affiliations: string[];
+  email?: string;
+  showOrcid?: boolean;
+}
+
 export interface PosterElement {
   id: string;
   type: ElementType;
@@ -88,6 +105,8 @@ export interface PosterElement {
   /** which way an arrow points */
   direction?: 'right' | 'left' | 'up' | 'down';
   locked?: boolean;
+  /** set when the text was built with the authors and affiliations tool */
+  authors?: AuthorList;
   /** elements sharing a group id move, resize, copy and select together */
   groupId?: string;
 }

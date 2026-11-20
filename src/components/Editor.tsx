@@ -18,6 +18,9 @@ import CheckPanel from './CheckPanel';
 import ContextMenu, { type MenuItem } from './ContextMenu';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import AppearanceMenu from './AppearanceMenu';
+import AuthorsDialog from './AuthorsDialog';
+import { PLACEHOLDER_TEXT } from '../lib/checks';
+import type { AuthorList } from '../types';
 import { useUiPrefs } from '../lib/uiPrefs';
 
 const CLIP_MIME = 'application/x-posterhub-element';
@@ -58,6 +61,8 @@ export default function Editor({ initial, onClose }: Props) {
   const [viewing, setViewing] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
+  /** open authors dialog; `id` is the text box it fills (none = add a new one) */
+  const [authorsDialog, setAuthorsDialog] = useState<{ id?: string; initial?: AuthorList; replacing?: boolean } | null>(null);
   const [checkOpen, setCheckOpen] = useState(false);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
@@ -209,6 +214,33 @@ export default function Editor({ initial, onClose }: Props) {
     setChartDialog(null);
   }
 
+  /** Opens the authors tool for the selected box, the template's author line, or a new box. */
+  function openAuthors(forId?: string) {
+    const els = posterRef.current.elements;
+    const sel = els.find((e) => e.id === (forId ?? selectedId));
+    if (sel?.authors) return setAuthorsDialog({ id: sel.id, initial: sel.authors });
+    if (sel?.style && sel.type !== 'title') return setAuthorsDialog({ id: sel.id, replacing: !!sel.html?.trim() });
+    const authorLine = PLACEHOLDER_TEXT.find((t) => t.startsWith('Author One'))!;
+    const ph = els.find((e) => e.authors || (e.style && e.html?.includes(authorLine)));
+    if (ph) return setAuthorsDialog({ id: ph.id, initial: ph.authors });
+    setAuthorsDialog({});
+  }
+
+  function saveAuthors(list: AuthorList, html: string) {
+    const id = authorsDialog?.id;
+    if (id && posterRef.current.elements.some((e) => e.id === id)) {
+      updateElement(id, { authors: list, html });
+      setSelectedId(id);
+    } else {
+      const el = makeElement('subtitle', posterRef.current);
+      el.authors = list;
+      el.html = html;
+      el.h = el.h * 1.6; // room for the affiliation and contact lines
+      addElement(el);
+    }
+    setAuthorsDialog(null);
+  }
+
   function removeSelected() {
     if (!selectedIds.length) return;
     const ids = new Set(selectedIds);
@@ -330,7 +362,7 @@ export default function Editor({ initial, onClose }: Props) {
   useEffect(() => {
     const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     const onKey = (e: KeyboardEvent) => {
-      if (viewing || chartDialog) return;
+      if (viewing || chartDialog || authorsDialog) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -411,7 +443,7 @@ export default function Editor({ initial, onClose }: Props) {
       if (e.type === 'cut') removeSelected();
     };
     const onPaste = (e: ClipboardEvent) => {
-      if (isTyping(e.target) || isTyping(document.activeElement) || viewing || chartDialog) return;
+      if (isTyping(e.target) || isTyping(document.activeElement) || viewing || chartDialog || authorsDialog) return;
       const dt = e.clipboardData;
       if (!dt) return;
       const json = dt.getData(CLIP_MIME);
@@ -707,6 +739,7 @@ export default function Editor({ initial, onClose }: Props) {
             onInsertImage={() => chooseImage()}
             onInsertChart={() => setChartDialog({})}
             onInsertQr={insertQr}
+            onInsertAuthors={() => openAuthors()}
             notify={notify}
           />
         ) : (
@@ -786,6 +819,7 @@ export default function Editor({ initial, onClose }: Props) {
             onLayer={layer}
             onReplaceImage={() => selected && chooseImage(selected.id)}
             onEditChart={() => selected && setChartDialog({ id: selected.id, spec: selected.chart })}
+            onEditAuthors={() => selected && openAuthors(selected.id)}
           />
         ) : (
           <button className="panel-reveal props" title="Show properties panel" aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>
@@ -809,6 +843,7 @@ export default function Editor({ initial, onClose }: Props) {
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && <CheckPanel issues={issues} onPick={pickIssue} onClose={() => setCheckOpen(false)} />}
       {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
+      {authorsDialog && <AuthorsDialog initial={authorsDialog.initial} replacing={authorsDialog.replacing} onSave={saveAuthors} onCancel={() => setAuthorsDialog(null)} />}
       {toast && <div className="toast">{toast}</div>}
       {marquee && (
         <div

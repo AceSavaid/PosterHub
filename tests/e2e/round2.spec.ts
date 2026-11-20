@@ -90,7 +90,7 @@ test('formats only the selected words', async ({ page }) => {
   await page.getByRole('button', { name: 'Text box', exact: true }).click();
   await page.keyboard.type('plain then special');
   await page.keyboard.press('Shift+ControlOrMeta+ArrowLeft');
-  await page.getByRole('button', { name: 'Make selected words larger' }).click();
+  await page.getByRole('button', { name: 'A+ larger' }).click();
   await page.getByRole('button', { name: 'Colour selected words accent' }).click();
   await page.keyboard.press('Escape');
   const html = await page.locator('.poster .el-body').innerHTML();

@@ -55,9 +55,9 @@ test('previews the poster as colour-blind readers and greyscale print see it', a
   await expect(page.locator('filter#vision-deuteranopia feColorMatrix')).toHaveCount(1);
 
   // the filter really changes what is drawn: a red box looks olive under deuteranopia
-  await page.getByRole('button', { name: 'Design', exact: true }).click();
+  await page.getByRole('tab', { name: 'Design', exact: true }).click();
   await page.getByRole('button', { name: 'Sunset' }).first().click(); // primary #c0392b
-  await page.getByRole('button', { name: 'Insert', exact: true }).click();
+  await page.getByRole('tab', { name: 'Insert', exact: true }).click();
   await page.getByRole('button', { name: 'Box / panel', exact: true }).click();
   await page.getByRole('button', { name: 'Primary (follows palette)' }).click();
   await page.locator('.stage').click({ position: { x: 5, y: 5 } }); // deselect so handles don't cover it
@@ -98,7 +98,7 @@ test('poster check warns when graph colours look alike and offers a preview', as
 test('a graph with red and green series is flagged for red-green colour blindness', async ({ page }) => {
   await newPoster(page);
   // Sunset palette: primary is red; the fourth series colour is olive green
-  await page.getByRole('button', { name: 'Design', exact: true }).click();
+  await page.getByRole('tab', { name: 'Design', exact: true }).click();
   await page.getByRole('button', { name: 'Sunset' }).first().click();
   await pasteTable(page, 'Group\tControl\tB\tC\tTreatment\nx\t1\t2\t3\t4\ny\t2\t3\t4\t5', ['Treatment']);
   await page.getByRole('button', { name: /^Check/ }).click();

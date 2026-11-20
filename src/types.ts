@@ -152,6 +152,8 @@ export interface PosterElement {
   refList?: boolean;
   /** Heading shown above the reference list ("" for none). */
   refTitle?: string;
+  /** Description of an image or graph for screen readers and exported files (alt text). */
+  alt?: string;
 }
 
 export type ElementRole =

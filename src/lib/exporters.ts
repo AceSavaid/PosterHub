@@ -243,7 +243,7 @@ export async function buildPptx(p: Poster, chartImages: Map<string, string> = ne
       case 'image':
         if (e.src) {
           const fit = e.fit ?? 'contain';
-          slide.addImage({ data: e.src, ...box, sizing: fit === 'fill' ? undefined : { type: fit, w: box.w, h: box.h } } as never);
+          slide.addImage({ data: e.src, ...box, altText: e.alt || e.qr || undefined, sizing: fit === 'fill' ? undefined : { type: fit, w: box.w, h: box.h } } as never);
         }
         break;
       case 'equation': {
@@ -258,7 +258,7 @@ export async function buildPptx(p: Poster, chartImages: Map<string, string> = ne
         const ok = addNativeChart(pptx, slide, e, box, p, k);
         if (!ok) {
           const img = chartImages.get(e.id);
-          if (img) slide.addImage({ data: img, ...box });
+          if (img) slide.addImage({ data: img, ...box, altText: e.alt || e.chart.title || undefined });
         }
         break;
       }

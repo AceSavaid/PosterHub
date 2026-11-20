@@ -82,7 +82,7 @@ export default function ViewMode({ poster, onClose, vision = 'normal', onVision 
           </label>
         </div>
       )}
-      <div className={'view-stage' + (distance ? ' distance' : zoomed ? ' zoomed' : '')} style={{ filter: visionFilter(vision) }} onClick={() => !distance && setZoomed((z) => !z)}>
+      <div className={'view-stage' + (distance ? ' distance' : zoomed ? ' zoomed' : '')} tabIndex={0} role="region" aria-label="Poster preview" style={{ filter: visionFilter(vision) }} onClick={() => !distance && setZoomed((z) => !z)}>
         <Surface poster={poster} zoom={zoom} renderElement={(el) => <ElementView key={el.id} el={el} poster={poster} className={small.has(el.id) ? 'too-small' : undefined} />} />
       </div>
     </div>

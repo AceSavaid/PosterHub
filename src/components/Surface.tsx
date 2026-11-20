@@ -3,6 +3,7 @@ import type { Poster, PosterElement, TableSpec } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth, fontStack, resolveColor, resolveFont } from '../model';
 import ChartView from './ChartView';
 import TableView from './TableView';
+import { TYPE_NAMES } from '../lib/a11y';
 import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
 import { cleanHtml } from '../lib/sanitize';
 import { PT_TO_PX, layoutEquation, mathSvg, svgDataUrl, typesetLatex } from '../lib/math';
@@ -33,6 +34,7 @@ export const Surface = forwardRef<HTMLDivElement, SurfaceProps>(function Surface
     backgroundPosition: 'center',
     color: resolveColor('@text', pal),
     fontFamily: fontStack(poster.bodyFont),
+    ['--zoom' as string]: zoom,
   };
   return (
     <div className="surface-scroll-size" style={{ width: px(poster.width) * zoom, height: px(poster.height) * zoom }}>
@@ -112,11 +114,11 @@ export function ElementView({ el, poster, editing, onCommitText, onCommitTable, 
       break;
     case 'image':
       inner = el.src ? (
-        <img src={el.src} alt="" draggable={false} style={{ objectFit: el.fit ?? 'contain', imageRendering: el.qr ? 'pixelated' : undefined }} />
+        <img src={el.src} alt={el.alt ?? ''} draggable={false} style={{ objectFit: el.fit ?? 'contain', imageRendering: el.qr ? 'pixelated' : undefined }} />
       ) : (
         <div className="img-placeholder ui-only">
           <span>{el.placeholder ?? 'Image'}</span>
-          <small>Double-click to choose, or drop / paste an image</small>
+          <small>Double-click or press Enter to choose, or drop / paste an image</small>
         </div>
       );
       break;
@@ -135,7 +137,7 @@ export function ElementView({ el, poster, editing, onCommitText, onCommitTable, 
       ) : (
         <div className="img-placeholder ui-only">
           <span>Chart</span>
-          <small>Double-click to load a CSV</small>
+          <small>Double-click or press Enter to load a CSV</small>
         </div>
       );
       break;
@@ -241,6 +243,9 @@ function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement
       className="el-body"
       style={style}
       contentEditable={editing}
+      role={editing ? 'textbox' : undefined}
+      aria-multiline={editing || undefined}
+      aria-label={editing ? `Editing ${TYPE_NAMES[el.type].toLowerCase()}. Press Escape when done.` : undefined}
       suppressContentEditableWarning
       spellCheck={editing}
       onBlur={() => {
@@ -252,7 +257,10 @@ function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.preventDefault();
+          const box = e.currentTarget.parentElement as HTMLElement | null;
           (e.currentTarget as HTMLElement).blur();
+          // Hand focus back to the element itself so keyboard users can carry on from here.
+          if (box?.classList.contains('el')) box.focus();
         }
         e.stopPropagation();
       }}

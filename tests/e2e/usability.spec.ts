@@ -116,7 +116,7 @@ test('library: rename in place and “Download backup”', async ({ page }) => {
 
 test('Layout tab explains that columns move guides only', async ({ page }) => {
   await newPoster(page);
-  await page.getByRole('button', { name: 'Layout' }).click();
+  await page.getByRole('tab', { name: 'Layout' }).click();
   await expect(page.getByText('content stays where it is')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Switch layout' })).toBeVisible();
   // cancelling the confirmation leaves the poster alone

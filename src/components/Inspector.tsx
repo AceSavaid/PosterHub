@@ -12,6 +12,7 @@ import { SHAPE_CHOICES } from '../lib/shapes';
 import { resizeSelection, styleSelection } from '../lib/richtext';
 import { PALETTE_ROLES } from '../model';
 import { CITATION_STYLES, DEFAULT_STYLE, shortLabel } from '../lib/refs/format';
+import { TYPE_NAMES } from '../lib/a11y';
 
 interface Props {
   poster: Poster;
@@ -85,13 +86,12 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: 
   );
 }
 
-const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', table: 'Table', equation: 'Equation' };
 
 export default function Inspector(props: Props) {
   const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onEditChart, onEditEquation, multi, overflow, onShrinkText, onGrowBox, onCite, onOpenReferences, onSetStyle } = props;
   if (multi > 1) {
     return (
-      <aside className="panel right">
+      <aside className="panel right" aria-label="Properties">
         <div className="panel-body">
           <div className="insp-head">
             <h3>{props.grouped ? `Group of ${multi}` : `${multi} elements selected`}</h3>
@@ -122,7 +122,7 @@ export default function Inspector(props: Props) {
   }
   if (!el) {
     return (
-      <aside className="panel right">
+      <aside className="panel right" aria-label="Properties">
         <div className="panel-body">
           <h3>Nothing selected</h3>
           <p className="hint">Click an element on the poster to change its text, colours, size and position. Double-click text to type.</p>
@@ -132,6 +132,9 @@ export default function Inspector(props: Props) {
             <li><kbd>Ctrl/⌘ C / X / V</kbd> copy, cut, paste elements, text or images</li>
             <li><kbd>Ctrl/⌘ D</kbd> duplicate</li>
             <li><kbd>Ctrl/⌘ G</kbd> group, <kbd>Ctrl/⌘ Shift G</kbd> ungroup</li>
+            <li><kbd>Tab</kbd> move between elements on the poster</li>
+            <li><kbd>Enter</kbd> edit text, or choose an image or graph</li>
+            <li><kbd>Shift F10</kbd> actions menu for the element</li>
             <li><kbd>Delete</kbd> remove selected</li>
             <li><kbd>Shift</kbd>-click or drag a box to select several</li>
             <li><kbd>Ctrl/⌘ A</kbd> select everything</li>
@@ -153,13 +156,13 @@ export default function Inspector(props: Props) {
     editing ? document.execCommand(cmd) : setStyle({ [key]: !st![key] } as Partial<TextStyle>);
 
   return (
-    <aside className="panel right">
+    <aside className="panel right" aria-label="Properties">
       <div className="panel-body">
         <div className="insp-head">
           <h3>{el.refList ? 'Reference list' : TYPE_NAMES[el.type]}</h3>
           <div className="icon-row">
             <button className="icon-btn" title="Duplicate (Ctrl/⌘ D)" onClick={onDuplicate}>⧉</button>
-            <button className="icon-btn" title={el.locked ? 'Unlock' : 'Lock position'} onClick={() => onChange({ locked: !el.locked })}>
+            <button className="icon-btn" title={el.locked ? 'Unlock' : 'Lock position'} aria-label="Lock position" aria-pressed={!!el.locked} onClick={() => onChange({ locked: !el.locked })}>
               {el.locked ? '🔒' : '🔓'}
             </button>
             <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
@@ -231,8 +234,8 @@ export default function Inspector(props: Props) {
               <div className="sel-format">
                 <div className="field-label">Selected words</div>
                 <div className="toolbar-row">
-                  <button className="fmt" title="Larger" aria-label="Make selected words larger" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1.15)}>A+</button>
-                  <button className="fmt" title="Smaller" aria-label="Make selected words smaller" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1 / 1.15)}>A−</button>
+                  <button className="fmt" title="Make selected words larger" aria-label="A+ larger" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1.15)}>A+</button>
+                  <button className="fmt" title="Make selected words smaller" aria-label="A− smaller" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1 / 1.15)}>A−</button>
                   <span className="sep" />
                   {PALETTE_ROLES.filter((r) => r !== 'background' && r !== 'surface').map((r) => (
                     <button
@@ -319,6 +322,10 @@ export default function Inspector(props: Props) {
               </select>
             </label>
             <p className="hint">Hold Shift while dragging a corner to keep proportions.</p>
+            <label>
+              Description (alt text)
+              <textarea rows={2} value={el.alt ?? ''} placeholder="What does it show? Read aloud by screen readers." onChange={(e) => onChange({ alt: e.target.value || undefined }, 'alt')} />
+            </label>
           </section>
         )}
 
@@ -334,6 +341,10 @@ export default function Inspector(props: Props) {
                 <input type="number" min={4} value={el.chart.fontSize} onChange={(e) => onChange((x) => void (x.chart!.fontSize = Math.max(4, +e.target.value || 4)), 'cfs')} />
               </label>
             )}
+            <label>
+              Description (alt text)
+              <textarea rows={2} value={el.alt ?? ''} placeholder="What does it show? Read aloud by screen readers." onChange={(e) => onChange({ alt: e.target.value || undefined }, 'alt')} />
+            </label>
           </section>
         )}
 

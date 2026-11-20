@@ -7,6 +7,7 @@ import { uid, PALETTES } from '../model';
 import NewPosterDialog from './NewPosterDialog';
 import SlidePicker from './SlidePicker';
 import ConfirmDialog from './ConfirmDialog';
+import SupportFooter from './SupportFooter';
 
 const fmtSize = (p: Poster) => `${Math.round(p.width)} × ${Math.round(p.height)} mm · ${p.width > p.height ? 'landscape' : 'portrait'}`;
 const fmtDate = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -195,6 +196,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
           ))}
         </div>
       </main>
+      <SupportFooter />
       {picking && (
         <SlidePicker deck={picking.deck} fileName={picking.fileName} onPick={(i) => finishImport(picking.deck, i, picking.name)} onCancel={() => setPicking(null)} />
       )}

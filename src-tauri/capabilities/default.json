@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the PosterHub window may do: read and write posters in Documents/PosterHub, show Save dialogs for exports, and open that folder.",
+  "description": "What the PosterHub window may do: read and write posters in Documents/PosterHub, show Save dialogs for exports, open that folder, and open the Buy me a coffee page in the system browser.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -26,6 +26,10 @@
     {
       "identifier": "opener:allow-open-path",
       "allow": [{ "path": "$DOCUMENT/PosterHub" }, { "path": "$HOME/Documents/PosterHub" }]
+    },
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://buymeacoffee.com/acesavaid" }]
     }
   ]
 }

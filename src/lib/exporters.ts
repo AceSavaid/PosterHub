@@ -1,9 +1,9 @@
 import { toBlob, toCanvas, toJpeg } from 'html-to-image';
-import type { Poster, PosterElement } from '../types';
+import type { ChartSpec, Poster, PosterElement } from '../types';
 import { MM_TO_IN, MM_TO_PX, resolveColor, resolveFont } from '../model';
 import { fontEmbedCss } from './fonts';
 import { downloadBlob, safeFileName } from './storage';
-import { seriesData } from './chart';
+import { histogramData, seriesData } from './chart';
 import { cleanHtml } from './sanitize';
 
 const MAX_SIDE = 16000;
@@ -307,8 +307,17 @@ function addNativeTable(slide: any, e: PosterElement, box: { x: number; y: numbe
   }
 }
 
+/**
+ * PowerPoint has no box plot chart, and pptxgenjs cannot add trend lines, so those
+ * charts go in as a picture of the editor's chart instead of an editable chart.
+ */
+export function hasNativePptxChart(spec: ChartSpec): boolean {
+  return spec.kind !== 'box' && !(spec.kind === 'scatter' && spec.trendline);
+}
+
 function addNativeChart(pptx: any, slide: any, e: PosterElement, box: object, p: Poster, k: number): boolean {
   const spec = e.chart!;
+  if (!hasNativePptxChart(spec)) return false;
   try {
     const d = seriesData(spec);
     const textColor = hex(resolveColor('@text', p.palette));
@@ -349,10 +358,24 @@ function addNativeChart(pptx: any, slide: any, e: PosterElement, box: object, p:
     switch (spec.kind) {
       case 'bar':
       case 'horizontalBar':
+      case 'stackedBar':
         type = pptx.ChartType.bar;
-        common.barDir = spec.kind === 'bar' ? 'col' : 'bar';
+        common.barDir = spec.kind === 'horizontalBar' ? 'bar' : 'col';
+        if (spec.kind === 'stackedBar') {
+          common.barGrouping = 'stacked';
+          common.barGapWidthPct = 60;
+        }
         data = d.series.map((s) => ({ name: s.name, labels: d.labels, values: clean(s.values) }));
         break;
+      case 'histogram': {
+        const h = histogramData(spec);
+        type = pptx.ChartType.bar;
+        common.barDir = 'col';
+        common.barGapWidthPct = h.series.length > 1 ? 20 : 0;
+        common.valAxisMinVal = 0;
+        data = h.series.map((s) => ({ name: s.name, labels: h.labels, values: s.counts }));
+        break;
+      }
       case 'line':
         type = pptx.ChartType.line;
         data = d.series.map((s) => ({ name: s.name, labels: d.labels, values: clean(s.values) }));

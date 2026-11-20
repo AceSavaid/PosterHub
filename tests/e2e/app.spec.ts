@@ -437,6 +437,42 @@ test.describe('graphs', () => {
     expect(await chart.boundingBox()).toEqual(before);
   });
 
+  test('makes box plots, histograms and scatter trend lines from raw measurements', async ({ page }) => {
+    await newPoster(page, { template: 'Blank' });
+    const rows = ['Condition\tScore\tDose', ...['Control\t10\t1', 'Control\t12\t2', 'Control\t11\t3', 'Control\t30\t4', 'Drug\t20\t5', 'Drug\t22\t6', 'Drug\t21\t7', 'Drug\t24\t8']];
+    await paste(page, { 'text/plain': rows.join('\n') });
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+
+    // Box plot: repeated conditions mean rows are grouped by them automatically.
+    await page.getByLabel('Graph type').selectOption('box');
+    await expect(page.getByText('Shows the median, quartiles')).toBeVisible();
+    await expect(page.getByRole('radio', { name: /Group rows by a column/ })).toBeChecked();
+    await expect(page.getByRole('combobox', { name: 'Group rows by', exact: true })).toHaveValue('0');
+    await page.getByRole('checkbox', { name: 'Dose' }).uncheck();
+    await expect(page.locator('.chart-preview canvas')).toBeVisible();
+
+    // Histogram: no X axis column, and the Y axis is labelled as counts.
+    await page.getByLabel('Graph type').selectOption('histogram');
+    await expect(page.getByLabel('Categories / X axis from')).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Group rows by', exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Y axis label')).toHaveValue('Count');
+    await expect(page.getByLabel('X axis label')).toHaveValue('Score');
+    await page.getByLabel('Number of bars').fill('4');
+
+    // Scatter with a trend line.
+    await page.getByLabel('Graph type').selectOption('scatter');
+    await expect(page.getByLabel('Y axis label')).toHaveValue('');
+    await page.getByLabel('X values (numbers) from').selectOption({ label: 'Dose' });
+    await page.getByRole('checkbox', { name: 'Score' }).check();
+    await page.getByRole('checkbox', { name: /Trend line/ }).check();
+    await page.getByRole('button', { name: 'Add graph to poster' }).click();
+    await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
+    await page.getByRole('button', { name: 'Edit data and graph…' }).click();
+    await expect(page.getByRole('checkbox', { name: /Trend line/ })).toBeChecked();
+    expect(errors).toEqual([]);
+  });
+
   test('builds a graph from pasted spreadsheet data', async ({ page }) => {
     await newPoster(page, { template: 'Blank' });
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1\nB\t3\nC\t2' });

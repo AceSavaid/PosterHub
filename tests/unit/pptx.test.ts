@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import PptxGenJS from 'pptxgenjs';
+import JSZip from 'jszip';
 import { importPptx } from '../../src/lib/pptxImport';
-import { htmlToRuns } from '../../src/lib/exporters';
+import { hasNativePptxChart, htmlToRuns } from '../../src/lib/exporters';
+import { createPoster, makeElement, PALETTES } from '../../src/model';
+import type { ChartSpec } from '../../src/types';
 
 // 1x1 red PNG
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==';
@@ -70,5 +73,53 @@ describe('editor HTML to PowerPoint text runs', () => {
   });
   it('returns one empty run for empty text', () => {
     expect(htmlToRuns('')).toHaveLength(1);
+  });
+});
+
+describe('PowerPoint export of the newer graph types', () => {
+  async function exportWith(chart: Partial<ChartSpec>) {
+    const { exportPptx } = await import('../../src/lib/exporters');
+    const p = createPoster({ name: 'g', width: 210, height: 297, sizePreset: 'A4', columns: 2, palette: PALETTES[0], headingFont: 'Open Sans', bodyFont: 'Open Sans', template: 'blank' });
+    const el = makeElement('chart', p, { id: 'c1' });
+    const rows = [['A', '1', '4'], ['A', '2', '5'], ['B', '3', '9'], ['B', '7', '8']];
+    el.chart = { kind: 'bar', title: 'G', columns: ['Group', 'X', 'Y'], rows, xColumn: 0, yColumns: [1, 2], rowStart: 0, rowEnd: 3, xLabel: '', yLabel: '', showLegend: true, fontSize: 12, ...chart };
+    p.elements = [el];
+    let out: ArrayBuffer | undefined;
+    const spy = vi.spyOn(PptxGenJS.prototype, 'writeFile').mockImplementation(async function (this: PptxGenJS) {
+      out = (await this.write({ outputType: 'arraybuffer' })) as ArrayBuffer;
+      return 'ok';
+    });
+    try {
+      await exportPptx(p, new Map([['c1', PNG]]));
+    } finally {
+      spy.mockRestore();
+    }
+    const zip = await JSZip.loadAsync(out!);
+    const charts = Object.keys(zip.files).filter((f) => /^ppt\/charts\/chart\d+\.xml$/.test(f));
+    const media = Object.keys(zip.files).filter((f) => f.startsWith('ppt/media/'));
+    const xml = charts.length ? await zip.file(charts[0])!.async('string') : '';
+    return { charts, media, xml };
+  }
+
+  it('keeps stacked bars as an editable stacked chart', async () => {
+    const r = await exportWith({ kind: 'stackedBar' });
+    expect(r.charts).toHaveLength(1);
+    expect(r.xml).toContain('<c:grouping val="stacked"/>');
+  });
+
+  it('exports a histogram as an editable column chart of counts', async () => {
+    const r = await exportWith({ kind: 'histogram', yColumns: [1], bins: 3 });
+    expect(r.charts).toHaveLength(1);
+    expect(r.xml).toContain('<c:barDir val="col"/>');
+    expect(r.xml).toMatch(/1–3/);
+  });
+
+  it('falls back to a picture for box plots and trend lines', async () => {
+    expect(hasNativePptxChart({ kind: 'box' } as ChartSpec)).toBe(false);
+    expect(hasNativePptxChart({ kind: 'scatter', trendline: true } as ChartSpec)).toBe(false);
+    expect(hasNativePptxChart({ kind: 'scatter' } as ChartSpec)).toBe(true);
+    const r = await exportWith({ kind: 'box', boxGroups: 'category', yColumns: [2] });
+    expect(r.charts).toHaveLength(0);
+    expect(r.media.length).toBeGreaterThan(0);
   });
 });

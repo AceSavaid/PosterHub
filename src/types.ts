@@ -145,6 +145,10 @@ export interface Poster {
   gutter: number; // mm
   backgroundImage?: string;
   elements: PosterElement[];
+  /** words the spelling check should accept on this poster (names, jargon) */
+  ignoredWords?: string[];
+  /** optional word limit set by a conference; the check warns when the poster goes over it */
+  wordLimit?: number;
   createdAt: number;
   updatedAt: number;
   thumbnail?: string;

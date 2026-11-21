@@ -210,9 +210,14 @@ function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
         <label className="span2">
           Layout
           <select value={template} onChange={(e) => setTemplate(e.target.value as TemplateId)}>
-            {TEMPLATES.map((t) => (
+            {TEMPLATES.filter((t) => !t.field).map((t) => (
               <option key={t.id} value={t.id}>{t.label}</option>
             ))}
+            <optgroup label="By research field">
+              {TEMPLATES.filter((t) => t.field).map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </optgroup>
           </select>
         </label>
         <p className="hint span2">{templateDef(template).description} Your text, figures and logos carry over.</p>

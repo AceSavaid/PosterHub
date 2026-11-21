@@ -100,15 +100,23 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
           {!mine && <>
           <div className="span2">
             <div className="field-label">Layout <span className="muted">· previews follow the colours, size and columns you pick below</span></div>
-            <div className="template-grid">
-              {TEMPLATES.map((t) => (
-                <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => { setTemplate(t.id); setMine(null); }}>
-                  <TemplateThumb id={t.id} width={size.width} height={size.height} columns={columns} palette={palette} />
-                  <strong>{t.label}</strong>
-                  <span>{t.description}</span>
-                </button>
-              ))}
-            </div>
+            {[
+              { label: '', list: TEMPLATES.filter((t) => !t.field) },
+              { label: 'By research field', list: TEMPLATES.filter((t) => t.field) },
+            ].map((g) => (
+              <div key={g.label || 'general'} role="group" aria-label={g.label || 'General layouts'}>
+                {g.label && <div className="field-label" style={{ marginTop: 14 }}>{g.label}</div>}
+                <div className="template-grid">
+                  {g.list.map((t) => (
+                    <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => { setTemplate(t.id); setMine(null); }}>
+                      <TemplateThumb id={t.id} width={size.width} height={size.height} columns={columns} palette={palette} />
+                      <strong>{t.label}</strong>
+                      <span>{t.description}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
           <div className="span2">
             <div className="field-label">Colour palette</div>

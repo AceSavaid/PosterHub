@@ -1174,7 +1174,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         <button
           className="icon-btn"
           aria-label="Help"
-          title="Help"
+          title="Help: keyboard shortcuts, tour and settings"
           aria-haspopup="menu"
           aria-expanded={!!helpMenu}
           onClick={(e) => {
@@ -1464,6 +1464,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           y={helpMenu.y}
           onClose={() => setHelpMenu(null)}
           items={[
+            { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setShortcutsOpen(true) },
             {
               label: 'Take the tour',
               onClick: () => {
@@ -1471,6 +1472,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
                 setTouring(true);
               },
             },
+            { label: 'Settings…', onClick: () => setSettingsOpen(true) },
           ]}
         />
       )}

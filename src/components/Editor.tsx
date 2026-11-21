@@ -45,6 +45,8 @@ import { NotesLayer, NotesPanel } from './ReviewNotes';
 import { cleanText, createNote, loadReviewerName, MAX_NOTE_LENGTH, notePositionFor, openNotes, saveReviewerName } from '../lib/notes';
 import VisionMenu, { VisionBanner, VisionFilters, visionFilter } from './VisionFilters';
 import type { VisionMode } from '../lib/colorVision';
+import Tour from './Tour';
+import { hasSeenTour, markTourSeen } from '../lib/tour';
 
 /** Start of the example reference in starter templates. */
 const EXAMPLE_REFS = 'Author, A. (2025). Title of work';
@@ -125,6 +127,18 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     }
   }, []);
   const [vision, setVision] = useState<VisionMode>('normal');
+  // The tour starts by itself the first time someone opens a poster; Help → Take the tour replays it.
+  const [touring, setTouring] = useState(false);
+  const [helpMenu, setHelpMenu] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (hasSeenTour()) return;
+    // Wait for the poster to zoom to fit so the first card points at the right place.
+    const t = setTimeout(() => {
+      markTourSeen();
+      setTouring(true);
+    }, 500);
+    return () => clearTimeout(t);
+  }, []);
   const exportBtn = useRef<HTMLButtonElement>(null);
   const exportMenu = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -1122,6 +1136,19 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           </label>
         </AppearanceMenu>
         <VisionMenu mode={vision} onChange={setVision} />
+        <button
+          className="icon-btn"
+          aria-label="Help"
+          title="Help"
+          aria-haspopup="menu"
+          aria-expanded={!!helpMenu}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setHelpMenu({ x: r.left, y: r.bottom + 4 });
+          }}
+        >
+          ?
+        </button>
         <span className="sep" />
         <button
           className={'btn check-btn notes-btn' + (notesOpen ? ' active' : '')}
@@ -1137,6 +1164,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         </button>
         <button
           className={'btn check-btn' + (checkOpen ? ' active' : '')}
+          data-tour="check"
           onClick={() => {
             runCheck();
             setNotesOpen(false);
@@ -1154,7 +1182,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         <button className={'btn' + (findOpen ? ' active' : '')} onClick={() => setFindOpen(!findOpen)} title="Find and replace words on the poster (Ctrl/⌘ F)">Find</button>
         <button className="btn" onClick={() => setViewing(true)} title="See the poster full screen, without editing tools">Preview</button>
         <button className="btn" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
-        <div className="menu-wrap">
+        <div className="menu-wrap" data-tour="export">
           <button ref={exportBtn} className="btn primary" aria-expanded={exportOpen} aria-controls="export-menu" onClick={() => setExportOpen((o) => !o)}>Export ▾</button>
           {exportOpen && (
             <div className="menu" id="export-menu" role="group" aria-label="Export" ref={exportMenu} onMouseLeave={() => setExportOpen(false)}>
@@ -1394,6 +1422,23 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           ]}
         />
       )}
+      {helpMenu && (
+        <ContextMenu
+          x={helpMenu.x}
+          y={helpMenu.y}
+          onClose={() => setHelpMenu(null)}
+          items={[
+            {
+              label: 'Take the tour',
+              onClick: () => {
+                setExportOpen(false);
+                setTouring(true);
+              },
+            },
+          ]}
+        />
+      )}
+      {touring && <Tour onClose={() => setTouring(false)} />}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && (
         <CheckPanel

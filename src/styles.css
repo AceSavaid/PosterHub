@@ -664,3 +664,13 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .keep-pic.on { border-color: var(--accent); background: var(--accent-soft); }
 .keep-pic img { width: 56px; height: 40px; object-fit: contain; background: #fff; border-radius: 3px; }
 .inline.wrap { flex-wrap: wrap; }
+
+/* First-time tour: a ring around one part of the editor and a card next to it. Sits under dialogs. */
+.tour-ring { position: fixed; z-index: 45; border: 3px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 4px var(--accent-soft); pointer-events: none; transition: left 0.2s, top 0.2s, width 0.2s, height 0.2s; }
+.tour-card { position: fixed; z-index: 46; width: min(320px, calc(100vw - 32px)); background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 16px 18px 14px; }
+.tour-card h2 { font-size: 16px; margin: 4px 0 6px; }
+.tour-card p { font-size: 13.5px; line-height: 1.5; margin: 0 0 12px; }
+.tour-dots { display: flex; gap: 6px; margin-bottom: 12px; }
+.tour-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.tour-dots span.on { background: var(--accent); }
+.tour-actions { display: flex; align-items: center; gap: 8px; }

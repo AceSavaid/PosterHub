@@ -37,7 +37,7 @@ const TABS: Tab[] = ['insert', 'layout', 'design'];
 export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, onFillFromAbstract, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
-    <aside className="panel left" aria-label="Tools">
+    <aside className="panel left" aria-label="Tools" data-tour="tools">
       <div className="tabs" role="tablist" aria-label="Tools">
         {TABS.map((t, i) => (
           <button

@@ -10,6 +10,8 @@ export default defineConfig({
     baseURL: 'http://localhost:4173',
     trace: 'off',
     viewport: { width: 1440, height: 900 },
+    // Mark the first-time tour as seen so it doesn't sit over the editor in every test; tour.spec.ts turns it back on.
+    storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'posterhub.tour', value: 'done' }] }] },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } }],
   webServer: {

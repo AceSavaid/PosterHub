@@ -25,7 +25,7 @@ export function SizeFields({ orientation, preset, width, height, onChange }: Pro
 
   return (
     <>
-      <div>
+      <div className="orient-field">
         <div className="field-label" id="orientation-label">Orientation</div>
         <div className="seg" role="group" aria-labelledby="orientation-label">
           {(['portrait', 'landscape'] as Orientation[]).map((o) => (

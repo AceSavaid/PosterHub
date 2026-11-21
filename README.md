@@ -20,6 +20,7 @@ Make research and academic posters in your browser. No account, no install: ever
 - **Find, spelling and word count**: find and replace across every text box (Ctrl/⌘ F), keeping bold, colours and line breaks. The Check panel has a Spelling tab (US and UK English dictionaries bundled with the app, so it works offline; acronyms and gene names are skipped) and a Words tab with a count per section, a total, and an optional conference word limit.
 - **My posters**: every poster autosaves to a library in your browser, with thumbnails, rename, duplicate and delete.
 - **Export**: print-quality vector PDF (real, selectable text with embedded fonts, vector shapes, charts and equations, full-resolution photos, so it stays sharp at A0 and beyond), PowerPoint (editable text, shapes and native charts), PNG, or a `.poster.json` project file you can back up or open on another computer.
+- **Install it and work offline**: on the website, the first visit saves PosterHub on your device. After that it opens and works with no internet (on a plane, at a conference with bad Wi-Fi), and your browser offers to install it as an app (Chrome/Edge: the install icon in the address bar; Safari: **Share → Add to Dock / Add to Home Screen**). Google Fonts your posters use are saved too; a font you have never used before falls back to a similar one until you are back online. Reference lookups by DOI still need the internet. When a new version is out, a note offers **Reload**.
 - **Share and present**: copy the poster as an image to paste anywhere, or open Preview to present it full screen. Preview can also show the poster as it looks from 1, 2 or 3 m away and mark text too small to read from there.
 
 ## Desktop app
@@ -69,6 +70,8 @@ The app is a static site (Vite + React + TypeScript). `vite.config.ts` uses rela
 | `src/lib/relayout.ts` | Switching layouts: moves existing content into the new layout |
 | `src/lib/` | Storage, fonts, charts, exporters, PowerPoint import, undo history, in-app dialogs |
 | `src/lib/store/` | Where the poster library lives: browser storage or a folder on disk |
+| `pwa/` | Offline support for the website: the service worker and the build step that lists the files it saves |
+| `public/` | Install manifest and app icons |
 | `src-tauri/` | Desktop app shell (Tauri): window, permissions, icons |
 | `src/components/` | Library, editor, canvas, panels and dialogs |
 | `tests/unit/` | Vitest unit tests |
@@ -77,7 +80,7 @@ The app is a static site (Vite + React + TypeScript). `vite.config.ts` uses rela
 
 ## Publishing on GitHub Pages
 
-Pushing to `main` runs `.github/workflows/deploy.yml`, which tests, builds and publishes the site. In the repository's **Settings → Pages**, set **Source** to **GitHub Actions** once.
+Pushing to `main` runs `.github/workflows/deploy.yml`, which tests, builds and publishes the site. The build writes `dist/sw.js` with a fresh version for every release, so visitors pick up updates; the desktop app never registers it. In the repository's **Settings → Pages**, set **Source** to **GitHub Actions** once.
 
 ## Licences
 

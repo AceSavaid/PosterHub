@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Papa from 'papaparse';
 import type { ChartKind, ChartSpec, Poster } from '../types';
 import { resolveColor, resolveFont, typeScale } from '../model';
@@ -7,6 +7,7 @@ import { useEscape } from '../lib/useEscape';
 import { pickFile } from '../lib/storage';
 import ChartView from './ChartView';
 import { useDialog } from '../lib/useDialog';
+import { useDiscardGuard } from './useDiscardGuard';
 
 interface Props {
   poster: Poster;
@@ -71,6 +72,8 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
   });
   const [paste, setPaste] = useState('');
   const [error, setError] = useState('');
+  const startRef = useRef(JSON.stringify(spec));
+  const { request: cancel, prompt: discardPrompt } = useDiscardGuard(!!paste.trim() || JSON.stringify(spec) !== startRef.current, onCancel);
   const set = (p: Partial<ChartSpec>) => setSpec((s) => (s ? { ...s, ...p } : s));
 
   /** Switches graph type and fills in sensible labels for the new type. */
@@ -108,13 +111,13 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
     if (f) load(await f.text());
   }
 
-  const dialog = useDialog(onCancel, 'chart-dialog-title');
+  const dialog = useDialog(cancel, 'chart-dialog-title');
   const preview = useMemo(() => spec && { ...spec, fontSize: 11 }, [spec]);
   const mismatch = useMemo(() => spec && scaleMismatch(spec), [spec]);
-  useEscape(onCancel);
+  useEscape(cancel);
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && cancel()}>
       <div {...dialog} className="modal xwide chart-dialog">
         <h2 id="chart-dialog-title">{initial ? 'Edit graph' : 'Graph from CSV'}</h2>
         {!spec ? (
@@ -123,7 +126,7 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
             <p className="muted">or paste data (from Excel, Sheets or a CSV) below, with column names in the first row:</p>
             <textarea rows={8} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={'Condition,Trial 1,Trial 2\nControl,12,14\nTreatment,18,21'} />
             <div className="modal-actions">
-              <button className="btn" onClick={onCancel}>Cancel</button>
+              <button className="btn" onClick={cancel}>Cancel</button>
               <button className="btn primary" disabled={!paste.trim()} onClick={() => load(paste)}>Use pasted data</button>
             </div>
             {error && <div className="banner error">{error}</div>}
@@ -273,7 +276,7 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
               </div>
             </div>
             <div className="modal-actions span-all">
-              <button className="btn" onClick={onCancel}>Cancel</button>
+              <button className="btn" onClick={cancel}>Cancel</button>
               <button className="btn primary" disabled={!spec.yColumns.length} onClick={() => onSave(spec)}>
                 {initial ? 'Update graph' : 'Add graph to poster'}
               </button>
@@ -281,6 +284,7 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
           </div>
         )}
       </div>
+      {discardPrompt}
     </div>
   );
 }

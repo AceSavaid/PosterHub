@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import PptxGenJS from 'pptxgenjs';
 import { inspectPdf, localFontsource, pdfText } from '../helpers/pdf';
 import jsQR from 'jsqr';
+import { allowClipboard } from '../helpers/clipboard';
 
 const FIXTURES = path.join(import.meta.dirname, '..', 'fixtures');
 
@@ -636,8 +637,8 @@ test.describe('export, import and sharing', () => {
     await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
   });
 
-  test('copies the poster as an image', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  test('copies the poster as an image', async ({ page, context, browserName }) => {
+    await allowClipboard(context, browserName);
     await newPoster(page, { size: 'A4' });
     await page.getByRole('button', { name: 'Copy image' }).click();
     await expect(page.locator('.toast')).toContainText('copied');

@@ -15,7 +15,15 @@ export default defineConfig({
   // `npm run test:e2e:all` runs all three, and CI runs Firefox and WebKit in their own job.
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } },
-    { name: 'firefox', use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 } } },
+    {
+      name: 'firefox',
+      use: {
+        ...devices['Desktop Firefox'],
+        viewport: { width: 1440, height: 900 },
+        // lets tests read the clipboard without Firefox's "Paste" prompt
+        launchOptions: { firefoxUserPrefs: { 'dom.events.testing.asyncClipboard': true } },
+      },
+    },
     { name: 'webkit', use: { ...devices['Desktop Safari'], viewport: { width: 1440, height: 900 } } },
   ],
   webServer: {

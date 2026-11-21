@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import JSZip from 'jszip';
 import { localFontsource, pdfText } from '../helpers/pdf';
+import { allowClipboard } from '../helpers/clipboard';
 
 // Review notes: sticky notes for co-authors that are saved in the poster file
 // but must never appear in anything that gets printed or shared as an image.
@@ -161,8 +162,8 @@ test('Check lists open notes and clicking one opens it', async ({ page }) => {
   await expect(check.getByRole('button', { name: /Open note from/ })).toHaveCount(0);
 });
 
-test('notes never appear in PDF, PowerPoint, PNG or copied images, but travel in the project file', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('notes never appear in PDF, PowerPoint, PNG or copied images, but travel in the project file', async ({ page, context, browserName }) => {
+  await allowClipboard(context, browserName);
   await newPoster(page, 'Shared draft');
   const secret = 'SUPERVISOR-ONLY-COMMENT';
   // put the note in an empty part of the poster and leave its card open while exporting

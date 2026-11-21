@@ -44,6 +44,10 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
   const [guides, setGuides] = useState<Guide[]>([]);
   const [angle, setAngle] = useState<{ deg: number; x: number; y: number } | null>(null);
   const dragging = useRef(false);
+  /** The last finger tap on an element, to spot a double-tap: Safari on iPad doesn't send dblclick for one. */
+  const lastTap = useRef<{ id: string; t: number; x: number; y: number } | null>(null);
+  /** When a double-tap last opened an element, so a dblclick the browser sends as well is ignored. */
+  const tapActivatedAt = useRef(-Infinity);
 
   const scale = zoom * MM_TO_PX; // screen px per mm
 
@@ -333,8 +337,20 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
                 if (!selectedIds.includes(el.id)) onSelect(el.id, false);
                 onContextMenu(el, e.clientX, e.clientY);
               },
+              onPointerUp: (e) => {
+                if (isEditing || e.pointerType !== 'touch') return;
+                const prev = lastTap.current;
+                const t = e.timeStamp;
+                if (prev && prev.id === el.id && t - prev.t < 400 && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 24) {
+                  lastTap.current = null;
+                  tapActivatedAt.current = t;
+                  if (isText) onEdit(el.id);
+                  else onActivate(el);
+                } else lastTap.current = { id: el.id, t, x: e.clientX, y: e.clientY };
+              },
               onDoubleClick: (e) => {
                 e.stopPropagation();
+                if (e.timeStamp - tapActivatedAt.current < 600) return;
                 if (isText) onEdit(el.id);
                 else onActivate(el);
               },

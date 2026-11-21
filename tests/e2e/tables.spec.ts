@@ -162,8 +162,7 @@ test.describe('tables', () => {
     await expect(page.locator('.poster .poster-table')).toBeVisible();
   });
 
-  test('copies a table so it pastes back into a spreadsheet as cells', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  test('copies a table so it pastes back into a spreadsheet as cells', async ({ page }) => {
     await newPoster(page);
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1' });
     const text = await page.evaluate(() => {

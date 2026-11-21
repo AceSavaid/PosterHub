@@ -47,7 +47,10 @@ test('the poster name has room in the desktop top bar', async ({ page }) => {
   await newPoster(page);
   await expect(page.getByRole('button', { name: 'Colour vision' })).toHaveCount(0);
   const name = (await page.getByLabel('Poster name').boundingBox())!;
-  expect(name.width).toBeGreaterThan(120); // it was squeezed to its 90px minimum with the eye button there
+  // With the eye button there it was squeezed to its 90px minimum. Button widths depend on the
+  // computer's fonts, so check it is clearly above that minimum rather than an exact size.
+  expect(name.width).toBeGreaterThan(100);
+  expect(await page.locator('.topbar').evaluate((n) => n.scrollWidth <= n.clientWidth + 1)).toBe(true);
   // still one row
   const bar = (await page.locator('.topbar').boundingBox())!;
   expect(bar.height).toBeLessThan(60);

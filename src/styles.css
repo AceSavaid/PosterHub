@@ -767,3 +767,23 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .tour-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
 .tour-dots span.on { background: var(--accent); }
 .tour-actions { display: flex; align-items: center; gap: 8px; }
+
+/* In the narrow Layout panel the orientation buttons take a whole row, so the Size list isn't squeezed */
+.panel .form-grid > .orient-field { grid-column: 1 / -1; }
+/* Export menu: "Bleed" sits to the left of its list, not centred above it */
+.menu-print label:not(.check) { flex-direction: row; }
+.menu-print label:not(.check) select { width: auto; flex: 1; min-width: 0; }
+
+/* ---------------- Phone toolbar: one row with Undo, Check and Export; the rest sits under More */
+.phone-only { display: none; }
+.topbar-group { display: contents; }
+@media (max-width: 680px) {
+  .topbar, :root[data-ui-size] .topbar { flex-wrap: nowrap; gap: 4px; padding: 6px 8px; }
+  .topbar .phone-hide { display: none; }
+  .topbar .phone-only { display: inline-flex; }
+  .topbar > * { flex-shrink: 0; }
+  .topbar > .poster-name { flex: 1 1 auto; width: auto; min-width: 60px; }
+  .topbar > .spacer { display: none; }
+  .back-btn { padding-left: 6px; padding-right: 6px; }
+}
+.context-menu button:disabled { opacity: .45; cursor: default; background: none; }

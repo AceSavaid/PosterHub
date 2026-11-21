@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import OfflineStatus from './components/OfflineStatus';
 import './styles.css';
 import { applyAppearance, loadPrefs, watchSystemContrast } from './lib/uiPrefs';
 
@@ -11,5 +12,6 @@ watchSystemContrast();
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
+    <OfflineStatus />
   </StrictMode>,
 );

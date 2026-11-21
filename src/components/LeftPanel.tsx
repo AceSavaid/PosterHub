@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ElementType, Poster, PosterElement } from '../types';
+import { scaleContent as scaleContentTo } from '../lib/copyAtSize';
 import { applyLayout, describeReport } from '../lib/relayout';
 import { PALETTE_ROLES, TEMPLATES, templateDef, typeScale, type TemplateId } from '../model';
 import { SizeFields } from './SizeFields';
@@ -146,23 +147,7 @@ function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
 
   const resize = (o: string, preset: string, w: number, h: number) =>
     update((d) => {
-      const sx = w / d.width;
-      const sy = h / d.height;
-      if (scaleContent) {
-        const fs = Math.min(sx, sy);
-        for (const e of d.elements) {
-          e.x *= sx;
-          e.w *= sx;
-          e.y *= sy;
-          e.h *= sy;
-          if (e.style) e.style.fontSize = Math.max(4, Math.round(e.style.fontSize * fs * 10) / 10);
-          if (e.chart) e.chart.fontSize = Math.max(4, Math.round(e.chart.fontSize * fs));
-          if (e.table) e.table.fontSize = Math.max(4, Math.round(e.table.fontSize * fs * 10) / 10);
-          if (e.equation) e.equation.fontSize = Math.max(4, Math.round(e.equation.fontSize * fs * 10) / 10);
-        }
-        d.margin *= Math.min(sx, sy);
-        d.gutter *= Math.min(sx, sy);
-      }
+      if (scaleContent) scaleContentTo(d, w, h);
       d.width = w;
       d.height = h;
       d.sizePreset = preset;

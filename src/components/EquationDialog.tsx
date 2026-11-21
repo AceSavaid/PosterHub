@@ -3,6 +3,8 @@ import type { EquationSpec, Poster } from '../types';
 import { resolveColor } from '../model';
 import { SNIPPETS, insertSnippet, mathSvg, svgDataUrl, typesetLatex } from '../lib/math';
 import { useMathReady } from '../lib/useMath';
+import { keys } from '../lib/keys';
+import { useDiscardGuard } from './useDiscardGuard';
 
 interface Props {
   poster: Poster;
@@ -26,6 +28,7 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
   const ready = useMathReady();
   const [latex, setLatex] = useState(initial.latex);
   const [fontSize, setFontSize] = useState(initial.fontSize);
+  const { request: cancel, prompt: discardPrompt } = useDiscardGuard(latex !== initial.latex || fontSize !== initial.fontSize, onCancel);
   const area = useRef<HTMLTextAreaElement>(null);
   /** Where to put the caret once a snippet insert has rendered. */
   const caret = useRef<number | null>(null);
@@ -72,7 +75,7 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && cancel()}>
       <div className="modal wide equation-dialog" role="dialog" aria-modal="true" aria-labelledby="eq-title">
         <h2 id="eq-title">{isNew ? 'Insert equation' : 'Edit equation'}</h2>
         <label className="eq-field">
@@ -92,7 +95,7 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
                 save();
               } else if (e.key === 'Escape') {
                 e.preventDefault();
-                onCancel();
+                cancel();
               }
             }}
           />
@@ -111,7 +114,7 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
         </div>
         <p id="eq-help" className="hint">
           Type maths as you would in LaTeX, without the $ signs: <code>x^2</code> for powers, <code>x_i</code> for subscripts, <code>\frac{"{a}{b}"}</code> for fractions,{' '}
-          <code>\alpha</code> for Greek letters. It stays perfectly sharp in PDF and PowerPoint. <kbd>Ctrl/⌘ Enter</kbd> saves.
+          <code>\alpha</code> for Greek letters. It stays perfectly sharp in PDF and PowerPoint. <kbd>{keys('Ctrl/⌘ Enter')}</kbd> saves.
         </p>
         <div className="eq-examples">
           <span className="field-label">Examples:</span>
@@ -127,12 +130,13 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
             <input type="number" min={4} max={600} value={fontSize} onChange={(e) => setFontSize(Math.max(4, +e.target.value || 4))} />
           </label>
           <span className="spacer" />
-          <button className="btn" onClick={onCancel}>Cancel</button>
+          <button className="btn" onClick={cancel}>Cancel</button>
           <button className="btn primary" disabled={!canSave} onClick={save}>
             {isNew ? 'Insert' : 'Save'}
           </button>
         </div>
       </div>
+      {discardPrompt}
     </div>
   );
 }

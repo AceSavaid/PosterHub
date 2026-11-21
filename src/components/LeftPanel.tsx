@@ -14,6 +14,7 @@ import { applyBrandKit } from '../lib/brandKit';
 import { BRAND_KITS, brandKitById } from '../brandKits';
 import { IconPicker } from './IconPicker';
 import { ICON_SOURCES } from '../lib/icons/library';
+import { keys } from '../lib/keys';
 
 type Tab = 'insert' | 'layout' | 'design';
 
@@ -37,7 +38,7 @@ const TABS: Tab[] = ['insert', 'layout', 'design'];
 export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, onFillFromAbstract, notify }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
-    <aside className="panel left" aria-label="Tools">
+    <aside className="panel left" aria-label="Tools" data-tour="tools">
       <div className="tabs" role="tablist" aria-label="Tools">
         {TABS.map((t, i) => (
           <button
@@ -64,6 +65,7 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
         ))}
       </div>
       <div className="panel-body" id="tools-panel" role="tabpanel" aria-labelledby={'tab-' + tab}>
+        <h2 className="sr-only">{tab[0].toUpperCase() + tab.slice(1)}</h2>
         {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} onInsertReferences={onInsertReferences} onInsertTable={onInsertTable} onInsertEquation={onInsertEquation} onFillFromAbstract={onFillFromAbstract} />}
         {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
@@ -132,7 +134,7 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
         ))}
       </div>
       <p className="hint">
-        Tip: paste text, images or cells from Excel / Google Sheets straight onto the poster with Ctrl/⌘ + V, or drag image and CSV files in. Double-click any text to edit it.
+        {keys('Tip: paste text, images or cells from Excel / Google Sheets straight onto the poster with Ctrl/⌘ V, or drag image and CSV files in. Double-click any text to edit it.')}
       </p>
     </>
   );

@@ -63,6 +63,9 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Use pasted data' }).click();
     await expectNoViolations(page, 'Graph dialog, second step');
     await page.getByRole('button', { name: 'Cancel' }).click();
+    // data was loaded, so closing asks first
+    await expectNoViolations(page, 'Discard changes question');
+    await page.getByRole('button', { name: 'Discard changes' }).click();
 
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     await expectNoViolations(page, 'View mode');

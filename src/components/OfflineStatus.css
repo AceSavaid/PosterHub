@@ -1,0 +1,28 @@
+.offline-status {
+  position: fixed;
+  left: 16px;
+  bottom: 56px; /* above the support footer */
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 10px 12px 10px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--line, #d9dde3);
+  background: var(--bg, #fff);
+  color: var(--fg, inherit);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  font-size: 13.5px;
+}
+.offline-status span { flex: 1; }
+.offline-status-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 20px;
+  line-height: 1;
+  min-width: 32px;
+  min-height: 32px;
+  cursor: pointer;
+}

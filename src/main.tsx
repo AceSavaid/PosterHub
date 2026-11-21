@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import OfflineStatus from './components/OfflineStatus';
 import './styles.css';
 import { applyTheme, loadPrefs } from './lib/uiPrefs';
 
@@ -10,5 +11,6 @@ applyTheme(loadPrefs().theme);
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
+    <OfflineStatus />
   </StrictMode>,
 );

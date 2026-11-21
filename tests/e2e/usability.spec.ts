@@ -22,7 +22,7 @@ test('new poster dialog: layouts first, Create always in view, Esc closes it', a
   await page.getByRole('button', { name: '+ New poster' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'New poster' });
   // the layout gallery comes before the size settings
-  const layouts = await box(page, '.template-grid');
+  const layouts = await box(page, '.template-grid >> nth=0'); // general layouts; field layouts follow in a second grid
   const size = await page.getByText('Orientation', { exact: true }).boundingBox();
   expect(layouts.y).toBeLessThan(size!.y);
   // Create is on screen without scrolling

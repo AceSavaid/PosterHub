@@ -9,6 +9,8 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4173',
     trace: 'off',
+    // The offline service worker would hide requests from page.route(); tests/e2e/offline.spec.ts turns it back on.
+    serviceWorkers: 'block',
     viewport: { width: 1440, height: 900 },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } } }],

@@ -2,6 +2,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { contentSecurityPolicy } from './csp';
+import { pwaPlugin } from './pwa/plugin';
 
 // `base: './'` keeps every asset path relative, so the same build works on
 // GitHub Pages (served from /<repo>/) and inside a desktop wrapper (file://).
@@ -9,6 +10,8 @@ export default defineConfig({
   base: './',
   plugins: [
     react(),
+    // Installable app + offline support for the website (not used by the desktop app).
+    pwaPlugin(),
     // Added to built pages only: the dev server needs inline scripts for hot reload.
     {
       name: 'posterhub-csp',

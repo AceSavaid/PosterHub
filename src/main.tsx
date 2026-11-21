@@ -2,10 +2,11 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './styles.css';
-import { applyTheme, loadPrefs } from './lib/uiPrefs';
+import { applyAppearance, loadPrefs, watchSystemContrast } from './lib/uiPrefs';
 
 // Before the first render so a dark-theme user never sees a white flash.
-applyTheme(loadPrefs().theme);
+applyAppearance(loadPrefs());
+watchSystemContrast();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

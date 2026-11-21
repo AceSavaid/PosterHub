@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useUiPrefs, type Theme } from '../lib/uiPrefs';
+import { keys } from '../lib/keys';
 
 const THEMES: { id: Theme; label: string }[] = [
   { id: 'system', label: 'Auto' },
@@ -11,7 +12,7 @@ const THEMES: { id: Theme; label: string }[] = [
  * Small popover for how the app looks to this person. `panels` adds the editor's panel options;
  * with a `label` it becomes a text button (the editor's "View" menu) and `children` go at the top.
  */
-export default function AppearanceMenu({ panels = false, label, children }: { panels?: boolean; label?: string; children?: ReactNode }) {
+export default function AppearanceMenu({ panels = false, label, children, footer }: { panels?: boolean; label?: string; children?: ReactNode; footer?: (close: () => void) => ReactNode }) {
   const [prefs, change] = useUiPrefs();
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -80,10 +81,11 @@ export default function AppearanceMenu({ panels = false, label, children }: { pa
                 <input type="checkbox" checked={prefs.swapPanels} onChange={(e) => change({ swapPanels: e.target.checked })} /> Tools on the right
               </label>
               <p className="hint">
-                <kbd>Ctrl</kbd>/<kbd>⌘</kbd> <kbd>\</kbd> hides or shows both panels.
+                <kbd>{keys('Ctrl/⌘ \\')}</kbd> hides or shows both panels.
               </p>
             </>
           )}
+          {footer && <div className="appearance-footer">{footer(() => setOpen(false))}</div>}
         </div>
       )}
     </div>

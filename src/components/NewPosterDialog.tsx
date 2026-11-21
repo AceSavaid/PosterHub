@@ -58,15 +58,12 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
   }
 
   const fonts = [...new Set([...(kit ? [kit.headingFont, kit.bodyFont, ...(kit.googleFonts ?? [])] : []), ...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS])];
-  const dialog = useDialog<HTMLFormElement>(onCancel, 'new-poster-title');
+  const dialog = useDialog<HTMLDivElement>(onCancel, 'new-poster-title');
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+      <div {...dialog} className="modal wide" aria-label="New poster">
       <form
-        {...dialog}
-        className="modal wide"
-        role="dialog"
-        aria-label="New poster"
         onSubmit={(e) => {
           e.preventDefault();
           if (mine) {
@@ -158,6 +155,7 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
           <button type="submit" className="btn primary">Create poster</button>
         </div>
       </form>
+      </div>
     </div>
   );
 }

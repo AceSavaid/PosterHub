@@ -17,8 +17,17 @@ import { resizeSelection, styleSelection } from '../lib/richtext';
 import { PALETTE_ROLES } from '../model';
 import { CITATION_STYLES, DEFAULT_STYLE, shortLabel } from '../lib/refs/format';
 import { TYPE_NAMES } from '../lib/a11y';
+import { keys } from '../lib/keys';
+import { SHORTCUTS } from '../lib/shortcuts';
+import { elementTip } from '../lib/tips';
+import { useUiPrefs } from '../lib/uiPrefs';
+
+/** The few shortcuts shown in the empty Properties panel; the rest are on the ? sheet. */
+const QUICK = new Set(['Undo', 'Redo', 'Copy, cut and paste elements, text or images', 'Duplicate', 'Move between elements on the poster', 'Edit the selected text, table, equation, image or graph', 'Nudge 1 mm', 'Stop editing, or clear the selection']);
 
 interface Props {
+  /** opens the full keyboard shortcut list */
+  onShowShortcuts?: () => void;
   poster: Poster;
   el: PosterElement | null;
   editing: boolean;
@@ -92,6 +101,20 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: 
 }
 
 
+function ElementTip({ el }: { el: PosterElement }) {
+  const [prefs, change] = useUiPrefs();
+  const tip = elementTip(el);
+  if (!prefs.showTips || !tip) return null;
+  return (
+    <p className="hint element-tip" data-testid="element-tip">
+      {keys(tip)}{' '}
+      <button className="link" onClick={() => change({ showTips: false })} title="You can turn tips back on in Settings">
+        Hide tips
+      </button>
+    </p>
+  );
+}
+
 export default function Inspector(props: Props) {
   const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onCrop, onEditChart, onEditEquation, multi, overflow, onShrinkText, onGrowBox, onCite, onOpenReferences, onSetStyle } = props;
   if (multi > 1) {
@@ -101,7 +124,7 @@ export default function Inspector(props: Props) {
           <div className="insp-head">
             <h3>{props.grouped ? `Group of ${multi}` : `${multi} elements selected`}</h3>
             <div className="icon-row">
-              <button className="icon-btn" title="Duplicate (Ctrl/⌘ D)" onClick={onDuplicate}>⧉</button>
+              <button className="icon-btn" title={keys('Duplicate (Ctrl/⌘ D)')} onClick={onDuplicate}>⧉</button>
               <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
             </div>
           </div>
@@ -109,12 +132,12 @@ export default function Inspector(props: Props) {
             <section>
               <h4>Group</h4>
               <div className="toolbar-row">
-                {props.onGroup && <button className="btn small-btn" onClick={props.onGroup} title="Ctrl/⌘ G">Group</button>}
-                {props.onUngroup && <button className="btn small-btn" onClick={props.onUngroup} title="Ctrl/⌘ Shift G">Ungroup</button>}
+                {props.onGroup && <button className="btn small-btn" onClick={props.onGroup} title={keys('Ctrl/⌘ G')}>Group</button>}
+                {props.onUngroup && <button className="btn small-btn" onClick={props.onUngroup} title={keys('Ctrl/⌘ Shift G')}>Ungroup</button>}
               </div>
               <p className="hint">
                 {props.grouped
-                  ? 'Drag to move the group; drag a corner to resize it all (Shift lets it stretch). Ctrl/⌘-click picks out one element.'
+                  ? keys('Drag to move the group; drag a corner to resize it all (Shift lets it stretch). Ctrl/⌘-click picks out one element.')
                   : 'Group them to keep a figure with its caption, or a row of logos, together.'}
               </p>
             </section>
@@ -133,20 +156,25 @@ export default function Inspector(props: Props) {
           <p className="hint">Click an element on the poster to change its text, colours, size and position. Double-click text to type.</p>
           <h3>Shortcuts</h3>
           <ul className="shortcuts">
-            <li><kbd>Ctrl/⌘ Z</kbd> undo, <kbd>Ctrl/⌘ Shift Z</kbd> redo</li>
-            <li><kbd>Ctrl/⌘ C / X / V</kbd> copy, cut, paste elements, text or images</li>
-            <li><kbd>Ctrl/⌘ D</kbd> duplicate</li>
-            <li><kbd>Ctrl/⌘ G</kbd> group, <kbd>Ctrl/⌘ Shift G</kbd> ungroup</li>
-            <li><kbd>Tab</kbd> move between elements on the poster</li>
-            <li><kbd>Enter</kbd> edit text, or choose an image or graph</li>
-            <li><kbd>Shift F10</kbd> actions menu for the element</li>
-            <li><kbd>Delete</kbd> remove selected</li>
-            <li><kbd>Shift</kbd>-click or drag a box to select several</li>
-            <li><kbd>Ctrl/⌘ A</kbd> select everything</li>
-            <li><kbd>Arrows</kbd> nudge (Shift = 10 mm)</li>
-            <li><kbd>Ctrl/⌘ B / I / U</kbd> bold, italic, underline while typing</li>
-            <li><kbd>Esc</kbd> stop editing / deselect</li>
+            {SHORTCUTS.flatMap((g) => g.items)
+              .filter((x) => QUICK.has(x.what))
+              .map((x) => (
+                <li key={x.what}>
+                  {x.combos.map((c, i) => (
+                    <span key={c}>
+                      {i > 0 && ' '}
+                      <kbd>{keys(c)}</kbd>
+                    </span>
+                  ))}{' '}
+                  {x.what.charAt(0).toLowerCase() + x.what.slice(1)}
+                </li>
+              ))}
           </ul>
+          {props.onShowShortcuts && (
+            <button className="btn small-btn" onClick={props.onShowShortcuts}>
+              All shortcuts <kbd>?</kbd>
+            </button>
+          )}
         </div>
       </aside>
     );
@@ -166,13 +194,14 @@ export default function Inspector(props: Props) {
         <div className="insp-head">
           <h3>{el.refList ? 'Reference list' : TYPE_NAMES[el.type]}</h3>
           <div className="icon-row">
-            <button className="icon-btn" title="Duplicate (Ctrl/⌘ D)" onClick={onDuplicate}>⧉</button>
+            <button className="icon-btn" title={keys('Duplicate (Ctrl/⌘ D)')} onClick={onDuplicate}>⧉</button>
             <button className="icon-btn" title={el.locked ? 'Unlock' : 'Lock position'} aria-label="Lock position" aria-pressed={!!el.locked} onClick={() => onChange({ locked: !el.locked })}>
               {el.locked ? '🔒' : '🔓'}
             </button>
             <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
           </div>
         </div>
+        <ElementTip el={el} />
 
         {(st || el.type === 'table') && overflow && (
           <section className="warn-box" role="status">

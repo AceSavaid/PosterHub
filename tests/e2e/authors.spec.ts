@@ -80,11 +80,15 @@ test("fills a template's author line instead of adding a new box", async ({ page
   await expect(filled).not.toHaveAttribute('data-overflow', 'true');
 });
 
-test('Escape closes the dialog without changes', async ({ page }) => {
+test('Escape closes the dialog without changes (asking first, once something was typed)', async ({ page }) => {
   await newPoster(page);
+  await page.getByRole('button', { name: 'Authors and affiliations…' }).click();
+  await page.keyboard.press('Escape');
+  await expect(dialog(page)).toHaveCount(0);
   await page.getByRole('button', { name: 'Authors and affiliations…' }).click();
   await dialog(page).getByLabel('Author 1 name', { exact: true }).fill('Ana');
   await page.keyboard.press('Escape');
+  await page.getByRole('alertdialog', { name: 'Discard your changes?' }).getByRole('button', { name: 'Discard changes' }).click();
   await expect(dialog(page)).toHaveCount(0);
   await expect(page.locator('.poster > .el')).toHaveCount(0);
 });

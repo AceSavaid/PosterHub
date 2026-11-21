@@ -45,10 +45,12 @@ export function NotesLayer({ poster, zoom, showResolved, openId, onOpen, onMove,
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       if (!moved) onOpen(openId === n.id ? null : n.id);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   return (

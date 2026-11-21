@@ -599,11 +599,13 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
       setMarquee(null);
       if (!moved && !additive) setSelectedId(null);
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   }
 
   function layer(dir: 'front' | 'back' | 'up' | 'down') {

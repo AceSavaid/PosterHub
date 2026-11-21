@@ -7,7 +7,6 @@ import { PaletteSwatches } from './PaletteSwatches';
 import { FontSelect } from './FontSelect';
 import { fileToDataUrl, pickFile } from '../lib/storage';
 import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fonts';
-import { importPptx } from '../lib/pptxImport';
 import { askConfirm } from '../lib/dialogs';
 import { SHAPE_CHOICES } from '../lib/shapes';
 import { applyBrandKit } from '../lib/brandKit';
@@ -282,6 +281,7 @@ function DesignTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
     const f = await pickFile('.pptx,.potx');
     if (!f) return;
     try {
+      const { importPptx } = await import('../lib/pptxImport');
       const r = await importPptx(f);
       update((d) => {
         d.palette = r.poster.palette;

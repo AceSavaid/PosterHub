@@ -1,18 +1,23 @@
 import AppearanceMenu from './AppearanceMenu';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Poster } from '../types';
 import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFile, readText, savePoster, storageInfo } from '../lib/storage';
 import { parsePosterText } from '../lib/posterFile';
 import { backupDue, daysSinceBackup, downloadLibraryBackup, parseBackupText, planRestore, restoreMessage, snoozeUntil } from '../lib/backup';
 import { useUiPrefs } from '../lib/uiPrefs';
-import SettingsDialog from './SettingsDialog';
 import GearIcon from './GearIcon';
-import { openPptx, posterFromImport, type PptxDeck } from '../lib/pptxImport';
+import type { PptxDeck } from '../lib/pptxImport';
 import { uid, PALETTES } from '../model';
-import NewPosterDialog from './NewPosterDialog';
-import SlidePicker from './SlidePicker';
+import { lazyPart } from '../lib/lazyPart';
 import ConfirmDialog from './ConfirmDialog';
 import SupportFooter from './SupportFooter';
+
+// PowerPoint import is rarely used, so it loads only when someone picks a file.
+const SlidePicker = lazy(() => import('./SlidePicker'));
+const loadPptx = () => import('../lib/pptxImport');
+// Dialogs load when opened, so My posters itself appears sooner.
+const NewPosterDialog = lazyPart(() => import('./NewPosterDialog'));
+const SettingsDialog = lazyPart(() => import('./SettingsDialog'));
 
 const fmtSize = (p: Poster) => `${Math.round(p.width)} × ${Math.round(p.height)} mm · ${p.width > p.height ? 'landscape' : 'portrait'}`;
 const fmtDate = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -35,6 +40,16 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
   useEffect(() => {
     refresh();
     storageInfo().then(setWhere).catch(() => undefined);
+  }, []);
+
+  // Once My posters is showing, fetch the editor and New poster dialog in the background,
+  // so the first click on a poster (or + New poster) doesn't wait for a download.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      import('./NewPosterDialog').catch(() => undefined);
+      import('./Editor').catch(() => undefined);
+    }, 1500);
+    return () => clearTimeout(t);
   }, []);
 
   async function create(p: Poster) {
@@ -77,7 +92,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
     if (!f) return;
     setBusy('Reading PowerPoint template…');
     try {
-      const deck = await openPptx(f);
+      const deck = await (await loadPptx()).openPptx(f);
       const name = f.name.replace(/\.(pptx|potx)$/i, '');
       // With several slides (or layouts) let the user choose; otherwise import straight away.
       if (deck.pages.length > 1) setPicking({ deck, name, fileName: f.name });
@@ -94,7 +109,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
     setBusy('Importing…');
     try {
       const r = await deck.importPage(index);
-      const p = posterFromImport(r, name);
+      const p = (await loadPptx()).posterFromImport(r, name);
       await savePoster(p);
       onOpen(p, r.warnings.length ? 'Imported with a few notes:\n• ' + r.warnings.join('\n• ') : undefined);
     } catch (e) {
@@ -254,7 +269,9 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
       </main>
       <SupportFooter />
       {picking && (
-        <SlidePicker deck={picking.deck} fileName={picking.fileName} onPick={(i) => finishImport(picking.deck, i, picking.name)} onCancel={() => setPicking(null)} />
+        <Suspense fallback={null}>
+          <SlidePicker deck={picking.deck} fileName={picking.fileName} onPick={(i) => finishImport(picking.deck, i, picking.name)} onCancel={() => setPicking(null)} />
+        </Suspense>
       )}
       {deleting && (
         <ConfirmDialog

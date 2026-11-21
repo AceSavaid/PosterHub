@@ -6,7 +6,7 @@
 // "we found", "these findings suggest") and where each sentence sits, keeping the parts in
 // the usual order. Either way the person checks and fixes the split before anything changes.
 
-import JSZip from 'jszip';
+import type JSZip from 'jszip';
 import type { Poster, PosterElement } from '../types';
 import { isStarterText } from '../templates';
 import { headingOwner, sectionHeadings, sectionKey } from './relayout';
@@ -282,7 +282,8 @@ export async function readDocx(file: Blob): Promise<DocxText> {
   if (file.size > MAX_DOCX) throw new Error('That file is too large to read (over 50 MB).');
   let zip: JSZip;
   try {
-    zip = await JSZip.loadAsync(file);
+    const { default: JSZipLib } = await import('jszip');
+    zip = await JSZipLib.loadAsync(file);
   } catch {
     throw new Error('This does not look like a Word (.docx) file. Older .doc files need saving as .docx first.');
   }

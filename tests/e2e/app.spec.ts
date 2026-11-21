@@ -95,6 +95,7 @@ test.describe('templates', () => {
     await page.goto('/');
     await page.getByRole('button', { name: '+ New poster' }).first().click();
     const cards = page.locator('.template-card');
+    await expect(cards.first()).toBeVisible();
     expect(await cards.count()).toBeGreaterThanOrEqual(10);
     const thumb = page.locator('[data-template="sidebar"] svg');
     const portrait = (await thumb.boundingBox())!;

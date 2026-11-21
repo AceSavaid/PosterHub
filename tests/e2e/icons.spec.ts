@@ -96,6 +96,7 @@ test('the icon grid works with the keyboard and passes accessibility checks', as
   await blankPoster(page);
   await search(page).fill('cell');
   const active = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '');
+  await expect(page.locator('.icon-grid button').first()).toBeVisible();
   await search(page).press('ArrowDown');
   await expect.poll(active).toMatch(/^Insert icon: /);
   const first = await active();

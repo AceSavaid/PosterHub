@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Author, AuthorList } from '../types';
 import { authorListProblems, authorsHtml, emptyAuthorList, removeAffiliation } from '../lib/authors';
+import { useDiscardGuard } from './useDiscardGuard';
+import { useEscape } from '../lib/useEscape';
 
 interface Props {
   initial?: AuthorList;
@@ -14,13 +16,12 @@ interface Props {
 export default function AuthorsDialog({ initial, replacing, onSave, onCancel }: Props) {
   const [list, setList] = useState<AuthorList>(() => structuredClone(initial ?? emptyAuthorList()));
   const first = useRef<HTMLInputElement>(null);
+  const startRef = useRef(JSON.stringify(list));
+  const { request: cancel, prompt: discardPrompt } = useDiscardGuard(JSON.stringify(list) !== startRef.current, onCancel);
 
-  useEffect(() => {
-    first.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCancel();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
+  useEffect(() => first.current?.focus(), []);
+  // Esc goes through the shared stack so a "Discard your changes?" box on top gets it first.
+  useEscape(cancel);
 
   const setAuthor = (i: number, patch: Partial<Author>) =>
     setList((l) => ({ ...l, authors: l.authors.map((a, j) => (j === i ? { ...a, ...patch } : a)) }));
@@ -42,7 +43,7 @@ export default function AuthorsDialog({ initial, replacing, onSave, onCancel }: 
   const hasName = list.authors.some((a) => a.name.trim());
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
+    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && cancel()}>
       <div className="modal wide authors-dialog" role="dialog" aria-modal="true" aria-labelledby="authors-title">
         <h2 id="authors-title">Authors and affiliations</h2>
         <p className="muted">Type each institution once, then tick which ones each author belongs to. Numbers, commas and the contact line are added for you.</p>
@@ -147,12 +148,13 @@ export default function AuthorsDialog({ initial, replacing, onSave, onCancel }: 
         {replacing && <p className="hint">This replaces the text in the selected box, including any changes you typed into it by hand.</p>}
 
         <div className="modal-actions">
-          <button className="btn" onClick={onCancel}>Cancel</button>
+          <button className="btn" onClick={cancel}>Cancel</button>
           <button className="btn primary" disabled={!hasName} onClick={() => onSave(list, html)}>
             {initial ? 'Update authors' : 'Add to poster'}
           </button>
         </div>
       </div>
+      {discardPrompt}
     </div>
   );
 }

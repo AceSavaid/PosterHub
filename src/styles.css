@@ -674,3 +674,97 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .tour-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
 .tour-dots span.on { background: var(--accent); }
 .tour-actions { display: flex; align-items: center; gap: 8px; }
+
+/* ---- high contrast (Settings → Contrast). Pure black/white, darker hints, stronger lines and focus rings. */
+:root[data-contrast='high'] {
+  --bg: #ffffff;
+  --bg2: #ffffff;
+  --bg3: #e8e8e8;
+  --line: #3d3d3d;
+  --fg: #000000;
+  --muted: #262626;
+  --accent: #0037a6;
+  --accent-fg: #ffffff;
+  --accent-soft: #d3e0ff;
+  --danger: #a10000;
+  --stage: #b8b8b8;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-contrast='high']:not([data-theme='light']) {
+    --bg: #000000;
+    --bg2: #000000;
+    --bg3: #262626;
+    --line: #d0d0d0;
+    --fg: #ffffff;
+    --muted: #e6e6e6;
+    --accent: #9cc3ff;
+    --accent-fg: #000000;
+    --accent-soft: #1c3366;
+    --danger: #ff9c9c;
+    --stage: #333333;
+  }
+}
+:root[data-contrast='high'][data-theme='dark'] {
+  --bg: #000000;
+  --bg2: #000000;
+  --bg3: #262626;
+  --line: #d0d0d0;
+  --fg: #ffffff;
+  --muted: #e6e6e6;
+  --accent: #9cc3ff;
+  --accent-fg: #000000;
+  --accent-soft: #1c3366;
+  --danger: #ff9c9c;
+  --stage: #333333;
+}
+:root[data-contrast='high'] :focus-visible { outline: 3px solid var(--accent) !important; outline-offset: 2px; }
+:root[data-contrast='high'] .btn,
+:root[data-contrast='high'] .icon-btn,
+:root[data-contrast='high'] input,
+:root[data-contrast='high'] select,
+:root[data-contrast='high'] textarea { border-color: var(--line); }
+:root[data-contrast='high'] .btn.primary { border: 2px solid var(--fg); }
+:root[data-contrast='high'] .panel.left,
+:root[data-contrast='high'] .panel.right,
+:root[data-contrast='high'] .topbar { border-color: var(--fg); }
+:root[data-contrast='high'] a, :root[data-contrast='high'] button.link { text-decoration: underline; }
+
+/* ---- interface size (Settings → Interface size). Scales the app's own controls, never the poster:
+   the canvas and anything positioned from pointer coordinates (context menus, tooltips) stay at 1. */
+:root[data-ui-size] .topbar,
+:root[data-ui-size] .panel,
+:root[data-ui-size] .modal,
+:root[data-ui-size] .check-panel,
+:root[data-ui-size] .lib-header,
+:root[data-ui-size] .lib-main,
+:root[data-ui-size] .toast { zoom: var(--ui-zoom, 1); }
+:root[data-ui-size] .panel.left { width: 290px; }
+
+/* ---- Settings dialog */
+.settings-dialog h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 18px 0 8px; }
+.settings-dialog h3:first-of-type { margin-top: 4px; }
+.settings-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px 14px; align-items: center; }
+.settings-grid > .field-label { margin: 0; }
+.settings-checks { display: flex; flex-direction: column; gap: 8px; }
+.storage-meter { height: 8px; border-radius: 4px; background: var(--bg3); border: 1px solid var(--line); overflow: hidden; }
+.storage-meter > div { height: 100%; background: var(--accent); }
+.backup-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--accent-soft); border: 1px solid var(--accent); color: var(--fg); padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; }
+.backup-banner p { margin: 0; flex: 1 1 280px; }
+@media (max-width: 560px) {
+  .settings-grid { grid-template-columns: 1fr; gap: 4px; }
+}
+.lib-title-row h1 { margin-right: auto; }
+.shortcut-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 4px 24px; margin-top: 12px; max-height: 60vh; overflow: auto; }
+.shortcut-groups h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 10px 0 6px; }
+.shortcut-groups dl { margin: 0; }
+.shortcut-row { display: grid; grid-template-columns: minmax(110px, auto) 1fr; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--bg3); align-items: baseline; }
+.shortcut-row dt { white-space: nowrap; }
+.shortcut-row dd { margin: 0; }
+.appearance-footer { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.appearance-footer kbd { margin-left: 4px; }
+.element-tip { background: var(--bg2); border-radius: 6px; padding: 6px 8px; margin: 4px 0 10px; }
+/* a bigger interface needs more room: let the top bar wrap onto a second row instead of running off screen */
+:root[data-ui-size] .topbar { flex-wrap: wrap; }
+.settings-grid .seg { justify-self: start; }
+/* the top bar can wrap when the interface is bigger, so float the Check and Notes panels below its real height (set by the editor) */
+:root[data-ui-size] .check-panel { top: calc((var(--topbar-h, 48px) + 6px) / var(--ui-zoom, 1)); max-height: calc((100vh - var(--topbar-h, 48px) - 24px) / var(--ui-zoom, 1)); }

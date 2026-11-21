@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { keys } from '../lib/keys';
 
 export interface MenuItem {
   label: string;
@@ -79,7 +80,7 @@ export default function ContextMenu({ x, y, items, onClose }: { x: number; y: nu
             }}
           >
             <span>{it.label}</span>
-            {it.shortcut && <kbd>{it.shortcut}</kbd>}
+            {it.shortcut && <kbd>{keys(it.shortcut)}</kbd>}
           </button>
         ),
       )}

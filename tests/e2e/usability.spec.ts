@@ -79,8 +79,9 @@ test('a graph picks similar columns, warns about mixed scales and fills an empty
   await expect(page.locator('.chart-dialog .hint.warn')).toHaveCount(0);
   await page.getByRole('checkbox', { name: 'Speed' }).check();
   await expect(page.locator('.chart-dialog .hint.warn')).toContainText('“Accuracy” is much smaller than “Speed”');
-  // Esc closes the graph dialog too
+  // Esc closes the graph dialog too, after checking the loaded data can be thrown away
   await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Discard changes' }).click();
   await expect(page.locator('.chart-dialog')).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Graph from CSV…' }).click();

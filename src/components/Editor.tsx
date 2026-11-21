@@ -5,7 +5,7 @@ import { cellsFromClipboard, deleteColumn, deleteRow, insertColumn, insertRow, n
 import { usePosterHistory } from '../lib/usePoster';
 import { align, distribute, emptyFigureSlot, findFreeSpot, intersects, matchSize } from '../lib/arrange';
 import { canGroup, canUngroup, dropLonelyGroups, expandToGroups, group, groupMembers, regroupCopies, ungroup, wholeGroup } from '../lib/groups';
-import { deletePoster, exportPosterFile, fileToDataUrl, pickFile, savePoster } from '../lib/storage';
+import { deletePoster, exportPosterFile, fileToDataUrl, isDesktop, pickFile, savePoster } from '../lib/storage';
 import { ensurePosterFonts } from '../lib/fonts';
 import { copyImageToClipboard, effectiveDpi, exportPdf, exportPng, exportPptx, makeThumbnail } from '../lib/exporters';
 import { Canvas } from './Canvas';
@@ -26,6 +26,11 @@ import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import { replaceAllInPoster } from '../lib/textTools';
 import { ignoreKey } from '../lib/spelling';
 import AppearanceMenu from './AppearanceMenu';
+import SettingsDialog from './SettingsDialog';
+import ShortcutsDialog from './ShortcutsDialog';
+import GearIcon from './GearIcon';
+import { keys } from '../lib/keys';
+import { downloadLibraryBackup } from '../lib/backup';
 import AuthorsDialog from './AuthorsDialog';
 import AbstractDialog from './AbstractDialog';
 import { describeFill, fillPoster, type FillPlan } from '../lib/abstractImport';
@@ -184,9 +189,22 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const [reviewer, setReviewer] = useState(loadReviewerName);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // The top bar wraps onto two rows with a bigger interface; floating panels sit under its real height.
+  const topbarRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const bar = topbarRef.current;
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    const set = () => document.documentElement.style.setProperty('--topbar-h', `${Math.round(bar.getBoundingClientRect().height)}px`);
+    const ro = new ResizeObserver(set);
+    ro.observe(bar);
+    set();
+    return () => ro.disconnect();
+  }, []);
 
   const notify = useCallback((msg: string, action?: { label: string; run: () => void }) => {
-    setToast({ msg, action });
+    setToast({ msg: keys(msg), action });
     clearTimeout(toastTimer.current);
     toastTimer.current = window.setTimeout(() => setToast(null), action ? 8000 : 4000);
   }, []);
@@ -636,7 +654,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   useEffect(() => {
     const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     const onKey = (e: KeyboardEvent) => {
-      if (viewing || chartDialog || authorsDialog || confirmDelete || eqDialog) return;
+      if (viewing || chartDialog || authorsDialog || confirmDelete || eqDialog || settingsOpen || shortcutsOpen) return;
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -656,6 +674,11 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         return;
       }
       if (isTyping(e.target)) return;
+      if (e.key === '?' && !mod) {
+        e.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
       // keys pressed on a note pin or in the notes list are about the note, not the selected elements
       if (e.target instanceof HTMLElement && e.target.closest('.notes-layer, .notes-panel') && !mod) return;
       if (mod && e.key.toLowerCase() === 'z') {
@@ -969,12 +992,12 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     if (!many && el.style && el.html?.includes('<table')) items.push({ label: 'Convert to editable table', onClick: () => convertToTable(el) });
     if (!many && el.type === 'equation') items.push({ label: 'Edit equation…', shortcut: 'Enter', onClick: () => openEquation(el) });
     if (items.length) items.push('-');
-    if (!many) items.push({ label: 'Copy', shortcut: '⌘/Ctrl C', onClick: () => copyElement(el) });
-    if (!many && internalClipboard) items.push({ label: 'Paste', shortcut: '⌘/Ctrl V', onClick: () => duplicate(internalClipboard!) });
-    items.push({ label: 'Duplicate', shortcut: '⌘/Ctrl D', onClick: () => duplicate() });
+    if (!many) items.push({ label: 'Copy', shortcut: 'Ctrl/⌘ C', onClick: () => copyElement(el) });
+    if (!many && internalClipboard) items.push({ label: 'Paste', shortcut: 'Ctrl/⌘ V', onClick: () => duplicate(internalClipboard!) });
+    items.push({ label: 'Duplicate', shortcut: 'Ctrl/⌘ D', onClick: () => duplicate() });
     const els = posterRef.current.elements;
-    if (canGroup(selectedIds, els)) items.push({ label: 'Group', shortcut: '⌘/Ctrl G', onClick: groupSelected });
-    if (canUngroup(selectedIds, els)) items.push({ label: 'Ungroup', shortcut: '⌘/Ctrl ⇧ G', onClick: ungroupSelected });
+    if (canGroup(selectedIds, els)) items.push({ label: 'Group', shortcut: 'Ctrl/⌘ G', onClick: groupSelected });
+    if (canUngroup(selectedIds, els)) items.push({ label: 'Ungroup', shortcut: 'Ctrl/⌘ Shift G', onClick: ungroupSelected });
     items.push('-');
     if (!many) {
       items.push({ label: 'Bring to front', onClick: () => layer('front') });
@@ -1100,8 +1123,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
 
   return (
     <div className="editor" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
-      <h1 className="sr-only">Editing {poster.name || 'poster'}</h1>
-      <header className="topbar">
+      <header className="topbar" ref={topbarRef}>
+        <h1 className="sr-only">Editing {poster.name || 'poster'}</h1>
         <button className="btn ghost" onClick={() => close()} title="Back to My posters">
           <Logo /> ‹ My posters
         </button>
@@ -1119,14 +1142,23 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         </button>
         <span className="muted small save-state">{saved ? 'Saved' : 'Saving…'}</span>
         <div className="spacer" />
-        <button className="icon-btn" disabled={!canUndo} onClick={undo} title="Undo (Ctrl/⌘ Z)">↶</button>
-        <button className="icon-btn" disabled={!canRedo} onClick={redo} title="Redo (Ctrl/⌘ Shift Z)">↷</button>
+        <button className="icon-btn" disabled={!canUndo} onClick={undo} title={keys('Undo (Ctrl/⌘ Z)')}>↶</button>
+        <button className="icon-btn" disabled={!canRedo} onClick={redo} title={keys('Redo (Ctrl/⌘ Shift Z)')}>↷</button>
         <span className="sep" />
         <button className="icon-btn" onClick={() => setZoom((z) => Math.max(0.02, z / 1.25))} title="Zoom out">−</button>
         <button className="btn ghost zoom-label" onClick={fit} title="Fit to screen (Shift 0)" aria-label={`${Math.round(zoom * 100)}%, fit to screen`}>{Math.round(zoom * 100)}%</button>
         <button className="icon-btn" onClick={() => setZoom((z) => Math.min(4, z * 1.25))} title="Zoom in">+</button>
         <span className="sep" />
-        <AppearanceMenu panels label="View">
+        <AppearanceMenu
+          panels
+          label="View"
+          footer={(close) => (
+            <>
+              <button className="btn small-btn" onClick={() => { close(); setShortcutsOpen(true); }}>Keyboard shortcuts <kbd>?</kbd></button>
+              <button className="btn small-btn" onClick={() => { close(); setSettingsOpen(true); }}>All settings…</button>
+            </>
+          )}
+        >
           <div className="field-label">While editing</div>
           <label className="check" title="Blue lines that show the columns">
             <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Show column guides
@@ -1135,6 +1167,9 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap while dragging
           </label>
         </AppearanceMenu>
+        <button className="icon-btn" aria-label="Settings" title="Settings: theme, contrast, interface size, panels, printing and backups" onClick={() => setSettingsOpen(true)}>
+          <GearIcon />
+        </button>
         <VisionMenu mode={vision} onChange={setVision} />
         <button
           className="icon-btn"
@@ -1179,7 +1214,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             </span>
           )}
         </button>
-        <button className={'btn' + (findOpen ? ' active' : '')} onClick={() => setFindOpen(!findOpen)} title="Find and replace words on the poster (Ctrl/⌘ F)">Find</button>
+        <button className={'btn' + (findOpen ? ' active' : '')} onClick={() => setFindOpen(!findOpen)} title={keys('Find and replace words on the poster (Ctrl/⌘ F)')}>Find</button>
         <button className="btn" onClick={() => setViewing(true)} title="See the poster full screen, without editing tools">Preview</button>
         <button className="btn" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
         <div className="menu-wrap" data-tour="export">
@@ -1371,6 +1406,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         </main>
         {prefs.showProperties ? (
           <Inspector
+            onShowShortcuts={() => setShortcutsOpen(true)}
             poster={poster}
             el={selectedIds.length > 1 ? null : selected}
             multi={selectedIds.length}
@@ -1435,6 +1471,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
                 setTouring(true);
               },
             },
+            { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setShortcutsOpen(true) },
           ]}
         />
       )}
@@ -1545,6 +1582,19 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           onClose={() => setRefsOpen(false)}
         />
       )}
+      {settingsOpen && (
+        <SettingsDialog
+          storageKind={isDesktop() ? 'folder' : 'browser'}
+          onReviewer={setReviewer}
+          onBackupAll={async () => {
+            await saveWithThumbnail();
+            const t = await downloadLibraryBackup();
+            if (t) setPrefs({ lastBackupAt: t, backupSnoozedUntil: 0 });
+          }}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       <div className="toast-region" role="status" aria-live="polite">
         {toast && (
           <div className="toast">

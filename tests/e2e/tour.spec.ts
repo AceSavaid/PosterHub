@@ -99,6 +99,12 @@ test('Help → Take the tour replays it from the start', async ({ page }) => {
   await page.getByRole('menuitem', { name: 'Take the tour' }).click();
   await expect(page.getByRole('dialog', { name: 'Click to edit' })).toBeVisible();
   await expect(page.getByText('Step 1 of 4')).toBeVisible();
+  await page.getByRole('button', { name: 'Skip tour' }).click();
+
+  // The Help menu also opens the keyboard shortcuts sheet.
+  await page.getByRole('button', { name: 'Help' }).click();
+  await page.getByRole('menuitem', { name: /Keyboard shortcuts/ }).click();
+  await expect(page.getByRole('dialog', { name: /Keyboard shortcuts/i })).toBeVisible();
 });
 
 test('the editor still works while the tour is open', async ({ page }) => {

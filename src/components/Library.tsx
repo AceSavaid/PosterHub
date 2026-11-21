@@ -1,7 +1,12 @@
 import AppearanceMenu from './AppearanceMenu';
 import { useEffect, useState } from 'react';
 import type { Poster } from '../types';
-import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFile, readPosterFile, savePoster, storageInfo } from '../lib/storage';
+import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFile, readText, savePoster, storageInfo } from '../lib/storage';
+import { parsePosterText } from '../lib/posterFile';
+import { backupDue, daysSinceBackup, downloadLibraryBackup, parseBackupText, planRestore, restoreMessage, snoozeUntil } from '../lib/backup';
+import { useUiPrefs } from '../lib/uiPrefs';
+import SettingsDialog from './SettingsDialog';
+import GearIcon from './GearIcon';
 import { openPptx, posterFromImport, type PptxDeck } from '../lib/pptxImport';
 import { uid, PALETTES } from '../model';
 import NewPosterDialog from './NewPosterDialog';
@@ -22,6 +27,9 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
   const [picking, setPicking] = useState<{ deck: PptxDeck; name: string; fileName: string } | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
   const [deleting, setDeleting] = useState<Poster | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [notice, setNotice] = useState('');
+  const [prefs, changePrefs] = useUiPrefs();
 
   const refresh = () => listPosters().then(setPosters).catch((e) => setError(String(e)));
   useEffect(() => {
@@ -45,7 +53,16 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
     const f = await pickFile('.json,.poster.json,application/json');
     if (!f) return;
     try {
-      const p = await readPosterFile(f);
+      const text = await readText(f);
+      const backup = parseBackupText(text);
+      if (backup) {
+        const plan = planRestore(await listPosters(), backup.posters);
+        for (const p of [...plan.add, ...plan.replace]) await savePoster(p);
+        await refresh();
+        setNotice(restoreMessage(plan, backup.skipped));
+        return;
+      }
+      const p = parsePosterText(text);
       p.id = uid();
       p.updatedAt = Date.now();
       await savePoster(p);
@@ -109,6 +126,21 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
     refresh();
   }
 
+  async function backupAll() {
+    try {
+      const t = await downloadLibraryBackup();
+      if (t) {
+        changePrefs({ lastBackupAt: t, backupSnoozedUntil: 0 });
+        setNotice('Backup downloaded. To bring the posters back, use “Open project file” and pick that file.');
+      }
+    } catch (e) {
+      setError('Could not make the backup: ' + String(e));
+    }
+  }
+
+  const remindBackup = where?.kind === 'browser' && !!posters?.length && backupDue(posters, prefs);
+  const backupDays = remindBackup ? daysSinceBackup(posters!, prefs.lastBackupAt) : null;
+
   const shown = (posters ?? []).filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
@@ -122,12 +154,20 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
           <button className="btn" onClick={importProject}>Open project file</button>
           <button className="btn primary" onClick={() => setCreating(true)}>+ New poster</button>
           <AppearanceMenu />
+          <button className="icon-btn" aria-label="Settings" title="Settings" onClick={() => setSettingsOpen(true)}>
+            <GearIcon />
+          </button>
         </div>
       </header>
       <main className="lib-main">
         <div className="lib-title-row">
           <h1>My posters</h1>
-          {!!posters?.length && <input className="search" placeholder="Search posters" value={query} onChange={(e) => setQuery(e.target.value)} />}
+          {!!posters?.length && <input className="search" placeholder="Search posters" aria-label="Search posters" value={query} onChange={(e) => setQuery(e.target.value)} />}
+          {!!posters?.length && where?.kind === 'browser' && (
+            <button className="btn" onClick={backupAll} title="One file with every poster. Open it with “Open project file” to restore.">
+              Back up all posters
+            </button>
+          )}
         </div>
         {where?.kind === 'folder' && (
           <p className="muted small lib-location">
@@ -141,6 +181,22 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
           </div>
         )}
         {busy && <div className="banner">{busy}</div>}
+        {notice && (
+          <div className="banner" role="status">
+            {notice}{' '}
+            <button className="link" onClick={() => setNotice('')}>Dismiss</button>
+          </div>
+        )}
+        {remindBackup && (
+          <div className="backup-banner" role="region" aria-label="Backup reminder">
+            <p>
+              <strong>{prefs.lastBackupAt ? `Last backup ${backupDays} days ago.` : 'You haven’t made a backup yet.'}</strong> Your posters are only saved in this browser, so clearing browsing data
+              would delete them.
+            </p>
+            <button className="btn primary" onClick={backupAll}>Download backup</button>
+            <button className="btn" onClick={() => changePrefs({ backupSnoozedUntil: snoozeUntil() })}>Remind me later</button>
+          </div>
+        )}
         {posters && posters.length === 0 && (
           <div className="empty">
             <h2>Make your first research poster</h2>
@@ -152,7 +208,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
             <p className="muted small">
               {where?.kind === 'folder'
                 ? 'Posters are saved automatically as files in your Documents/PosterHub folder, so you can back them up or copy them like any other file.'
-                : 'Posters are saved in this browser automatically. Use “Download backup” to keep a copy or move them to another computer.'}
+                : 'Posters are saved in this browser automatically. Once you have some, download a backup from Settings (the gear, top right) to keep a copy or move them to another computer.'}
             </p>
           </div>
         )}
@@ -210,6 +266,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
           onCancel={() => setDeleting(null)}
         />
       )}
+      {settingsOpen && <SettingsDialog storageKind={where?.kind ?? 'browser'} onBackupAll={backupAll} onClose={() => setSettingsOpen(false)} />}
       {creating && <NewPosterDialog onCreate={create} onCancel={() => setCreating(false)} />}
     </div>
   );
@@ -225,3 +282,4 @@ export function Logo() {
     </svg>
   );
 }
+

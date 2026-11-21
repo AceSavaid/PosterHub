@@ -12,7 +12,8 @@ async function pasteTable(page: Page, text: string, alsoPlot: string[] = []) {
   await page.evaluate((t) => {
     const dt = new DataTransfer();
     dt.setData('text/plain', t);
-    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    // Firefox drops clipboardData given to a script-made event, so attach it directly.
+    document.dispatchEvent(Object.defineProperty(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }), 'clipboardData', { value: dt }));
   }, text);
   // pasted cells become a table; the toast offers a graph instead
   await page.getByRole('button', { name: 'Make a graph instead' }).click();

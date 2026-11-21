@@ -57,8 +57,8 @@ test('grouped elements select, move and resize together, and can be ungrouped', 
   expect(moved[2]).toEqual(before[2]);
 
   // dragging the group's corner scales both members
-  const box = (await page.getByTestId('group-box').boundingBox())!;
-  await drag(page, { x: box.x + box.width, y: box.y + box.height }, 60, 40);
+  const corner = (await page.getByTestId('group-box').locator('.handle.h-se').boundingBox())!;
+  await drag(page, { x: corner.x + corner.width / 2, y: corner.y + corner.height / 2 }, 60, 40);
   const scaled = await rects(page);
   expect(scaled[0].w).toBeGreaterThan(moved[0].w);
   expect(scaled[1].w).toBeGreaterThan(moved[1].w);

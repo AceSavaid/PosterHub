@@ -44,6 +44,8 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
   const [guides, setGuides] = useState<Guide[]>([]);
   const [angle, setAngle] = useState<{ deg: number; x: number; y: number } | null>(null);
   const dragging = useRef(false);
+  /** Firefox starts dragging selected text when a handle or box is pressed, which cancels our own drag. */
+  const noNativeDrag = (e: React.DragEvent) => e.preventDefault();
   /** The last finger tap on an element, to spot a double-tap: Safari on iPad doesn't send dblclick for one. */
   const lastTap = useRef<{ id: string; t: number; x: number; y: number } | null>(null);
   /** When a double-tap last opened an element, so a dblclick the browser sends as well is ignored. */
@@ -330,6 +332,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
                 }
               },
               onPointerDown: isEditing ? (e) => e.stopPropagation() : (e) => startDrag(e, el),
+              onDragStart: isEditing ? undefined : noNativeDrag,
               onContextMenu: (e) => {
                 if (isEditing) return; // keep the browser's spelling / copy menu while typing
                 e.preventDefault();
@@ -362,6 +365,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       {selected && !editingId && (
         <div
           className="ui-only sel-box"
+          onDragStart={noNativeDrag}
           style={{
             left: selected.x * MM_TO_PX,
             top: selected.y * MM_TO_PX,
@@ -415,6 +419,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       {groupBox && !editingId && (
         <div
           className="ui-only sel-box group-box"
+          onDragStart={noNativeDrag}
           data-testid="group-box"
           style={{ left: groupBox.x * MM_TO_PX, top: groupBox.y * MM_TO_PX, width: groupBox.w * MM_TO_PX, height: groupBox.h * MM_TO_PX, borderWidth: 2 / zoom }}
         >

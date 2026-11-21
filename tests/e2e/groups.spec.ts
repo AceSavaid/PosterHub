@@ -58,18 +58,10 @@ test('grouped elements select, move and resize together, and can be ungrouped', 
 
   // dragging the group's corner scales both members
   const corner = (await page.getByTestId('group-box').locator('.handle.h-se').boundingBox())!;
-  const at = { x: corner.x + corner.width / 2, y: corner.y + corner.height / 2 };
-  const hit = await page.evaluate(({ x, y }) => { const e = document.elementFromPoint(x, y); return `${e?.tagName}.${e?.className}`; }, at);
-  await page.evaluate(() => {
-    const w = window as unknown as { __ev: string[] };
-    w.__ev = [];
-    for (const t of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'mousedown', 'mouseup', 'click', 'dragstart', 'lostpointercapture'])
-      window.addEventListener(t, (e) => w.__ev.push(`${t}:${(e.target as Element)?.className}:${(e as PointerEvent).buttons ?? ''}:${e.defaultPrevented}`), true);
-  });
-  await drag(page, at, 60, 40);
-  const ev = await page.evaluate(() => (window as unknown as { __ev: string[] }).__ev.join(' | '));
+  // In Firefox this used to start a native drag of selected text, which cancelled the resize.
+  await drag(page, { x: corner.x + corner.width / 2, y: corner.y + corner.height / 2 }, 60, 40);
   const scaled = await rects(page);
-  expect(scaled[0].w, `pressed on ${hit} at ${JSON.stringify(at)}; events: ${ev}`).toBeGreaterThan(moved[0].w);
+  expect(scaled[0].w).toBeGreaterThan(moved[0].w);
   expect(scaled[1].w).toBeGreaterThan(moved[1].w);
   expect(scaled[2]).toEqual(before[2]);
 

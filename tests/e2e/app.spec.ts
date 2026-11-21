@@ -395,9 +395,9 @@ test.describe('fonts', () => {
 test.describe('graphs', () => {
   test('builds a graph from a CSV file', async ({ page }) => {
     await newPoster(page, { template: 'Blank' });
-    await page.getByRole('button', { name: 'Graph from CSV…' }).click();
+    await page.getByRole('button', { name: 'Graph from Excel or CSV…' }).click();
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Choose a CSV file…' }).click();
+    await page.getByRole('button', { name: 'Choose an Excel or CSV file…' }).click();
     await (await chooser).setFiles(path.join(FIXTURES, 'results.csv'));
     await expect(page.locator('.table-wrap tbody tr')).toHaveCount(4);
     // numeric columns are picked automatically
@@ -469,7 +469,7 @@ test.describe('graphs', () => {
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1\nB\t3\nC\t2' });
     // Pasted cells become a table first; one click turns them into a graph instead.
     await page.getByRole('button', { name: 'Make a graph instead' }).click();
-    await expect(page.getByRole('heading', { name: 'Graph from CSV' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Graph from Excel or CSV' })).toBeVisible();
     await expect(page.locator('.poster .poster-table')).toHaveCount(0);
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
     await expect(page.locator('.poster .el-chart canvas')).toBeVisible();

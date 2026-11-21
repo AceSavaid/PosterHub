@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { EquationSpec, IconSpec, Poster, PosterElement, TableSpec, TableStyleId, TextStyle } from '../types';
 import { TABLE_STYLES, cellLook, normalizeTable } from '../lib/table';
+import { useDataFile } from './DataFilePicker';
 import type { TableAction } from './Editor';
 import { typesetLatex } from '../lib/math';
 import { useMathReady } from '../lib/useMath';
@@ -60,6 +61,8 @@ interface Props {
   onTableGraph?: () => void;
   onEditTable?: () => void;
   onConvertTable?: () => void;
+  /** replace the table's cells with ones read from an Excel or CSV file */
+  onFillTable?: (cells: string[][]) => void;
 }
 
 const ALIGN: { mode: AlignMode; label: string; icon: string }[] = [
@@ -577,8 +580,13 @@ function QrSection({ el, onChange }: { el: PosterElement; onChange: Props['onCha
   );
 }
 
-function TableSection({ poster, el, editing, onChange, activeCell, onTableAction, onTableGraph, onEditTable }: Props & { el: PosterElement }) {
+function TableSection({ poster, el, editing, onChange, activeCell, onTableAction, onTableGraph, onEditTable, onFillTable }: Props & { el: PosterElement }) {
   const t = normalizeTable(el.table);
+  const [fileError, setFileError] = useState('');
+  const dataFile = useDataFile((cells) => {
+    setFileError('');
+    onFillTable?.(cells);
+  }, setFileError);
   const set = (patch: Partial<TableSpec>, key?: string) => onChange((e) => void (e.table = { ...normalizeTable(e.table), ...patch }), key);
   // Buttons keep the cursor in the cell being edited.
   const keep = (e: React.MouseEvent) => e.preventDefault();
@@ -635,6 +643,13 @@ function TableSection({ poster, el, editing, onChange, activeCell, onTableAction
         <button className="btn small-btn" disabled={t.rows[0].length <= 1} onMouseDown={keep} onClick={() => act('deleteCol')}>− Delete column</button>
       </div>
       {!where && <p className="hint">Click into a cell first to add or delete next to it; otherwise changes apply at the end.</p>}
+      {onFillTable && (
+        <>
+          <button className="btn" onClick={dataFile.choose} disabled={dataFile.busy}>{dataFile.busy ? 'Reading…' : 'Fill from an Excel or CSV file…'}</button>
+          {dataFile.picker}
+          {fileError && <p className="hint error" role="alert">{fileError}</p>}
+        </>
+      )}
       <button className="btn" onClick={onTableGraph}>Make a graph from this table…</button>
     </section>
   );

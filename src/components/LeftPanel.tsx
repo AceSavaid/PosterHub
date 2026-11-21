@@ -113,7 +113,7 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
           <span aria-hidden className="ib-icon">▤</span>Table
         </button>
         <button className="insert-btn" onClick={onInsertChart}>
-          <span aria-hidden className="ib-icon">📊</span>Graph from CSV…
+          <span aria-hidden className="ib-icon">📊</span>Graph from Excel or CSV…
         </button>
         <button className="insert-btn" onClick={onInsertQr}>
           <span aria-hidden className="ib-icon">▦</span>QR code

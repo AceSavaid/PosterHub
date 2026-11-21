@@ -57,7 +57,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await expectNoViolations(page, 'Poster check');
     await page.getByRole('button', { name: 'Close' }).click();
 
-    await page.getByRole('button', { name: /Graph from CSV/ }).click();
+    await page.getByRole('button', { name: /Graph from Excel or CSV/ }).click();
     await expectNoViolations(page, 'Graph dialog');
     await page.getByRole('dialog').locator('textarea').fill('Group,Score\nA,1\nB,2\nC,3');
     await page.getByRole('button', { name: 'Use pasted data' }).click();
@@ -89,9 +89,9 @@ test('dialogs take focus, keep Tab inside, close on Escape and hand focus back',
   await expect(opener).toBeFocused();
 
   await createPoster(page, 'Blank');
-  const graph = page.getByRole('button', { name: /Graph from CSV/ });
+  const graph = page.getByRole('button', { name: /Graph from Excel or CSV/ });
   await graph.click();
-  const chart = page.getByRole('dialog', { name: 'Graph from CSV' });
+  const chart = page.getByRole('dialog', { name: 'Graph from Excel or CSV' });
   await expect(chart).toBeVisible();
   expect(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))).toBe(true);
   await page.keyboard.press('Escape');
@@ -165,7 +165,7 @@ test('a poster can be edited with the keyboard alone', async ({ page }) => {
 
 test('Enter on an empty graph placeholder opens the graph dialog', async ({ page }) => {
   await createPoster(page, 'Blank');
-  await page.getByRole('button', { name: /Graph from CSV/ }).click();
+  await page.getByRole('button', { name: /Graph from Excel or CSV/ }).click();
   await page.getByRole('dialog').locator('textarea').fill('Group,Score\nA,1\nB,2\nC,3');
   await page.getByRole('button', { name: 'Use pasted data' }).click();
   await page.getByRole('button', { name: 'Add graph to poster' }).click();

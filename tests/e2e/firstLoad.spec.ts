@@ -41,7 +41,7 @@ test('the editor opens without charts or PowerPoint import, and a graph still dr
   expect(files.some((f) => f.startsWith('Editor-'))).toBe(true);
   expect(files.filter((f) => /^(chart|jszip|pptxImport|pptxgen|jspdf|vectorPdf)[-.]/.test(f))).toEqual([]);
 
-  await page.getByRole('button', { name: 'Graph from CSV…' }).click();
+  await page.getByRole('button', { name: /^.*Graph from (Excel or )?CSV…/ }).click();
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Choose a CSV file…' }).click();
   await (await chooser).setFiles(path.join(FIXTURES, 'results.csv'));

@@ -65,7 +65,8 @@ test.describe('phone', () => {
     await expect(page.locator('.poster')).toBeVisible();
   });
 
-  test('pinch zooms around the fingers, one finger pans, double-tap zooms in and back out', async ({ page, context }) => {
+  test('pinch zooms around the fingers, one finger pans, double-tap zooms in and back out', async ({ page, context, browserName }) => {
+    test.skip(browserName !== 'chromium', 'multi-finger touches can only be simulated in Chromium');
     await newPoster(page);
     await openPreview(page);
     const cdp = await context.newCDPSession(page);
@@ -116,7 +117,8 @@ test.describe('phone', () => {
     expect(Math.round((await posterBox(page)).width)).toBe(Math.round(fit.width));
   });
 
-  test('turning the phone sideways keeps the poster on screen', async ({ page, context }) => {
+  test('turning the phone sideways keeps the poster on screen', async ({ page, context, browserName }) => {
+    test.skip(browserName !== 'chromium', 'multi-finger touches can only be simulated in Chromium');
     await newPoster(page);
     await openPreview(page);
     const cdp = await context.newCDPSession(page);

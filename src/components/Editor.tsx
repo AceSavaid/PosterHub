@@ -373,23 +373,26 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     // Like pasted cells: wide tables get two columns' width, and the box grows to fit every row.
     const w = t.rows[0].length > 3 ? Math.max(el.w, Math.min(p.width - p.margin - el.x, el.w * 2 + p.gutter)) : el.w;
     const h = Math.max(el.h, Math.min(p.height - p.margin - el.y, tableHeightMm(t.rows.length, t.fontSize)));
-    updateElement(el.id, { table: t, w, h });
-    fitTable(el.id);
+    // one undo step, even when the box then grows to fit the rows
+    const key = `fill-${el.id}-${Date.now()}`;
+    updateElement(el.id, { table: t, w, h }, key);
+    fitTable(el.id, key);
     const cut = cells.length > t.rows.length || Math.max(...cells.map((r) => r.length)) > t.rows[0].length;
     notify(cut ? `Filled the table with the first ${t.rows.length} rows and ${t.rows[0].length} columns. Tables this big are hard to read on a poster; a graph may suit the rest.` : `Filled the table with ${t.rows.length} × ${t.rows[0].length} cells.`);
   }
 
   /** Grows a table's box when its rows no longer fit (after typing, pasting or adding rows). */
-  function fitTable(id: string) {
+  /** Grows a table's box to show every row. Pass the change's coalesce key so the growth joins its undo step. */
+  function fitTable(id: string, key?: string) {
     requestAnimationFrame(() => {
       const n = textNode(id);
-      if (n && n.scrollHeight > n.clientHeight + 1) growToFit(id);
+      if (n && n.scrollHeight > n.clientHeight + 1) growToFit(id, key);
     });
   }
 
   function commitTable(id: string, t: TableSpec, key?: string) {
     updateElement(id, { table: t }, key);
-    fitTable(id);
+    fitTable(id, key);
   }
 
   function tableAction(el: PosterElement, action: TableAction) {
@@ -609,12 +612,12 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     setOverflow(!!n && n.scrollHeight > n.clientHeight + 1);
   });
 
-  function growToFit(id = selectedId) {
+  function growToFit(id = selectedId, key?: string) {
     const n = id && textNode(id);
     if (!n) return;
     const el = posterRef.current.elements.find((e) => e.id === id)!;
     const extra = el.h * MM_TO_PX - n.clientHeight; // padding + border
-    updateElement(el.id, { h: (n.scrollHeight + extra) / MM_TO_PX + 0.5 });
+    updateElement(el.id, { h: (n.scrollHeight + extra) / MM_TO_PX + 0.5 }, key);
   }
 
   function shrinkToFit(id = selectedId) {

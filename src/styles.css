@@ -255,7 +255,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .grid-overlay { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
 .grid-margin { position: absolute; border: 1px dashed rgba(37, 87, 199, 0.5); }
 .grid-col { position: absolute; background: rgba(60, 120, 230, 0.06); border-left: 1px solid rgba(60,120,230,.25); border-right: 1px solid rgba(60,120,230,.25); }
-.sel-box { position: absolute; border: 2px solid var(--accent); pointer-events: none; z-index: 1000; }
+.sel-box { position: absolute; border: 2px solid var(--accent); pointer-events: none; z-index: 1000; user-select: none; -webkit-user-select: none; }
 .handle { position: absolute; background: #fff; border: 1.5px solid var(--accent); border-radius: 2px; pointer-events: auto; }
 .h-nw { left: 0; top: 0; cursor: nwse-resize; }
 .h-n { left: 50%; top: 0; cursor: ns-resize; }

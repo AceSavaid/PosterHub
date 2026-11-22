@@ -1,28 +1,51 @@
 import { test, expect, devices, type Page } from '@playwright/test';
 
 const { defaultBrowserType: _ignored, ...ipad } = devices['iPad (gen 7)'];
-test.use({ ...ipad });
+test.use({
+  ...ipad,
+  // Firefox has no mobile mode; it still gets the iPad's size and a touch screen.
+  isMobile: async ({ browserName }, use) => use(browserName !== 'firefox'),
+});
 
-async function newPoster(page: Page) {
+async function newPoster(page: Page, template = 'Classic columns') {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().tap();
-  await page.getByRole('button', { name: /^Classic columns/ }).tap();
+  await page.getByRole('button', { name: new RegExp('^' + template) }).tap();
   await page.getByRole('button', { name: 'Create poster' }).tap();
   await expect(page.locator('.poster')).toBeVisible();
 }
 
-test('tablet: double-tap edits text, a finger drags and resizes, handles are finger-sized', async ({ page, context }) => {
+test('tablet: double-tap edits text and opens the image picker', async ({ page }) => {
   await newPoster(page);
   const el = page.locator('.poster .el-text').nth(2);
+  const doubleTap = async (x: number, y: number) => {
+    await page.touchscreen.tap(x, y);
+    await page.waitForTimeout(80);
+    await page.touchscreen.tap(x, y);
+  };
 
   // double-tap to type with a hardware keyboard
   const a = (await el.boundingBox())!;
-  await page.touchscreen.tap(a.x + 20, a.y + 15);
-  await page.waitForTimeout(80);
-  await page.touchscreen.tap(a.x + 20, a.y + 15);
+  await doubleTap(a.x + 20, a.y + 15);
   await expect(el).toHaveClass(/editing/);
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
+  await expect(el).not.toHaveClass(/editing/);
+
+  // double-tap an empty logo box to choose a picture
+  await newPoster(page, 'Boxed sections');
+  const logo = page.locator('.poster .el-image').first();
+  const l = (await logo.boundingBox())!;
+  const chooser = page.waitForEvent('filechooser', { timeout: 5000 });
+  await doubleTap(l.x + l.width / 2, l.y + l.height / 2);
+  await chooser;
+});
+
+test('tablet: a finger drags and resizes, handles are finger-sized', async ({ page, context, browserName }) => {
+  // Real finger drags need Chrome's touch emulation (DevTools protocol); Firefox and WebKit can only tap.
+  test.skip(browserName !== 'chromium', 'finger drags can only be simulated in Chromium');
+  await newPoster(page);
+  const el = page.locator('.poster .el-text').nth(2);
 
   const cdp = await context.newCDPSession(page);
   const touchDrag = async (x: number, y: number, dx: number, dy: number) => {

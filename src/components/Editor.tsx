@@ -73,11 +73,19 @@ function plainTextOf(el: PosterElement) {
 
 export type TableAction = 'rowAbove' | 'rowBelow' | 'colLeft' | 'colRight' | 'deleteRow' | 'deleteCol';
 
+/** Loads an image. Waits for `load` rather than relying on `decode()` alone, which WebKit (Safari) can reject for images that aren't on the page. */
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('This image could not be opened.'));
+    img.src = src;
+  });
+}
+
 async function imageFileToDataUrl(file: Blob, maxSide = 4000): Promise<{ src: string; ratio: number }> {
   const src = await fileToDataUrl(file);
-  const img = new Image();
-  img.src = src;
-  await img.decode();
+  const img = await loadImage(src);
   const ratio = img.naturalWidth / img.naturalHeight || 1;
   if (Math.max(img.naturalWidth, img.naturalHeight) <= maxSide || file.type === 'image/svg+xml') return { src, ratio };
   const k = maxSide / Math.max(img.naturalWidth, img.naturalHeight);

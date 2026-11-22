@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import JSZip from 'jszip';
 import { localFontsource, pdfText } from '../helpers/pdf';
+import { allowClipboard, copiedPng, recordClipboard } from '../helpers/clipboard';
 
 // Review notes: sticky notes for co-authors that are saved in the poster file
 // but must never appear in anything that gets printed or shared as an image.
@@ -161,8 +162,9 @@ test('Check lists open notes and clicking one opens it', async ({ page }) => {
   await expect(check.getByRole('button', { name: /Open note from/ })).toHaveCount(0);
 });
 
-test('notes never appear in PDF, PowerPoint, PNG or copied images, but travel in the project file', async ({ page, context }) => {
-  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+test('notes never appear in PDF, PowerPoint, PNG or copied images, but travel in the project file', async ({ page, context, browserName }) => {
+  await allowClipboard(context, browserName);
+  await recordClipboard(page);
   await newPoster(page, 'Shared draft');
   const secret = 'SUPERVISOR-ONLY-COMMENT';
   // put the note in an empty part of the poster and leave its card open while exporting
@@ -195,14 +197,7 @@ test('notes never appear in PDF, PowerPoint, PNG or copied images, but travel in
 
   await page.getByRole('button', { name: 'Copy image' }).click();
   await expect(page.locator('.toast')).toContainText('copied');
-  const copied = await page.evaluate(async () => {
-    const item = (await navigator.clipboard.read())[0];
-    const buf = await (await item.getType('image/png')).arrayBuffer();
-    let s = '';
-    new Uint8Array(buf).forEach((b) => (s += String.fromCharCode(b)));
-    return btoa(s);
-  });
-  expect(await yellowPixels(page, Buffer.from(copied, 'base64'))).toBe(0);
+  expect(await yellowPixels(page, await copiedPng(page))).toBe(0);
 
   // the project file keeps the note, so feedback travels with the poster
   const proj = await download(page, /^Project file/);

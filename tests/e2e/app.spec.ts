@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import PptxGenJS from 'pptxgenjs';
 import { inspectPdf, localFontsource, pdfText } from '../helpers/pdf';
 import jsQR from 'jsqr';
+import { allowClipboard, copiedPng, recordClipboard } from '../helpers/clipboard';
 
 const FIXTURES = path.join(import.meta.dirname, '..', 'fixtures');
 
@@ -37,7 +38,8 @@ async function paste(page: Page, data: Record<string, string>) {
   await page.evaluate((d) => {
     const dt = new DataTransfer();
     for (const [k, v] of Object.entries(d)) dt.setData(k, v);
-    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    // Firefox drops clipboardData given to a script-made event, so attach it directly.
+    document.dispatchEvent(Object.defineProperty(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }), 'clipboardData', { value: dt }));
   }, data);
 }
 
@@ -288,7 +290,8 @@ test.describe('editing', () => {
       const dt = new DataTransfer();
       dt.setData('text/plain', 'Pasted words');
       dt.setData('text/html', '<span style="font-size:80px;color:red">Pasted words</span>');
-      document.activeElement!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      // Firefox drops clipboardData given to a script-made event, so attach it directly.
+      document.activeElement!.dispatchEvent(Object.defineProperty(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }), 'clipboardData', { value: dt }));
     });
     await expect(box).toHaveText('Pasted words');
     expect(await box.innerHTML()).not.toContain('font-size');
@@ -637,13 +640,13 @@ test.describe('export, import and sharing', () => {
     await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
   });
 
-  test('copies the poster as an image', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  test('copies the poster as an image', async ({ page, context, browserName }) => {
+    await allowClipboard(context, browserName);
+    await recordClipboard(page);
     await newPoster(page, { size: 'A4' });
     await page.getByRole('button', { name: 'Copy image' }).click();
     await expect(page.locator('.toast')).toContainText('copied');
-    const types = await page.evaluate(async () => (await navigator.clipboard.read())[0].types);
-    expect(types).toContain('image/png');
+    expect((await copiedPng(page)).subarray(1, 4).toString()).toBe('PNG');
   });
 
   test('view mode shows the poster read-only', async ({ page }) => {

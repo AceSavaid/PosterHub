@@ -80,7 +80,10 @@ test('can be installed: manifest, icons and theme colour', async ({ page, reques
   expect((await request.get(new URL(touch!, page.url()).href)).ok()).toBe(true);
 });
 
-test('opens, edits and creates posters with no internet', async ({ page, context }) => {
+test('opens, edits and creates posters with no internet', async ({ page, context, browserName }) => {
+  // Playwright's WebKit can't load a page from the service worker while its network is switched off
+  // ("WebKit encountered an internal error"). Chromium and Firefox run it.
+  test.skip(browserName === 'webkit', 'Playwright WebKit cannot reload offline through a service worker');
   await fakeGoogleFonts(context);
   await installApp(page);
   await createPoster(page, 'Field notes');
@@ -122,7 +125,10 @@ test('opens, edits and creates posters with no internet', async ({ page, context
   await expect(page.locator('.poster-card', { hasText: 'Made on the train' })).toBeVisible();
 });
 
-test('a poster opens offline even when its font was never saved', async ({ page, context }) => {
+test('a poster opens offline even when its font was never saved', async ({ page, context, browserName }) => {
+  // Playwright's WebKit can't load a page from the service worker while its network is switched off
+  // ("WebKit encountered an internal error"). Chromium and Firefox run it.
+  test.skip(browserName === 'webkit', 'Playwright WebKit cannot reload offline through a service worker');
   await installApp(page);
   await goOffline(context);
   await page.reload();

@@ -95,11 +95,14 @@ test('icons follow palette changes and can be recoloured and swapped', async ({ 
 test('the icon grid works with the keyboard and passes accessibility checks', async ({ page }) => {
   await blankPoster(page);
   await search(page).fill('cell');
+  const active = () => page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '');
+  await expect(page.locator('.icon-grid button').first()).toBeVisible();
   await search(page).press('ArrowDown');
-  const first = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
+  await expect.poll(active).toMatch(/^Insert icon: /);
+  const first = await active();
   await page.keyboard.press('ArrowRight');
-  const second = await page.evaluate(() => document.activeElement?.getAttribute('aria-label'));
-  expect(second).not.toBe(first);
+  await expect.poll(active).not.toBe(first);
+  const second = await active();
   await page.keyboard.press('Enter');
   expect(second).toMatch(/^Insert icon: /);
   await expect(page.getByRole('group', { name: `Icon: ${second!.replace('Insert icon: ', '')}` })).toBeVisible();

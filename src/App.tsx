@@ -35,8 +35,10 @@ export default function App() {
 
   async function openPoster(p: Poster, message?: string, push = true) {
     sanitizePoster(p);
-    await ensurePosterFonts(p);
+    // Add the history entry straight away, while the click still counts as the user's: Safari's Back
+    // button can skip entries that a page adds later on its own.
     if (push && hashPosterId() !== p.id) history.pushState({ posterhub: p.id }, '', posterHash(p.id));
+    await ensurePosterFonts(p);
     setNotice(message);
     setOpen(p);
   }

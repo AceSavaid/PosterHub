@@ -11,7 +11,8 @@ test('Check lists a graph with no description and takes one in place', async ({ 
   await page.evaluate(() => {
     const dt = new DataTransfer();
     dt.setData('text/plain', 'Group\tScore\nA\t40\nB\t75');
-    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    // Firefox drops clipboardData given to a script-made event, so attach it directly.
+    document.dispatchEvent(Object.defineProperty(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }), 'clipboardData', { value: dt }));
   });
   await page.getByRole('button', { name: 'Make a graph instead' }).click();
   await page.getByRole('button', { name: 'Add graph to poster' }).click();

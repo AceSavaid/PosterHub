@@ -182,6 +182,7 @@ test.describe('templates', () => {
         await page.getByRole('button', { name: '+ New poster' }).first().click();
         if (landscape) await page.getByRole('button', { name: 'Landscape' }).click();
         await page.getByLabel('Columns').selectOption(String(columns));
+        if (['clinical', 'lab', 'computing', 'humanities'].includes(id)) await page.getByText('By research field').click();
         await page.locator(`[data-template="${id}"]`).click();
         await page.getByRole('button', { name: 'Create poster' }).click();
         await expect(page.locator('.poster .el-title')).toBeVisible();

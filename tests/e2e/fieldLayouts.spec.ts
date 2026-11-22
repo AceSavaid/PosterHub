@@ -2,10 +2,15 @@ import { expect, test } from '@playwright/test';
 
 // Layouts written for a research field: clinical case report, lab study, computing/ML and humanities.
 
-test('the New poster dialog lists research-field layouts with previews', async ({ page }) => {
+test('the New poster dialog keeps research-field layouts in a collapsed section that opens to previews', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
   const group = page.getByRole('group', { name: 'By research field' });
+  // Collapsed at first, so the gallery stays short.
+  await expect(page.locator('[data-template="classic"]')).toBeVisible();
+  await expect(group).toHaveCount(0);
+  await expect(page.locator('details.field-layouts')).not.toHaveAttribute('open');
+  await page.getByText('By research field').click();
   await expect(group).toBeVisible();
   for (const [id, label] of [
     ['clinical', 'Clinical case report'],
@@ -28,6 +33,7 @@ for (const [id, heading, body] of [
   test(`creates a ${id} poster with the field’s sections and example text`, async ({ page }) => {
     await page.goto('/');
     await page.getByRole('button', { name: '+ New poster' }).first().click();
+    await page.getByText('By research field').click();
     await page.locator(`[data-template="${id}"]`).click();
     await page.getByRole('button', { name: 'Create poster' }).click();
     await expect(page.locator('.poster .el', { hasText: heading }).first()).toBeVisible();
@@ -38,6 +44,7 @@ for (const [id, heading, body] of [
 test('Switch layout moves written text from a clinical poster into another field layout', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
+  await page.getByText('By research field').click();
   await page.locator('[data-template="clinical"]').click();
   await page.getByRole('button', { name: 'Create poster' }).click();
   const summary = page.locator('.poster .el-text .el-body', { hasText: 'Age, sex and presenting complaint' });
@@ -56,4 +63,15 @@ test('Switch layout moves written text from a clinical poster into another field
   // The lab layout is in place, and the case summary landed in its first free section.
   await expect(page.locator('.poster .el', { hasText: 'The gap in what is known' }).first()).toBeVisible();
   await expect(page.locator('.poster .el-text .el-body', { hasText: 'A 54-year-old with a rare rash.' })).toHaveCount(1);
+});
+
+test('the research-field section stays open after picking one of its layouts and can be closed again', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '+ New poster' }).first().click();
+  const summary = page.getByText('By research field');
+  await summary.click();
+  await page.locator('[data-template="lab"]').click();
+  await expect(page.locator('[data-template="lab"]')).toHaveAttribute('aria-pressed', 'true');
+  await summary.click();
+  await expect(page.locator('[data-template="lab"]')).toHaveCount(0);
 });

@@ -12,36 +12,27 @@ import { Canvas } from './Canvas';
 import { reducedMotion } from '../lib/a11y';
 import LeftPanel from './LeftPanel';
 import Inspector from './Inspector';
-import ChartDialog from './ChartDialog';
-import EquationDialog from './EquationDialog';
 import { equationBoxSize, typesetLatex } from '../lib/math';
-import ViewMode from './ViewMode';
 import { chartCanvases } from './ChartView';
 import { Logo } from './Library';
 import CheckPanel, { type CheckTab } from './CheckPanel';
 import FindPanel from './FindPanel';
 import ContextMenu, { type MenuItem } from './ContextMenu';
-import CropDialog from './CropDialog';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import { replaceAllInPoster } from '../lib/textTools';
 import { ignoreKey } from '../lib/spelling';
 import AppearanceMenu from './AppearanceMenu';
 import SettingsDialog from './SettingsDialog';
-import ShortcutsDialog from './ShortcutsDialog';
 import GearIcon from './GearIcon';
 import { keys } from '../lib/keys';
 import { downloadLibraryBackup } from '../lib/backup';
-import AuthorsDialog from './AuthorsDialog';
-import AbstractDialog from './AbstractDialog';
-import { describeFill, fillPoster, type FillPlan } from '../lib/abstractImport';
+import type { FillPlan } from '../lib/abstractImport';
 import { PLACEHOLDER_TEXT } from '../lib/checks';
 import type { AuthorList } from '../types';
 import ConfirmDialog from './ConfirmDialog';
-import SaveTemplateDialog from './SaveTemplateDialog';
 import { saveAsTemplate } from '../lib/userTemplates';
 import { useUiPrefs } from '../lib/uiPrefs';
 import { sanitizeElement } from '../lib/sanitize';
-import ReferencesDialog from './ReferencesDialog';
 import { insertCitationAtCaret } from '../lib/refs/caret';
 import { refreshMarkersIn } from '../lib/refs/citations';
 import { replaceColor } from '../lib/printColor';
@@ -50,8 +41,21 @@ import { NotesLayer, NotesPanel } from './ReviewNotes';
 import { cleanText, createNote, loadReviewerName, MAX_NOTE_LENGTH, notePositionFor, openNotes, saveReviewerName } from '../lib/notes';
 import { VisionBanner, VisionFilters, VisionSelect, visionFilter } from './VisionFilters';
 import type { VisionMode } from '../lib/colorVision';
-import Tour from './Tour';
 import { hasSeenTour, markTourSeen } from '../lib/tour';
+import { lazyPart } from '../lib/lazyPart';
+import { loadChartJs } from '../lib/chartjs';
+
+// Dialogs most sessions never open download on first use, keeping the editor quick to open.
+const ChartDialog = lazyPart(() => import('./ChartDialog'));
+const EquationDialog = lazyPart(() => import('./EquationDialog'));
+const ViewMode = lazyPart(() => import('./ViewMode'));
+const CropDialog = lazyPart(() => import('./CropDialog'));
+const ShortcutsDialog = lazyPart(() => import('./ShortcutsDialog'));
+const AuthorsDialog = lazyPart(() => import('./AuthorsDialog'));
+const AbstractDialog = lazyPart(() => import('./AbstractDialog'));
+const SaveTemplateDialog = lazyPart(() => import('./SaveTemplateDialog'));
+const ReferencesDialog = lazyPart(() => import('./ReferencesDialog'));
+const Tour = lazyPart(() => import('./Tour'));
 
 /** Start of the example reference in starter templates. */
 const EXAMPLE_REFS = 'Author, A. (2025). Title of work';
@@ -487,8 +491,9 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   }
 
   /** Drops the parts of an abstract into the poster's sections (one undo step). */
-  function fillFromAbstract(plan: FillPlan) {
+  async function fillFromAbstract(plan: FillPlan) {
     setAbstractOpen(false);
+    const { describeFill, fillPoster } = await import('../lib/abstractImport');
     let report = { sections: 0, title: false };
     update((d) => void (report = fillPoster(d, plan)));
     notify(describeFill(report));
@@ -896,6 +901,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     setOpenNoteId(null);
     const p = posterRef.current;
     await new Promise((r) => setTimeout(r, 50));
+    // Charts draw once Chart.js has loaded; make sure that has happened before capturing them.
+    if (p.elements.some((e) => e.type === 'chart')) await loadChartJs();
     try {
       if (kind === 'project') return exportPosterFile(p);
       notify(kind === 'pptx' ? 'Building PowerPoint…' : kind === 'pdf' ? 'Building print-quality PDF…' : `Rendering at ${effectiveDpi(p, dpi)} dpi… large posters can take a few seconds.`);

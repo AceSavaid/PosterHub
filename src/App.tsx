@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Poster } from './types';
 import Library from './components/Library';
-import Editor from './components/Editor';
 import { loadPoster } from './lib/storage';
 import { ensurePosterFonts } from './lib/fonts';
 import { sanitizePoster } from './lib/sanitize';
+
+// The editor (and everything only it uses) loads on first open, so My posters appears sooner.
+const Editor = lazy(() => import('./components/Editor'));
 
 const posterHash = (id: string) => `#/poster/${id}`;
 const hashPosterId = () => location.hash.match(/^#\/poster\/(.+)$/)?.[1] ?? null;
@@ -48,5 +50,11 @@ export default function App() {
     setOpen(null);
   }
 
-  return open ? <Editor key={open.id} initial={open} notice={notice} onClose={close} /> : <Library onOpen={openPoster} />;
+  return open ? (
+    <Suspense fallback={<div className="app-loading" role="status">Opening poster…</div>}>
+      <Editor key={open.id} initial={open} notice={notice} onClose={close} />
+    </Suspense>
+  ) : (
+    <Library onOpen={openPoster} />
+  );
 }

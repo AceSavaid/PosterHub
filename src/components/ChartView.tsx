@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Chart, registerables } from 'chart.js';
+import type { Chart } from 'chart.js';
 import type { ChartSpec, Palette } from '../types';
 import { buildChartConfig } from '../lib/chart';
 import { fontStack } from '../model';
-
-Chart.register(...registerables);
+import { loadChartJs } from '../lib/chartjs';
 
 /** Live chart canvases by element id, used for image fallbacks when exporting. */
 export const chartCanvases = new Map<string, HTMLCanvasElement>();
@@ -27,13 +26,17 @@ export default function ChartView({ id, spec, palette, font, textColor, widthPx,
   useEffect(() => {
     const canvas = canvasRef.current!;
     if (id) chartCanvases.set(id, canvas);
-    const chart = new Chart(canvas, buildChartConfig(spec, palette, fontStack(font), textColor));
-    // Re-render once web fonts arrive so labels use the right typeface.
     let alive = true;
-    document.fonts.ready.then(() => alive && chart.update());
+    let chart: Chart | undefined;
+    loadChartJs().then((ChartJs) => {
+      if (!alive) return;
+      chart = new ChartJs(canvas, buildChartConfig(spec, palette, fontStack(font), textColor));
+      // Re-render once web fonts arrive so labels use the right typeface.
+      document.fonts.ready.then(() => alive && chart?.update());
+    });
     return () => {
       alive = false;
-      chart.destroy();
+      chart?.destroy();
       if (id && chartCanvases.get(id) === canvas) chartCanvases.delete(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

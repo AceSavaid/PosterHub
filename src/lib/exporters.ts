@@ -1,4 +1,3 @@
-import { toBlob, toCanvas, toJpeg } from 'html-to-image';
 import type { ChartSpec, CropRect, Poster, PosterElement } from '../types';
 import { MM_TO_IN, MM_TO_PX, resolveColor, resolveFont } from '../model';
 import { fontEmbedCss } from './fonts';
@@ -55,6 +54,7 @@ async function withExportMode<T>(node: HTMLElement, fn: () => Promise<T>): Promi
 export async function renderPng(node: HTMLElement, p: Poster, dpi: number): Promise<Blob> {
   const css = await fontEmbedCss();
   return withExportMode(node, async () => {
+    const { toBlob } = await import('html-to-image');
     const blob = await toBlob(node, captureOptions(p, pixelRatioFor(p, dpi), css));
     if (!blob) throw new Error('Could not render the poster image.');
     return blob;
@@ -92,6 +92,7 @@ export async function exportPdf(
 export async function exportPdfRaster(node: HTMLElement, p: Poster, dpi: number, print?: Partial<PrintOptions>) {
   const { jsPDF } = await import('jspdf');
   const css = await fontEmbedCss();
+  const { toCanvas } = await import('html-to-image');
   const canvas = await withExportMode(node, () => toCanvas(node, captureOptions(p, pixelRatioFor(p, dpi), css)));
   const g = printGeometry(p, print);
   const m = g.marginMm;
@@ -121,6 +122,7 @@ export async function copyImageToClipboard(node: HTMLElement, p: Poster) {
 export async function makeThumbnail(node: HTMLElement, p: Poster): Promise<string | undefined> {
   try {
     const ratio = 320 / (Math.max(p.width, p.height) * MM_TO_PX);
+    const { toJpeg } = await import('html-to-image');
     return await withExportMode(node, () =>
       toJpeg(node, { ...captureOptions(p, ratio, ''), quality: 0.7, fontEmbedCSS: '' }),
     );

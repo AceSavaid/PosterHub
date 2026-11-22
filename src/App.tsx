@@ -5,10 +5,8 @@ import Editor from './components/Editor';
 import { loadPoster } from './lib/storage';
 import { ensurePosterFonts } from './lib/fonts';
 import { sanitizePoster } from './lib/sanitize';
+import { hashPosterId, libraryUrl, pushPosterEntry } from './lib/posterHistory';
 
-const posterHash = (id: string) => `#/poster/${id}`;
-const hashPosterId = () => location.hash.match(/^#\/poster\/(.+)$/)?.[1] ?? null;
-const libraryUrl = () => location.pathname + location.search;
 
 export default function App() {
   const [open, setOpen] = useState<Poster | null>(null);
@@ -33,9 +31,8 @@ export default function App() {
 
   async function openPoster(p: Poster, message?: string, push = true) {
     sanitizePoster(p);
-    // Add the history entry straight away, while the click still counts as the user's: Safari's Back
-    // button can skip entries that a page adds later on its own.
-    if (push && hashPosterId() !== p.id) history.pushState({ posterhub: p.id }, '', posterHash(p.id));
+    // Before any waiting, while the click still counts as the user's (see pushPosterEntry).
+    if (push) pushPosterEntry(p.id);
     await ensurePosterFonts(p);
     setNotice(message);
     setOpen(p);

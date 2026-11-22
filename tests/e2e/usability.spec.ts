@@ -47,8 +47,9 @@ test('Export stays on the top bar on a 1280 px laptop screen', async ({ page }) 
 test('the browser Back button returns to My posters and Forward reopens the poster', async ({ page }) => {
   await page.goto('/');
   await newPoster(page, 'Blank', 'Back button test');
+  await expect(page).toHaveURL(/#\/poster\//);
   await page.goBack();
-  await expect(page.getByRole('heading', { name: 'My posters' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My posters' }), `after Back the page is ${page.url()}`).toBeVisible();
   await expect(page.locator('.poster-card', { hasText: 'Back button test' })).toBeVisible();
   await page.goForward();
   await expect(page.getByLabel('Poster name')).toHaveValue('Back button test');

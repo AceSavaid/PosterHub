@@ -9,6 +9,7 @@ import GearIcon from './GearIcon';
 import type { PptxDeck } from '../lib/pptxImport';
 import { uid, PALETTES } from '../model';
 import { lazyPart } from '../lib/lazyPart';
+import { hashPosterId, pushPosterEntry } from '../lib/posterHistory';
 import ConfirmDialog from './ConfirmDialog';
 import SupportFooter from './SupportFooter';
 
@@ -55,9 +56,11 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
   }, []);
 
   async function create(p: Poster) {
+    pushPosterEntry(p.id); // before saving, so Safari's Back button keeps it (see pushPosterEntry)
     try {
       await savePoster(p);
     } catch (e) {
+      if (hashPosterId() === p.id) history.back();
       setCreating(false);
       setError('Could not save the new poster: ' + String(e));
       return;

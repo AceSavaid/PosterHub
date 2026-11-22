@@ -119,7 +119,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [viewing, setViewing] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
   const [abstractOpen, setAbstractOpen] = useState(false);
-  const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
+  const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string; file?: File } | null>(null);
   const [cropFor, setCropFor] = useState<string | null>(null);
   const [eqDialog, setEqDialog] = useState<{ id?: string; spec: EquationSpec } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -361,6 +361,20 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     addElement(el);
     fitTable(el.id);
     return el;
+  }
+
+  /** Replaces a table's cells with ones from an Excel or CSV file, keeping its style. */
+  function fillTable(el: PosterElement, cells: string[][]) {
+    const { colWidths: _old, ...rest } = normalizeTable(el.table);
+    const t = normalizeTable({ ...rest, rows: cells });
+    const p = posterRef.current;
+    // Like pasted cells: wide tables get two columns' width, and the box grows to fit every row.
+    const w = t.rows[0].length > 3 ? Math.max(el.w, Math.min(p.width - p.margin - el.x, el.w * 2 + p.gutter)) : el.w;
+    const h = Math.max(el.h, Math.min(p.height - p.margin - el.y, tableHeightMm(t.rows.length, t.fontSize)));
+    updateElement(el.id, { table: t, w, h });
+    fitTable(el.id);
+    const cut = cells.length > t.rows.length || Math.max(...cells.map((r) => r.length)) > t.rows[0].length;
+    notify(cut ? `Filled the table with the first ${t.rows.length} rows and ${t.rows[0].length} columns. Tables this big are hard to read on a poster; a graph may suit the rest.` : `Filled the table with ${t.rows.length} × ${t.rows[0].length} cells.`);
   }
 
   /** Grows a table's box when its rows no longer fit (after typing, pasting or adding rows). */
@@ -847,6 +861,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       if (f.type.startsWith('image/')) insertImageFile(f, at, targetEl?.type === 'image' ? targetEl.id : undefined);
       else if (/\.(csv|tsv|txt)$/i.test(f.name) || f.type === 'text/csv')
         f.text().then((text) => setChartDialog(targetEl?.type === 'chart' ? { id: targetEl.id, text } : { text }));
+      else if (/\.(xlsx|xlsm)$/i.test(f.name)) setChartDialog(targetEl?.type === 'chart' ? { id: targetEl.id, file: f } : { file: f });
     }
   }
 
@@ -1470,6 +1485,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             onTableGraph={() => selected && tableToGraph(selected)}
             onEditTable={() => selected && setEditingId(selected.id)}
             onConvertTable={() => selected && convertToTable(selected)}
+            onFillTable={(cells) => selected && fillTable(selected, cells)}
             onEditEquation={() => selected && openEquation(selected)}
           />
         ) : (
@@ -1616,7 +1632,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         />
       )}
       <VisionFilters />
-      {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
+      {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} initialFile={chartDialog.file} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
       {cropEl && (
         <CropDialog
           el={cropEl}

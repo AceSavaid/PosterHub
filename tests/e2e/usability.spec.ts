@@ -70,9 +70,9 @@ test('a graph picks similar columns, warns about mixed scales and fills an empty
   await newPoster(page);
   const slots = page.locator('.poster .img-placeholder', { hasText: 'Figure' });
   const before = await slots.count();
-  await page.getByRole('button', { name: 'Graph from CSV…' }).click();
+  await page.getByRole('button', { name: 'Graph from Excel or CSV…' }).click();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Choose a CSV file…' }).click();
+  await page.getByRole('button', { name: 'Choose an Excel or CSV file…' }).click();
   await (await chooser).setFiles(path.join(FIXTURES, 'results.csv'));
   await expect(page.getByRole('checkbox', { name: 'Accuracy' })).toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Speed' })).not.toBeChecked();
@@ -84,9 +84,9 @@ test('a graph picks similar columns, warns about mixed scales and fills an empty
   await page.getByRole('button', { name: 'Discard changes' }).click();
   await expect(page.locator('.chart-dialog')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Graph from CSV…' }).click();
+  await page.getByRole('button', { name: 'Graph from Excel or CSV…' }).click();
   const chooser2 = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Choose a CSV file…' }).click();
+  await page.getByRole('button', { name: 'Choose an Excel or CSV file…' }).click();
   await (await chooser2).setFiles(path.join(FIXTURES, 'results.csv'));
   await page.getByRole('button', { name: 'Add graph to poster' }).click();
   await expect(page.locator('.poster .el-chart')).toHaveCount(1);

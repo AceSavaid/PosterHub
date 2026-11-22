@@ -1,10 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Papa from 'papaparse';
 import type { ChartKind, ChartSpec, Poster } from '../types';
 import { resolveColor, resolveFont, typeScale } from '../model';
 import { toNumber, usesXColumn, xColumnRepeats, defaultYColumns, scaleMismatch } from '../lib/chart';
 import { useEscape } from '../lib/useEscape';
-import { pickFile } from '../lib/storage';
+import { useDataFile } from './DataFilePicker';
 import ChartView from './ChartView';
 import { useDialog } from '../lib/useDialog';
 import { useDiscardGuard } from './useDiscardGuard';
@@ -13,6 +13,8 @@ interface Props {
   poster: Poster;
   initial?: ChartSpec;
   initialText?: string;
+  /** A dropped CSV or Excel file to read when the dialog opens. */
+  initialFile?: File;
   onSave: (spec: ChartSpec) => void;
   onCancel: () => void;
 }
@@ -31,7 +33,12 @@ const KINDS: { id: ChartKind; label: string; hint: string }[] = [
 
 export function parseCsv(text: string): { columns: string[]; rows: string[][] } {
   const res = Papa.parse<string[]>(text.trim(), { skipEmptyLines: true });
-  const [header, ...rows] = res.data;
+  return columnsFromCells(res.data);
+}
+
+/** Splits cells (from a CSV, a pasted block or an Excel sheet) into column names and data rows. */
+export function columnsFromCells(cells: string[][]): { columns: string[]; rows: string[][] } {
+  const [header, ...rows] = cells;
   if (!header) throw new Error('The file is empty.');
   return { columns: header.map((h, i) => h.trim() || `Column ${i + 1}`), rows };
 }
@@ -58,7 +65,7 @@ export function defaultSpec(columns: string[], rows: string[][], fontSize: numbe
   };
 }
 
-export default function ChartDialog({ poster, initial, initialText, onSave, onCancel }: Props) {
+export default function ChartDialog({ poster, initial, initialText, initialFile, onSave, onCancel }: Props) {
   const baseFont = Math.max(8, Math.round(24 * typeScale(poster)));
   const [spec, setSpec] = useState<ChartSpec | null>(() => {
     if (initial) return initial;
@@ -95,9 +102,9 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
     });
   }
 
-  function load(text: string) {
+  function loadCells(cells: string[][]) {
     try {
-      const { columns, rows } = parseCsv(text);
+      const { columns, rows } = columnsFromCells(cells);
       if (rows.length === 0) throw new Error('No data rows found under the header row.');
       setSpec(defaultSpec(columns, rows, baseFont));
       setError('');
@@ -106,10 +113,21 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
     }
   }
 
-  async function upload() {
-    const f = await pickFile('.csv,.tsv,.txt,text/csv');
-    if (f) load(await f.text());
+  function load(text: string) {
+    try {
+      loadCells(Papa.parse<string[]>(text.trim(), { skipEmptyLines: true }).data);
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
+
+  const dataFile = useDataFile(loadCells, setError);
+  const openedFile = useRef<File | null>(null);
+  useEffect(() => {
+    if (!initialFile || openedFile.current === initialFile) return;
+    openedFile.current = initialFile;
+    void dataFile.open(initialFile);
+  }, [initialFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const dialog = useDialog(cancel, 'chart-dialog-title');
   const preview = useMemo(() => spec && { ...spec, fontSize: 11 }, [spec]);
@@ -119,10 +137,15 @@ export default function ChartDialog({ poster, initial, initialText, onSave, onCa
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && cancel()}>
       <div {...dialog} className="modal xwide chart-dialog">
-        <h2 id="chart-dialog-title">{initial ? 'Edit graph' : 'Graph from CSV'}</h2>
-        {!spec ? (
+        <h2 id="chart-dialog-title">{initial ? 'Edit graph' : 'Graph from Excel or CSV'}</h2>
+        {!spec && dataFile.picker ? (
           <div className="csv-load">
-            <button className="btn primary big" onClick={upload}>Choose a CSV file…</button>
+            {dataFile.picker}
+            {error && <div className="banner error">{error}</div>}
+          </div>
+        ) : !spec ? (
+          <div className="csv-load">
+            <button className="btn primary big" onClick={dataFile.choose} disabled={dataFile.busy}>{dataFile.busy ? 'Reading…' : 'Choose an Excel or CSV file…'}</button>
             <p className="muted">or paste data (from Excel, Sheets or a CSV) below, with column names in the first row:</p>
             <textarea rows={8} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={'Condition,Trial 1,Trial 2\nControl,12,14\nTreatment,18,21'} />
             <div className="modal-actions">

@@ -178,13 +178,14 @@ test.describe('templates', () => {
 
   test('starter text fits its boxes in every template, even with narrow columns', async ({ page }) => {
     test.setTimeout(120_000);
-    const ids = ['classic', 'boxed', 'bars', 'minimal', 'sidebar', 'takeaway', 'showcase', 'framed', 'central', 'banner'];
+    const ids = ['classic', 'boxed', 'bars', 'minimal', 'sidebar', 'takeaway', 'showcase', 'framed', 'central', 'banner', 'clinical', 'lab', 'computing', 'humanities'];
     for (const [landscape, columns] of [[false, 5], [true, 6]] as const) {
       for (const id of ids) {
         await page.goto('/');
         await page.getByRole('button', { name: '+ New poster' }).first().click();
         if (landscape) await page.getByRole('button', { name: 'Landscape' }).click();
         await page.getByLabel('Columns').selectOption(String(columns));
+        if (['clinical', 'lab', 'computing', 'humanities'].includes(id)) await page.getByText('By research field').click();
         await page.locator(`[data-template="${id}"]`).click();
         await page.getByRole('button', { name: 'Create poster' }).click();
         await expect(page.locator('.poster .el-title')).toBeVisible();

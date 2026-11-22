@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PALETTES, TEMPLATES, buildTemplate, createPoster, sizeFor } from '../../src/model';
+import { isStarterText } from '../../src/templates';
 import type { Orientation, PosterElement } from '../../src/types';
 
 const base = { name: 'Test', palette: PALETTES[0], headingFont: 'Montserrat', bodyFont: 'Open Sans' };
@@ -153,5 +154,97 @@ describe('section names', () => {
         }
       }
     }
+  });
+});
+
+describe('research-field layouts', () => {
+  const A0 = sizeFor('A0', 'portrait');
+  const fields = TEMPLATES.filter((t) => t.field);
+  const headings = (id: (typeof TEMPLATES)[number]['id'], cols = 3, w = A0.width, h = A0.height) =>
+    make(id, w, h, cols).elements.filter((e) => e.role === 'heading').map((e) => e.html ?? '');
+
+  it('offers clinical, lab, computing and humanities layouts', () => {
+    expect(fields.map((t) => t.id).sort()).toEqual(['clinical', 'computing', 'humanities', 'lab']);
+    for (const t of fields) expect(t.field).toBe(t.id);
+  });
+
+  it('names sections the way each field does', () => {
+    expect(headings('clinical')).toEqual(expect.arrayContaining(['Case Summary', 'Investigations', 'Learning Points']));
+    expect(headings('lab')).toEqual(expect.arrayContaining(['Methods', 'Results']));
+    expect(headings('computing')).toEqual(expect.arrayContaining(['Problem', 'Approach', 'Results']));
+    expect(headings('humanities')).toEqual(expect.arrayContaining(['Question', 'Argument', 'Sources']));
+    expect(headings('humanities')).not.toContain('Methods');
+  });
+
+  it('keeps section names short enough to sit on one line in narrow columns', () => {
+    for (const t of fields)
+      for (const cols of [1, 2, 3, 4, 5, 6])
+        for (const name of headings(t.id, cols, 1189, 841)) expect(name.length, `${t.id} "${name}"`).toBeLessThanOrEqual(16);
+  });
+
+  it('writes example text for the field instead of generic filler', () => {
+    for (const t of fields) {
+      const bodies = make(t.id, A0.width, A0.height, 3).elements.filter((e) => e.role === 'body').map((e) => e.html ?? '');
+      expect(bodies.length, t.id).toBeGreaterThan(2);
+      expect(bodies.filter((b) => b.startsWith('Replace this text')), t.id).toEqual([]);
+      for (const b of bodies) expect(b.length, `${t.id}: ${b}`).toBeLessThanOrEqual(150);
+    }
+  });
+
+  it('gives every element a role so Switch layout can carry content over', () => {
+    for (const t of fields)
+      for (const cols of [1, 3, 5]) for (const e of make(t.id, A0.width, A0.height, cols).elements) expect(e.role, `${t.id} ${e.type} ${e.html ?? e.placeholder}`).toBeTruthy();
+  });
+
+  it('groups each section heading with its text and figures', () => {
+    for (const t of fields) {
+      const els = make(t.id, A0.width, A0.height, 3).elements;
+      for (const h of els.filter((e) => e.role === 'heading')) {
+        expect(h.group, `${t.id} ${h.html}`).toBeTruthy();
+        expect(els.some((e) => e.group === h.group && (e.role === 'body' || e.role === 'caption')), `${t.id} ${h.html} has text`).toBe(true);
+      }
+    }
+  });
+
+  it('puts the clinical learning points across the full width at the bottom', () => {
+    const p = make('clinical', A0.width, A0.height, 3);
+    const lp = p.elements.find((e) => e.html === 'Learning Points')!;
+    const others = p.elements.filter((e) => e.role === 'heading' && e !== lp);
+    expect(others.every((h) => h.y < lp.y)).toBe(true);
+    expect(lp.w).toBeGreaterThan(p.width * 0.8);
+  });
+
+  it('puts the lab methods band with a diagram above the other sections', () => {
+    const p = make('lab', A0.width, A0.height, 3);
+    const m = p.elements.find((e) => e.html === 'Methods')!;
+    expect(m.w).toBeGreaterThan(p.width * 0.8);
+    expect(p.elements.filter((e) => e.role === 'heading' && e !== m).every((h) => h.y > m.y)).toBe(true);
+    expect(p.elements.some((e) => e.group === m.group && e.role === 'figure')).toBe(true);
+  });
+
+  it('gives computing results a grid of figures and tables on the right', () => {
+    const p = make('computing', A0.width, A0.height, 3);
+    const r = p.elements.find((e) => e.html === 'Results')!;
+    expect(r.x).toBeGreaterThan(p.width / 3);
+    const figs = p.elements.filter((e) => e.group === r.group && e.role === 'figure');
+    expect(figs).toHaveLength(4);
+    const caps = p.elements.filter((e) => e.group === r.group && e.role === 'caption').map((e) => e.html);
+    expect(caps.some((c) => c?.includes('Table'))).toBe(true);
+    // One column: no room for a side block, so results flow like the other sections.
+    expect(make('computing', A0.width, A0.height, 1).elements.some((e) => e.html === 'Results')).toBe(true);
+  });
+
+  it('opens the humanities layout with a pull quote that carries over as the key finding', () => {
+    const p = make('humanities', A0.width, A0.height, 3);
+    const q = p.elements.find((e) => e.role === 'keyFinding')!;
+    expect(q.html).toContain('“');
+    const title = p.elements.find((e) => e.role === 'title')!;
+    expect(q.y).toBeGreaterThan(title.y);
+    expect(p.elements.filter((e) => e.role === 'heading').every((h) => h.y > q.y)).toBe(true);
+  });
+
+  it('treats the new example text as starter text', () => {
+    for (const t of fields)
+      for (const e of make(t.id, A0.width, A0.height, 3).elements) if (e.html) expect(isStarterText(e.html), e.html).toBe(true);
   });
 });

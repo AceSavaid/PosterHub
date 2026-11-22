@@ -41,6 +41,7 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
   const [columns, setColumns] = useState(3);
   const [palette, setPalette] = useState<Palette>(() => kitLook(kit).palette);
   const [template, setTemplate] = useState<TemplateId>('classic');
+  const [fieldOpen, setFieldOpen] = useState(false);
   const [headingFont, setHeadingFont] = useState(() => kitLook(kit).headingFont);
   const [bodyFont, setBodyFont] = useState(() => kitLook(kit).bodyFont);
   /** A saved template from My templates; when set it supplies size, colours and fonts. */
@@ -100,15 +101,26 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
           {!mine && <>
           <div className="span2">
             <div className="field-label">Layout <span className="muted">· previews follow the colours, size and columns you pick below</span></div>
-            <div className="template-grid">
-              {TEMPLATES.map((t) => (
+            {(() => {
+              const card = (t: (typeof TEMPLATES)[number]) => (
                 <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => { setTemplate(t.id); setMine(null); }}>
                   <TemplateThumb id={t.id} width={size.width} height={size.height} columns={columns} palette={palette} />
                   <strong>{t.label}</strong>
                   <span>{t.description}</span>
                 </button>
-              ))}
-            </div>
+              );
+              const fieldLayouts = TEMPLATES.filter((t) => t.field);
+              return <>
+                <div className="template-grid" role="group" aria-label="General layouts">{TEMPLATES.filter((t) => !t.field).map(card)}</div>
+                {/* Field layouts sit in a collapsible section so the gallery stays short. */}
+                <details className="field-layouts" open={fieldOpen} onToggle={(e) => setFieldOpen((e.currentTarget as HTMLDetailsElement).open)} style={{ marginTop: 14 }}>
+                  <summary className="field-label" style={{ cursor: 'pointer', marginBottom: 8 }}>
+                    By research field <span className="muted">· {fieldLayouts.length} layouts: {fieldLayouts.map((t) => t.label.split(/[ ,]/)[0].toLowerCase()).join(', ')}</span>
+                  </summary>
+                  {fieldOpen && <div className="template-grid" role="group" aria-label="By research field">{fieldLayouts.map(card)}</div>}
+                </details>
+              </>;
+            })()}
           </div>
           <div className="span2">
             <div className="field-label">Colour palette</div>

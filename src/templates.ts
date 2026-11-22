@@ -19,11 +19,16 @@ export type TemplateId =
   | 'framed'
   | 'central'
   | 'banner'
+  | 'clinical'
+  | 'lab'
+  | 'computing'
+  | 'humanities'
   | 'blank';
 
 export type HeaderStyle = 'band' | 'logos' | 'minimal' | 'split' | 'sidebar' | 'none';
 export type SectionStyle = 'plain' | 'boxed' | 'bars' | 'numbered' | 'framed';
-export type BodyLayout = 'flow' | 'central' | 'takeaway' | 'wideFigure' | 'none';
+export type BodyLayout = 'flow' | 'central' | 'takeaway' | 'wideFigure' | 'learningPoints' | 'methodsBand' | 'resultsGrid' | 'quote' | 'none';
+export type FieldId = 'clinical' | 'lab' | 'computing' | 'humanities';
 export type FooterStyle = 'references' | 'logos' | 'qr' | 'none';
 
 export interface TemplateDef {
@@ -36,6 +41,8 @@ export interface TemplateDef {
   footer: FooterStyle;
   /** A one-sentence key finding strip under the header. */
   banner?: boolean;
+  /** Research field the layout is written for: its section names and example text follow that field. */
+  field?: FieldId;
 }
 
 export const TEMPLATES: TemplateDef[] = [
@@ -49,6 +56,10 @@ export const TEMPLATES: TemplateDef[] = [
   { id: 'framed', label: 'Framed panels', description: 'Outlined panels with tab headings, logos in the header and a QR code.', header: 'logos', sections: 'framed', body: 'flow', footer: 'qr' },
   { id: 'central', label: 'Central figure', description: 'A large figure in the middle column with text either side.', header: 'band', sections: 'plain', body: 'central', footer: 'references' },
   { id: 'banner', label: 'Key finding banner', description: 'A bold one-sentence takeaway under the title, then columns.', header: 'band', sections: 'plain', body: 'flow', footer: 'references', banner: true },
+  { id: 'clinical', label: 'Clinical case report', description: 'Case summary, investigations and treatment in cards, with learning points across the bottom.', header: 'logos', sections: 'boxed', body: 'learningPoints', footer: 'references', field: 'clinical' },
+  { id: 'lab', label: 'Lab study, methods first', description: 'A wide methods band with room for a protocol diagram, then numbered sections.', header: 'band', sections: 'numbered', body: 'methodsBand', footer: 'logos', field: 'lab' },
+  { id: 'computing', label: 'Computing and ML results', description: 'Problem, data and model on the left, a grid of result figures and tables on the right.', header: 'split', sections: 'framed', body: 'resultsGrid', footer: 'references', field: 'computing' },
+  { id: 'humanities', label: 'Humanities argument', description: 'Text-led, with a pull quote under the title, a source image and a bibliography.', header: 'minimal', sections: 'plain', body: 'quote', footer: 'references', field: 'humanities' },
   { id: 'blank', label: 'Blank', description: 'An empty canvas with the column grid.', header: 'none', sections: 'plain', body: 'none', footer: 'none' },
 ];
 
@@ -61,21 +72,158 @@ const LOREM =
 const REFERENCES = '<b>References</b> 1. Author, A. (2025). Title of work. <i>Journal</i>, 1(1), 1–10.';
 const CONTACT = '<b>Contact</b> you@university.edu';
 
-// Sections in reading order. A poster with n sections gets the n most important, kept in this order.
-const READING_ORDER = [
-  'Introduction', 'Background', 'Aims', 'Hypotheses', 'Methods', 'Participants', 'Materials', 'Analysis', 'Results',
-  'Key Findings', 'Discussion', 'Limitations', 'Conclusions', 'Future Work', 'Ethics', 'Data and Code', 'Acknowledgements', 'Funding',
-];
-const IMPORTANCE = [
-  'Introduction', 'Methods', 'Results', 'Discussion', 'Conclusions', 'Future Work', 'Background', 'Analysis', 'Limitations',
-  'Acknowledgements', 'Aims', 'Key Findings', 'Participants', 'Funding', 'Materials', 'Hypotheses', 'Data and Code', 'Ethics',
-];
-const pickSections = (n: number, exclude: string[] = []) => {
-  const chosen = new Set(IMPORTANCE.filter((x) => !exclude.includes(x)).slice(0, n));
-  return READING_ORDER.filter((x) => chosen.has(x));
+/** The sections a layout can use: their names, which ones come first, and example text. */
+interface Vocab {
+  /** Sections in reading order. A poster with n sections gets the n most important, kept in this order. */
+  order: string[];
+  importance: string[];
+  /** Names used when a poster only has room for three sections or fewer. */
+  short: string[];
+  /** Sections that get a figure when there is room. */
+  figures: Set<string>;
+  /** The section a central or wide results figure stands in for. */
+  results: string;
+  /** Example text per section (LOREM for any not listed). Kept short so it fits narrow columns. */
+  text: Record<string, string>;
+}
+
+const GENERAL: Vocab = {
+  order: [
+    'Introduction', 'Background', 'Aims', 'Hypotheses', 'Methods', 'Participants', 'Materials', 'Analysis', 'Results',
+    'Key Findings', 'Discussion', 'Limitations', 'Conclusions', 'Future Work', 'Ethics', 'Data and Code', 'Acknowledgements', 'Funding',
+  ],
+  importance: [
+    'Introduction', 'Methods', 'Results', 'Discussion', 'Conclusions', 'Future Work', 'Background', 'Analysis', 'Limitations',
+    'Acknowledgements', 'Aims', 'Key Findings', 'Participants', 'Funding', 'Materials', 'Hypotheses', 'Data and Code', 'Ethics',
+  ],
+  short: ['Background', 'Results', 'Conclusions'],
+  figures: new Set(['Results', 'Methods']),
+  results: 'Results',
+  text: {},
 };
-const SHORT_NAMES = ['Background', 'Results', 'Conclusions'];
-const FIGURE_SECTIONS = new Set(['Results', 'Methods']);
+
+// Section names stay at 16 characters or fewer so headings fit narrow columns (see fitHeading).
+const FIELDS: Record<FieldId, Vocab> = {
+  clinical: {
+    order: [
+      'Introduction', 'Background', 'Case Summary', 'Examination', 'Investigations', 'Diagnosis', 'Differentials', 'Treatment',
+      'Outcome', 'Follow-up', 'Discussion', 'Literature', 'Patient Consent', 'Acknowledgements',
+    ],
+    importance: [
+      'Background', 'Case Summary', 'Investigations', 'Diagnosis', 'Treatment', 'Outcome', 'Discussion', 'Differentials',
+      'Examination', 'Follow-up', 'Introduction', 'Literature', 'Patient Consent', 'Acknowledgements',
+    ],
+    short: ['Case Summary', 'Investigations', 'Discussion'],
+    figures: new Set(['Investigations', 'Examination']),
+    results: 'Investigations',
+    text: {
+      Background: 'Why this case matters: how rare or how often missed it is, and the question it raises for practice.',
+      'Case Summary': 'Age, sex and presenting complaint. Relevant history, medicines and the timeline of symptoms.',
+      Examination: 'Key findings on examination, including the important negatives.',
+      Investigations: 'Bloods, imaging and other tests in the order they were done. Show the key image below.',
+      Diagnosis: 'The final diagnosis and how it was confirmed.',
+      Differentials: 'What else was considered, and what ruled each one out.',
+      Treatment: 'What was done, the doses and the dates, and why this option was chosen.',
+      Outcome: 'How the patient did, and the latest follow-up.',
+      'Follow-up': 'Plans for monitoring and what to watch for.',
+      Discussion: 'How this case compares with published cases, and what it adds.',
+      Literature: 'Brief review of similar published cases.',
+      'Patient Consent': 'Written consent for publication was obtained from the patient.',
+      Acknowledgements: 'Thank the care team and the patient.',
+      'Learning Points': '1. The first thing a clinician should remember. 2. A clue that is easy to miss. 3. What you would do differently next time.',
+    },
+  },
+  lab: {
+    order: [
+      'Introduction', 'Background', 'Aims', 'Hypotheses', 'Materials', 'Methods', 'Analysis', 'Results', 'Controls',
+      'Discussion', 'Limitations', 'Conclusions', 'Future Work', 'Data and Code', 'Acknowledgements', 'Funding',
+    ],
+    importance: [
+      'Introduction', 'Results', 'Discussion', 'Conclusions', 'Aims', 'Analysis', 'Future Work', 'Materials', 'Controls',
+      'Limitations', 'Acknowledgements', 'Background', 'Hypotheses', 'Funding', 'Data and Code',
+    ],
+    short: ['Introduction', 'Results', 'Conclusions'],
+    figures: new Set(['Results']),
+    results: 'Results',
+    text: {
+      Introduction: 'The gap in what is known, and the question this study answers.',
+      Aims: 'State each aim in one line.',
+      Hypotheses: 'What you expected to find, and why.',
+      Materials: 'Cell lines, strains, reagents and equipment, with suppliers.',
+      Methods: 'Step by step: samples, treatments, timings and measurements. Number the steps to match the protocol diagram.',
+      Analysis: 'Software, statistical tests, replicates and the significance threshold.',
+      Results: 'One sentence per finding, each pointing to its figure panel.',
+      Controls: 'Positive and negative controls, and what they showed.',
+      Discussion: 'What the results mean, and how they fit earlier work.',
+      Limitations: 'What this design cannot tell us.',
+      Conclusions: 'The answer to the question, in plain words.',
+      'Future Work': 'The next experiment.',
+      'Data and Code': 'Where to find raw data and analysis scripts.',
+      Acknowledgements: 'Thank the people and facilities who helped.',
+      Funding: 'Grant names and numbers.',
+    },
+  },
+  computing: {
+    order: [
+      'Problem', 'Background', 'Contributions', 'Dataset', 'Approach', 'Model', 'Training', 'Evaluation', 'Results',
+      'Ablations', 'Discussion', 'Limitations', 'Conclusions', 'Future Work', 'Code and Data', 'Acknowledgements',
+    ],
+    importance: [
+      'Problem', 'Approach', 'Results', 'Dataset', 'Conclusions', 'Evaluation', 'Contributions', 'Limitations', 'Model',
+      'Ablations', 'Code and Data', 'Future Work', 'Discussion', 'Training', 'Background', 'Acknowledgements',
+    ],
+    short: ['Problem', 'Results', 'Conclusions'],
+    figures: new Set(['Approach', 'Model']),
+    results: 'Results',
+    text: {
+      Problem: 'The task, why it is hard, and why it matters. One example input and output helps.',
+      Background: 'The closest prior work and where it falls short.',
+      Contributions: 'List what is new, one line each.',
+      Dataset: 'Source, size, splits and any preprocessing or filtering.',
+      Approach: 'The idea in one sentence, then a diagram of the pipeline or model.',
+      Model: 'Architecture, parameter count and key design choices.',
+      Training: 'Hardware, time, optimiser and the settings that matter.',
+      Evaluation: 'Metrics, baselines and how runs were repeated.',
+      Results: 'Headline numbers with baselines. Bold the best score in each table.',
+      Ablations: 'What happens when each part is removed.',
+      Discussion: 'Where it works, where it fails, and why.',
+      Limitations: 'Failure cases, bias and compute cost.',
+      Conclusions: 'The main result in one or two sentences.',
+      'Future Work': 'What you will try next.',
+      'Code and Data': 'Link to the repository and model weights.',
+      Acknowledgements: 'Thank collaborators and compute providers.',
+    },
+  },
+  humanities: {
+    order: [
+      'Question', 'Context', 'Historiography', 'Sources', 'Approach', 'Argument', 'Close Reading', 'Analysis',
+      'Significance', 'Conclusions', 'Further Research', 'Acknowledgements',
+    ],
+    importance: [
+      'Question', 'Context', 'Argument', 'Sources', 'Close Reading', 'Conclusions', 'Significance', 'Historiography',
+      'Approach', 'Analysis', 'Further Research', 'Acknowledgements',
+    ],
+    short: ['Question', 'Argument', 'Conclusions'],
+    figures: new Set(['Sources']),
+    results: 'Argument',
+    text: {
+      Question: 'The question this project asks, in one or two sentences.',
+      Context: 'The period, place or tradition, and what a reader needs to know first.',
+      Historiography: 'How scholars have read this so far, and where you differ.',
+      Sources: 'The texts, archives or objects you work from. Show one below with its citation.',
+      Approach: 'Your method or theoretical lens, and why it suits these sources.',
+      Argument: 'Your claim, stated plainly, with the two or three strongest pieces of evidence.',
+      'Close Reading': 'A short passage or detail, and what it reveals.',
+      Analysis: 'How the evidence supports the argument.',
+      Significance: 'Why this matters beyond the case itself.',
+      Conclusions: 'What we now understand differently.',
+      'Further Research': 'Open questions and next steps.',
+      Acknowledgements: 'Thank archives, libraries and supervisors.',
+    },
+  },
+};
+
+const vocabFor = (def: TemplateDef) => (def.field ? FIELDS[def.field] : GENERAL);
 
 interface Col {
   x: number;
@@ -99,6 +247,7 @@ class Builder {
   headH: number;
   /** Set while building one section, so its elements share a group id. */
   group?: string;
+  v: Vocab;
 
   constructor(
     private poster: Poster,
@@ -110,6 +259,16 @@ class Builder {
     this.m = poster.margin;
     this.g = poster.gutter;
     this.headH = 32 * this.s;
+    this.v = vocabFor(def);
+  }
+
+  pickSections(n: number, exclude: string[] = []) {
+    const chosen = new Set(this.v.importance.filter((x) => !exclude.includes(x)).slice(0, n));
+    return this.v.order.filter((x) => chosen.has(x));
+  }
+
+  textFor(name: string) {
+    return this.v.text[name] ?? LOREM;
   }
 
   add(type: ElementType, at: Partial<PosterElement>) {
@@ -166,6 +325,18 @@ class Builder {
         break;
       case 'wideFigure':
         this.wideFigure(cols, top, bottom);
+        break;
+      case 'learningPoints':
+        this.learningPoints(cols, top, bottom);
+        break;
+      case 'methodsBand':
+        this.methodsBand(cols, top, bottom);
+        break;
+      case 'resultsGrid':
+        this.resultsGrid(cols, top, bottom);
+        break;
+      case 'quote':
+        this.quote(cols, top, bottom);
         break;
       default:
         this.flow(cols, top, bottom);
@@ -316,12 +487,12 @@ class Builder {
     return Math.max(min, Math.min(3, n));
   }
 
-  sectionNames(total: number, names = total <= 3 ? SHORT_NAMES : pickSections(total)) {
+  sectionNames(total: number, names = total <= 3 ? this.v.short : this.pickSections(total)) {
     return Array.from({ length: total }, (_, i) => names[i] ?? `Section ${i + 1}`);
   }
 
   /** One section (heading + text, sometimes a figure) inside the given box. */
-  section(x: number, y: number, w: number, h: number, name: string, index: number, figure = FIGURE_SECTIONS.has(name)) {
+  section(x: number, y: number, w: number, h: number, name: string, index: number, figure = this.v.figures.has(name)) {
     const { s } = this;
     const style = this.def.sections;
     const headStyle = defaultStyle('heading', s);
@@ -386,11 +557,11 @@ class Builder {
     if (bodyH <= 0) return;
     if (figure && bodyH > 140 * s) {
       const textH = bodyH * 0.36;
-      this.text({ x: bx, y: bodyY, w: bw, h: textH, html: LOREM, role: 'body' });
+      this.text({ x: bx, y: bodyY, w: bw, h: textH, html: this.textFor(name), role: 'body' });
       this.placeholder('Figure', { x: bx, y: bodyY + textH + gap, w: bw, h: bodyH - textH - gap, fill: '@surface' });
       if (style === 'boxed') this.els[this.els.length - 1].fill = '@background';
     } else {
-      this.text({ x: bx, y: bodyY, w: bw, h: bodyH, html: LOREM, role: 'body' });
+      this.text({ x: bx, y: bodyY, w: bw, h: bodyH, html: this.textFor(name), role: 'body' });
     }
   }
 
@@ -419,11 +590,12 @@ class Builder {
   }
 
   sideFlow(parts: { before: Col[]; after: Col[] }, top: number, bottom: number) {
+    const results = this.v.results;
     const sideCols = [...parts.before, ...parts.after];
     const per = this.sectionCount(sideCols[0].w, bottom - top);
     // The middle block already holds the results, so the sides get the other sections.
     const total = per * sideCols.length;
-    const pool = total <= 2 ? SHORT_NAMES.filter((n) => n !== 'Results') : pickSections(total, ['Results']);
+    const pool = total <= 2 ? this.v.short.filter((n) => n !== results) : this.pickSections(total, [results]);
     const names = this.sectionNames(total, pool);
     this.flow(parts.before, top, bottom, names.slice(0, per * parts.before.length));
     this.flow(parts.after, top, bottom, names.slice(per * parts.before.length));
@@ -497,6 +669,127 @@ class Builder {
     const botY = midY + midH + g;
     cols.forEach((c, i) => this.section(c.x, botY, c.w, bottom - botY, bottomNames[i] ?? `Section ${cols.length + i + 1}`, cols.length + i, false));
   }
+
+  /** Names for `total` sections that leave out sections the layout already places elsewhere. */
+  namesWithout(total: number, exclude: string[]) {
+    return this.sectionNames(total, this.pickSections(total, exclude));
+  }
+
+  /** Sections in columns, then one full-width "Learning Points" section along the bottom. */
+  learningPoints(cols: Col[], top: number, bottom: number) {
+    const { s, g } = this;
+    const left = cols[0].x;
+    const right = cols[cols.length - 1].x + cols[cols.length - 1].w;
+    const avail = bottom - top;
+    const h = Math.min(Math.max(avail * 0.16, 95 * s), avail * 0.3);
+    this.flow(cols, top, bottom - h - g);
+    const per = this.sectionCount(cols[0].w, bottom - h - g - top);
+    this.section(left, bottom - h, right - left, h, 'Learning Points', per * cols.length, false);
+  }
+
+  /** A wide Methods band (steps beside a protocol diagram) across the top, then sections underneath. */
+  methodsBand(cols: Col[], top: number, bottom: number) {
+    const { s, g } = this;
+    const left = cols[0].x;
+    const right = cols[cols.length - 1].x + cols[cols.length - 1].w;
+    const avail = bottom - top;
+    const bandH = avail * 0.34;
+    const pad = 8 * s;
+    const gap = 6 * s;
+    this.group = uid();
+    this.add('shape', { x: left, y: top, w: right - left, h: bandH, fill: '@surface', radius: 5 * s });
+    const iw = right - left - 2 * pad;
+    this.add('heading', { x: left + pad, y: top + pad, w: iw, h: this.headH, html: 'Methods', style: { ...defaultStyle('heading', this.s), fontSize: this.fitHeading(50, iw) } });
+    const bodyY = top + pad + this.headH + gap;
+    const bodyH = bandH - 2 * pad - this.headH - gap;
+    const html = this.textFor('Methods');
+    if (cols.length >= 2) {
+      // Steps fill the first third of the columns, the diagram takes the rest.
+      const textCols = Math.max(1, Math.floor(cols.length / 3));
+      const split = cols[textCols - 1].x + cols[textCols - 1].w;
+      this.text({ x: left + pad, y: bodyY, w: split - left - pad, h: bodyH, html, role: 'body' });
+      this.placeholder('Figure', { x: split + g, y: bodyY, w: right - pad - split - g, h: bodyH, fill: '@background' });
+    } else {
+      const textH = bodyH * 0.4;
+      this.text({ x: left + pad, y: bodyY, w: iw, h: textH, html, role: 'body' });
+      this.placeholder('Figure', { x: left + pad, y: bodyY + textH + gap, w: iw, h: bodyH - textH - gap, fill: '@background' });
+    }
+    this.group = undefined;
+
+    const restTop = top + bandH + g;
+    const per = this.sectionCount(cols[0].w, bottom - restTop);
+    this.flow(cols, restTop, bottom, this.namesWithout(per * cols.length, ['Methods']));
+  }
+
+  /** Text sections in the left columns; a Results block with a grid of figures and tables on the right. */
+  resultsGrid(cols: Col[], top: number, bottom: number) {
+    if (cols.length < 2) return this.flow(cols, top, bottom);
+    const { s, g } = this;
+    const results = this.v.results;
+    const nRight = Math.ceil(cols.length / 2);
+    const leftCols = cols.slice(0, cols.length - nRight);
+    const rx = cols[leftCols.length].x;
+    const right = cols[cols.length - 1].x + cols[cols.length - 1].w;
+    const avail = bottom - top;
+
+    const per = this.sectionCount(leftCols[0].w, avail);
+    this.flow(leftCols, top, bottom, this.namesWithout(per * leftCols.length, [results]));
+
+    const pad = 8 * s;
+    const gap = 6 * s;
+    const iw = right - rx - 2 * pad;
+    this.group = uid();
+    this.add('shape', { x: rx, y: top, w: right - rx, h: avail, radius: 5 * s, borderColor: '@secondary', borderWidth: Math.max(0.75, 3 * s) });
+    const hp = 4 * s;
+    const headH = 40 * s;
+    this.add('heading', {
+      x: rx + pad, y: top + pad, w: iw, h: headH, html: results, fill: '@secondary', padding: hp, radius: 3 * s,
+      style: { ...defaultStyle('heading', s), fontSize: this.fitHeading(44, iw - 2 * hp), color: '#ffffff' },
+    });
+    const textY = top + pad + headH + gap;
+    const textH = Math.max(avail * 0.07, 40 * s);
+    this.text({ x: rx + pad, y: textY, w: iw, h: textH, html: this.textFor(results), role: 'body' });
+
+    const gridY = textY + textH + gap;
+    const gridH = top + avail - pad - gridY;
+    const gc = iw > 2 * 150 * s + g ? 2 : 1;
+    const rows = 2;
+    const cw = (iw - (gc - 1) * g) / gc;
+    const ch = (gridH - (rows - 1) * g) / rows;
+    const capH = 24 * s;
+    const captions = [
+      '<i>Figure 1.</i> Main results against baselines.',
+      '<i>Table 1.</i> Scores on each benchmark.',
+      '<i>Figure 2.</i> Performance as data grows.',
+      '<i>Table 2.</i> Ablation results.',
+    ];
+    let i = 0;
+    for (let r = 0; r < rows; r++)
+      for (let c = 0; c < gc; c++, i++) {
+        const x = rx + pad + c * (cw + g);
+        const y = gridY + r * (ch + g);
+        this.placeholder('Figure', { x, y, w: cw, h: ch - capH - 3 * s, fill: '@surface' });
+        this.text({ x, y: y + ch - capH, w: cw, h: capH, html: captions[(gc === 1 ? i * 2 : i) % captions.length], role: 'caption' }, 22, { align: 'center' });
+      }
+    this.group = undefined;
+  }
+
+  /** A pull quote with an accent rule under the header, then text sections. */
+  quote(cols: Col[], top: number, bottom: number) {
+    const { s, g } = this;
+    const left = cols[0].x;
+    const right = cols[cols.length - 1].x + cols[cols.length - 1].w;
+    const h = Math.min(75 * s, (bottom - top) * 0.2);
+    const bar = Math.max(1, 4 * s);
+    this.add('shape', { x: left, y: top, w: bar, h, fill: '@accent' });
+    this.text(
+      { x: left + bar + g * 0.6, y: top, w: right - left - bar - g * 0.6, h, html: '<i>“A short quotation from your sources that captures the heart of your argument.”</i><br>— Author, <i>Title of Work</i> (year)', role: 'keyFinding' },
+      36,
+      { fontFamily: '@heading', color: '@primary' },
+    );
+    this.flow(cols, top + h + g, bottom);
+  }
+
 }
 
 const PLACEHOLDER_ROLES: Record<string, ElementRole> = { Logo: 'logo', 'QR code': 'qr', Figure: 'figure' };

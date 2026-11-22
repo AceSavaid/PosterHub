@@ -185,3 +185,59 @@ describe('switching layouts keeps the person’s content', () => {
     expect(figureOf(elements, 'Methodology')!.src).toBe('data:image/png;base64,IMG');
   });
 });
+
+describe('research-field layouts and Switch layout', () => {
+  /** Fill every section of a field layout with its own text, and every figure spot with a picture. */
+  function filledField(template: TemplateId) {
+    const p = make(template);
+    p.elements.find((e) => e.type === 'title')!.html = 'My field poster';
+    const texts: string[] = [];
+    for (const h of p.elements.filter((e) => e.role === 'heading')) {
+      const body = p.elements.find((e) => e.group === h.group && e.role === 'body');
+      if (body) {
+        body.html = `Own words about ${h.html}.`;
+        texts.push(body.html);
+      }
+    }
+    const figs = p.elements.filter((e) => e.role === 'figure');
+    figs.forEach((f, i) => (f.src = `data:image/png;base64,FIG${i}`));
+    const quote = p.elements.find((e) => e.role === 'keyFinding');
+    if (quote) {
+      quote.html = '“A line from my archive.”';
+      texts.push(quote.html);
+    }
+    return { p, texts, figures: figs.length };
+  }
+
+  for (const from of ['clinical', 'lab', 'computing', 'humanities'] as TemplateId[]) {
+    for (const to of ['classic', 'sidebar', 'clinical', 'lab', 'computing', 'humanities'] as TemplateId[]) {
+      if (from === to) continue;
+      it(`${from} → ${to} keeps every section’s text and every picture`, () => {
+        const { p, texts, figures } = filledField(from);
+        const { elements } = applyLayout(p, to);
+        const html = allHtml(elements);
+        expect(html).toContain('My field poster');
+        for (const t of texts) expect(html, t).toContain(t);
+        expect(elements.filter((e) => e.src?.startsWith('data:image/png;base64,FIG'))).toHaveLength(figures);
+      });
+    }
+  }
+
+  it('matches field section names to their general equivalents', () => {
+    expect(sectionKey('Learning Points')).toBe('conclusions');
+    expect(sectionKey('Case Presentation')).toBe(sectionKey('Case Summary'));
+    expect(sectionKey('Problem')).toBe('introduction');
+    expect(sectionKey('Code and Data')).toBe(sectionKey('Data and Code'));
+  });
+
+  it('moves the classic Conclusions into the clinical Learning Points', () => {
+    const { elements } = applyLayout(filled(), 'clinical');
+    expect(bodyOf(elements, 'Learning Points')?.html).toBe('Naps help.');
+  });
+
+  it('moves the lab Methods band text into a Methods section of a general layout', () => {
+    const { p } = filledField('lab');
+    const { elements } = applyLayout(p, 'classic');
+    expect(bodyOf(elements, 'Methods')?.html).toBe('Own words about Methods.');
+  });
+});

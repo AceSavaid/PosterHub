@@ -30,6 +30,8 @@ interface Props {
   onConference?: (rules: ConferenceRules | undefined, key?: string) => void;
   /** Applies an issue's one-click fix (e.g. swap a colour for a printable one). */
   onFix?: (issue: Issue) => void;
+  /** Saves a description (alt text) typed straight into the Check list. */
+  onAlt?: (elementId: string, alt: string) => void;
   onClose: () => void;
   /** show the poster as seen with this kind of vision */
   onPreview?: (mode: VisionMode) => void;
@@ -66,7 +68,7 @@ export default function CheckPanel(props: Props) {
   );
 }
 
-function Problems({ issues, onPick, onPickNote, onFix, onPreview }: Props) {
+function Problems({ issues, onPick, onPickNote, onFix, onPreview, onAlt }: Props) {
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const warnings = issues.filter((i) => i.severity === 'warning').length;
   if (issues.length === 0)
@@ -101,6 +103,7 @@ function Problems({ issues, onPick, onPickNote, onFix, onPreview }: Props) {
                 {i.fix.label}
               </button>
             )}
+            {i.needsAlt && i.elementId && onAlt && <AltBox key={i.elementId} elementId={i.elementId} what={i.title} onSave={onAlt} />}
             {i.preview && onPreview && (
               <button className="issue-preview" onClick={() => onPreview(i.preview!)}>
                 👁 Preview as {visionInfo(i.preview).label.toLowerCase()}
@@ -110,6 +113,33 @@ function Problems({ issues, onPick, onPickNote, onFix, onPreview }: Props) {
         ))}
       </ul>
     </>
+  );
+}
+
+/** A box to describe a picture, graph or icon without leaving the Check list. */
+function AltBox({ elementId, what, onSave }: { elementId: string; what: string; onSave: (id: string, alt: string) => void }) {
+  const [text, setText] = useState('');
+  const fieldId = 'alt-' + elementId;
+  const save = () => text.trim() && onSave(elementId, text.trim());
+  return (
+    <div className="issue-alt">
+      <label htmlFor={fieldId} className="sr-only">Description for: {what}</label>
+      <textarea
+        id={fieldId}
+        rows={2}
+        value={text}
+        placeholder="Describe it in a sentence…"
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          // Enter saves; Shift+Enter starts a new line
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            save();
+          }
+        }}
+      />
+      <button className="btn small-btn" disabled={!text.trim()} onClick={save}>Save description</button>
+    </div>
   );
 }
 

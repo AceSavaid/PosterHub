@@ -304,11 +304,32 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 /* ---------------- View mode */
 .view-mode { position: fixed; inset: 0; background: #0f1115; color: #eee; display: flex; flex-direction: column; z-index: 40; }
 .view-bar { display: flex; gap: 12px; align-items: center; padding: 8px 14px; background: #181b21; }
-.view-bar > span:first-child { font-weight: 600; flex: 1; }
+.view-bar > .view-name { font-weight: 600; flex: 1; }
 .view-bar .btn:not(.primary) { background: #262a33; border-color: #3a404c; color: #eee; }
 .view-stage { flex: 1; overflow: auto; display: flex; padding: 24px; cursor: zoom-in; }
-.view-stage.zoomed { cursor: zoom-out; }
 .view-stage .el { cursor: inherit; }
+/* Fit mode pans and zooms with a transform instead of scrolling, and takes every touch gesture itself
+   (the browser would otherwise zoom or scroll the whole page). */
+.view-stage.pan-zoom { position: relative; overflow: hidden; padding: 0; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; overscroll-behavior: contain; }
+.view-stage.pan-zoom.zoomed { cursor: grab; }
+.view-stage.pan-zoom.zoomed:active { cursor: grabbing; }
+.pan-layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+.view-zoom { display: inline-flex; gap: 4px; }
+.view-zoom .btn { min-width: 34px; }
+.view-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* Phones: one compact bar that wraps, finger-sized buttons, and the poster gets the rest of the screen. */
+@media (max-width: 680px) {
+  .view-bar { flex-wrap: wrap; gap: 6px 8px; padding: 6px 8px; padding-top: max(6px, env(safe-area-inset-top)); }
+  /* the viewing-distance preview means sitting at arm's length from a big screen, so phones leave it out */
+  .view-bar .view-hint, .view-bar .view-distance { display: none; }
+  /* row 1: name and Back to editing; row 2: zoom buttons, colours, full screen */
+  .view-bar > * { order: 2; }
+  .view-bar > .view-name { order: 0; flex: 1 1 calc(100% - 190px); font-size: 14px; }
+  .view-bar > .btn.primary { order: 1; }
+  .view-bar .btn, .view-bar select { min-height: 40px; }
+  .view-bar .vision-select { flex: 1 1 0; min-width: 0; max-width: 170px; }
+  .view-zoom .btn { min-width: 40px; font-size: 18px; }
+}
 
 @media (max-width: 900px) {
   .panel { width: 230px; }

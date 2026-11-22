@@ -57,14 +57,12 @@ export default function CopySizeDialog({ poster, onCopy, onCancel }: Props) {
         }}
       >
         <h2 id="copy-size-title">Copy at another size</h2>
-        <p className="muted small">
-          Makes a new poster in My posters at the size you pick, for example an A1 landscape version or an A4 handout. “{poster.name}” stays as it is.
-        </p>
+        <p className="muted small copy-intro">A new poster at the size you pick. “{poster.name}” stays as it is.</p>
         <div className="form-grid">
           <SizeFields orientation={orientationOf(size)} preset={size.preset} width={size.width} height={size.height} onChange={pickSize} />
         </div>
         {same ? (
-          <p className="hint" role="status">That is the poster’s current size. Pick another size or orientation.</p>
+          <p className="hint copy-note" role="status">That is the poster’s current size. Pick another size or orientation.</p>
         ) : offerRearrange ? (
           <fieldset className="copy-mode">
             <legend>The shape changes. How should your content fit?</legend>
@@ -89,7 +87,7 @@ export default function CopySizeDialog({ poster, onCopy, onCancel }: Props) {
                     ))}
                   </select>
                 </label>
-                <p className="hint span2">Your title, authors, section text, figures, logos and QR codes move into the matching places. Text uses the layout’s sizes for the new page.</p>
+                <p className="hint span2">Your text, figures and logos move into the matching places.</p>
               </div>
             )}
             <label className="check">
@@ -97,7 +95,7 @@ export default function CopySizeDialog({ poster, onCopy, onCancel }: Props) {
             </label>
           </fieldset>
         ) : (
-          <p className="hint">
+          <p className="hint copy-note">
             Everything is moved and resized in proportion
             {textPct !== 100 ? `, and text is scaled to ${textPct}% so it still fits` : ''}.
             {changes && !rearrangeable ? ' The shape changes, so boxes are stretched to fit; check the copy afterwards.' : ''}

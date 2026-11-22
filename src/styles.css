@@ -792,3 +792,14 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .issue-alt { display: flex; gap: 6px; align-items: flex-start; margin: 4px 0 4px 34px; }
 .issue-alt textarea { flex: 1; min-width: 0; font: inherit; font-size: 12px; resize: vertical; }
 .issue .issue-alt button { width: auto; flex: none; padding: 4px 10px; font-size: 12px; }
+
+/* Copy at another size: give each step room to breathe */
+.copy-size .copy-intro { margin: -6px 0 18px; }
+.copy-size > .form-grid { padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
+.copy-size .copy-note { margin: 0 0 20px; }
+.copy-mode { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 16px; margin: 0 0 20px; display: flex; flex-direction: column; gap: 12px; }
+.copy-mode legend { font-weight: 600; font-size: 14px; padding: 0 6px; margin-left: -6px; }
+.copy-mode label.check { font-size: 13.5px; }
+.copy-mode .copy-rearrange { margin: 0 0 4px 26px; gap: 10px 14px; }
+.copy-mode .copy-rearrange .hint { margin: 0; }
+.copy-size .field { margin-top: 4px; }

@@ -1,6 +1,7 @@
 import AppearanceMenu from './AppearanceMenu';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Poster } from '../types';
+import CopySizeDialog from './CopySizeDialog';
 import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFile, readText, savePoster, storageInfo } from '../lib/storage';
 import { parsePosterText } from '../lib/posterFile';
 import { backupDue, daysSinceBackup, downloadLibraryBackup, parseBackupText, planRestore, restoreMessage, snoozeUntil } from '../lib/backup';
@@ -34,6 +35,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
   const [deleting, setDeleting] = useState<Poster | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notice, setNotice] = useState('');
+  const [resizing, setResizing] = useState<Poster | null>(null);
   const [prefs, changePrefs] = useUiPrefs();
 
   const refresh = () => listPosters().then(setPosters).catch((e) => setError(String(e)));
@@ -257,6 +259,9 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
                   <button className="link" onClick={() => onOpen(p)}>Open</button>
                   <button className="link" onClick={() => setRenaming({ id: p.id, name: p.name })}>Rename</button>
                   <button className="link" onClick={() => duplicate(p)}>Duplicate</button>
+                  <button className="link" onClick={() => setResizing(p)} aria-label={`Copy ${p.name} at another size`} title="Make a copy at another size or orientation, e.g. A1 landscape or an A4 handout">
+                    Copy at size…
+                  </button>
                   <button className="link" onClick={() => exportPosterFile(p)} title="Save a .poster.json copy you can open on another computer. For PDF or PowerPoint, open the poster and use Export.">
                     Download backup
                   </button>
@@ -268,6 +273,21 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
         </div>
       </main>
       <SupportFooter />
+      {resizing && (
+        <CopySizeDialog
+          poster={resizing}
+          onCancel={() => setResizing(null)}
+          onCopy={async (copy, message) => {
+            setResizing(null);
+            try {
+              await savePoster(copy);
+              onOpen(copy, message);
+            } catch (e) {
+              setError('Could not save the copy: ' + String(e));
+            }
+          }}
+        />
+      )}
       {picking && (
         <Suspense fallback={null}>
           <SlidePicker deck={picking.deck} fileName={picking.fileName} onPick={(i) => finishImport(picking.deck, i, picking.name)} onCancel={() => setPicking(null)} />

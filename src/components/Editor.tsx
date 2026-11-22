@@ -54,6 +54,7 @@ const ShortcutsDialog = lazyPart(() => import('./ShortcutsDialog'));
 const AuthorsDialog = lazyPart(() => import('./AuthorsDialog'));
 const AbstractDialog = lazyPart(() => import('./AbstractDialog'));
 const SaveTemplateDialog = lazyPart(() => import('./SaveTemplateDialog'));
+const CopySizeDialog = lazyPart(() => import('./CopySizeDialog'));
 const ReferencesDialog = lazyPart(() => import('./ReferencesDialog'));
 const Tour = lazyPart(() => import('./Tour'));
 
@@ -187,6 +188,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   }, [exportOpen]);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
   const [templateDialog, setTemplateDialog] = useState(false);
+  const [copySizeOpen, setCopySizeOpen] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [dpi, setDpi] = useState(200);
@@ -1501,6 +1503,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           onClose={() => setPosterMenu(null)}
           items={[
             { label: 'Duplicate this poster', onClick: duplicatePoster },
+            { label: 'Copy at another size…', onClick: () => setCopySizeOpen(true) },
             { label: 'Download project file', onClick: () => exportPosterFile(posterRef.current) },
             { label: 'Save as my template…', onClick: () => setTemplateDialog(true) },
             '-',
@@ -1649,6 +1652,21 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       {eqDialog && <EquationDialog poster={poster} initial={eqDialog.spec} isNew={!eqDialog.id} onSave={saveEquation} onCancel={() => setEqDialog(null)} />}
       {abstractOpen && <AbstractDialog poster={poster} onFill={fillFromAbstract} onCancel={() => setAbstractOpen(false)} />}
       {authorsDialog && <AuthorsDialog initial={authorsDialog.initial} replacing={authorsDialog.replacing} onSave={saveAuthors} onCancel={() => setAuthorsDialog(null)} />}
+      {copySizeOpen && (
+        <CopySizeDialog
+          poster={posterRef.current}
+          onCancel={() => setCopySizeOpen(false)}
+          onCopy={async (copy, message) => {
+            setCopySizeOpen(false);
+            try {
+              await savePoster(copy);
+              notify(`${message} Saved as “${copy.name}” in My posters. You are still editing the original.`);
+            } catch (e) {
+              notify('Could not save the copy: ' + String(e));
+            }
+          }}
+        />
+      )}
       {templateDialog && <SaveTemplateDialog poster={poster} onSave={saveTemplate} onCancel={() => setTemplateDialog(false)} />}
       {confirmDelete && (
         <ConfirmDialog

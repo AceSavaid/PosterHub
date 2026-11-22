@@ -44,11 +44,14 @@ test('previews the poster as colour-blind readers and greyscale print see it', a
   await newPoster(page);
   expect(await stageFilter(page)).toBe('none');
 
-  await page.getByRole('button', { name: 'Colour vision' }).click();
-  const menu = page.getByRole('dialog', { name: 'Colour vision' });
-  await expect(menu.getByRole('radio')).toHaveCount(5);
-  await expect(menu.getByRole('radio', { name: /Normal vision/ })).toHaveAttribute('aria-checked', 'true');
-  await menu.getByRole('radio', { name: /Deuteranopia/ }).click();
+  // the preview lives in the View menu, so the top bar has room for the poster name
+  await page.getByRole('button', { name: 'View ▾' }).click();
+  const menu = page.getByRole('dialog', { name: 'View options' });
+  const pick = menu.getByLabel('Colour vision');
+  await expect(pick.locator('option')).toHaveCount(5);
+  await expect(pick).toHaveValue('normal');
+  await pick.selectOption('deuteranopia');
+  await page.keyboard.press('Escape');
   await expect(menu).toBeHidden();
 
   await expect(page.getByRole('status').filter({ hasText: 'Previewing deuteranopia' })).toBeVisible();
@@ -68,8 +71,9 @@ test('previews the poster as colour-blind readers and greyscale print see it', a
   const normal = await centrePixel(page, box);
   expect(normal[0]).toBeGreaterThan(normal[1] + 80); // clearly red
   expect(Math.abs(simulated[0] - simulated[1])).toBeLessThan(40); // red and green channels level out
-  await page.getByRole('button', { name: 'Colour vision' }).click();
-  await page.getByRole('radio', { name: /Deuteranopia/ }).click();
+  await page.getByRole('button', { name: 'View ▾' }).click();
+  await page.getByRole('dialog', { name: 'View options' }).getByLabel('Colour vision').selectOption('deuteranopia');
+  await page.keyboard.press('Escape');
 
   // view mode keeps the same preview and can change it
   await page.getByRole('button', { name: 'Preview', exact: true }).click();

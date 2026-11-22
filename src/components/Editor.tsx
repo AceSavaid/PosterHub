@@ -1537,6 +1537,13 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           onPickNote={pickNote}
           onPreview={setVision}
           onFix={fixIssue}
+          onAlt={(id, alt) => {
+            update((d) => {
+              const el = d.elements.find((x) => x.id === id);
+              if (el) el.alt = alt;
+            });
+            notify('Description saved. Change it any time in the side panel.');
+          }}
           onPickMany={(ids) => ids[0] && pickIssue(ids[0], ids)}
           onFixWord={(word, replacement) => {
             setEditingId(null);

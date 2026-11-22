@@ -60,7 +60,7 @@ describe('poster check', () => {
     const p = blank();
     p.elements = [
       makeElement('text', p, { html: 'Real words', y: 900 }),
-      makeElement('image', p, { src: 'data:image/png;base64,x', w: 100, y: 1000 }),
+      makeElement('image', p, { src: 'data:image/png;base64,x', w: 100, y: 1000, alt: 'A chart' }),
     ];
     const found = checkPoster(p, new Map([[p.elements[1].id, { width: 2000 }]]));
     expect(found.filter((i) => i.severity !== 'tip')).toEqual([]);

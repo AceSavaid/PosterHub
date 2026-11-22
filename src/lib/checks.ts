@@ -30,6 +30,8 @@ export interface Issue {
   fix?: { label: string; from: string; to: string };
   /** a colour-vision preview that shows the problem */
   preview?: VisionMode;
+  /** The element has no description for screen readers; the Check panel offers a box to type one. */
+  needsAlt?: boolean;
 }
 
 export const PLACEHOLDER_TEXT = ['Your Poster Title Goes Here', 'Replace this text with your own', 'Type or paste your text here', 'Section Heading', 'Author One, Author Two', 'Describe what the figure shows', 'State your main result in one clear sentence', 'Author, A. (2025). Title of work'];
@@ -140,6 +142,43 @@ export function chartColorIssue(el: PosterElement, p: Poster): Issue | null {
     detail: parts.join(' '),
     preview: colourBlind[0] ?? (byMode.has('greyscale') ? 'greyscale' : undefined),
   };
+}
+
+/**
+ * Pictures, graphs and icons with no description (alt text). Screen readers, the
+ * accessible PDF and anyone who can't see the poster rely on it. QR codes describe
+ * themselves and empty placeholders are reported as leftovers instead.
+ */
+export function altTextIssue(el: PosterElement): Issue | null {
+  if (el.alt?.trim()) return null;
+  const base = { id: 'alt-' + el.id, elementId: el.id, needsAlt: true as const };
+  if (el.type === 'image' && el.src && !el.qr) {
+    const logo = el.role === 'logo';
+    return {
+      ...base,
+      severity: logo ? 'tip' : 'warning',
+      title: logo ? 'A logo has no description' : 'A picture has no description',
+      detail: logo ? 'Name the organisation, e.g. “Ontario Tech University logo”.' : 'Say what it shows in a sentence, so people using screen readers get it too.',
+    };
+  }
+  if (el.type === 'chart' && el.chart) {
+    const title = el.chart.title?.trim();
+    return {
+      ...base,
+      severity: 'warning',
+      title: title ? `Graph “${title.length > 28 ? title.slice(0, 26) + '…' : title}” has no description` : 'A graph has no description',
+      detail: 'Give the main finding, e.g. “Scores rose from 40% to 75% after training”, not just what is plotted.',
+    };
+  }
+  if (el.type === 'icon' && el.icon) {
+    return {
+      ...base,
+      severity: 'tip',
+      title: 'An icon has no description',
+      detail: 'Screen readers say the icon’s name. Describe what it stands for here, if it means something.',
+    };
+  }
+  return null;
 }
 
 export interface ImageInfo {
@@ -258,6 +297,8 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
       const cvd = chartColorIssue(el, p);
       if (cvd) issues.push(cvd);
     }
+    const alt = altTextIssue(el);
+    if (alt) issues.push(alt);
   }
 
   // ---- citations

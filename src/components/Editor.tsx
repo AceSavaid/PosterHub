@@ -48,7 +48,7 @@ import { replaceColor } from '../lib/printColor';
 import { BLEED_CHOICES } from '../lib/print';
 import { NotesLayer, NotesPanel } from './ReviewNotes';
 import { cleanText, createNote, loadReviewerName, MAX_NOTE_LENGTH, notePositionFor, openNotes, saveReviewerName } from '../lib/notes';
-import VisionMenu, { VisionBanner, VisionFilters, visionFilter } from './VisionFilters';
+import { VisionBanner, VisionFilters, VisionSelect, visionFilter } from './VisionFilters';
 import type { VisionMode } from '../lib/colorVision';
 import Tour from './Tour';
 import { hasSeenTour, markTourSeen } from '../lib/tour';
@@ -135,6 +135,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   // The tour starts by itself the first time someone opens a poster; Help → Take the tour replays it.
   const [touring, setTouring] = useState(false);
   const [helpMenu, setHelpMenu] = useState<{ x: number; y: number } | null>(null);
+  /** the phone toolbar's More menu, holding the buttons that don't fit on one row */
+  const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   useEffect(() => {
     if (hasSeenTour()) return;
     // Wait for the poster to zoom to fit so the first card points at the right place.
@@ -1125,12 +1127,12 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     <div className="editor" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <header className="topbar" ref={topbarRef}>
         <h1 className="sr-only">Editing {poster.name || 'poster'}</h1>
-        <button className="btn ghost" onClick={() => close()} title="Back to My posters">
-          <Logo /> ‹ My posters
+        <button className="btn ghost back-btn" onClick={() => close()} title="Back to My posters" aria-label="My posters">
+          <Logo /> ‹<span className="phone-hide"> My posters</span>
         </button>
         <input className="poster-name" value={poster.name} onChange={(e) => update((d) => void (d.name = e.target.value), 'name')} aria-label="Poster name" />
         <button
-          className="icon-btn"
+          className="icon-btn phone-hide"
           aria-label="Poster options"
           title="Poster options"
           onClick={(e) => {
@@ -1140,15 +1142,16 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         >
           ⋯
         </button>
-        <span className="muted small save-state">{saved ? 'Saved' : 'Saving…'}</span>
+        <span className="muted small save-state phone-hide">{saved ? 'Saved' : 'Saving…'}</span>
         <div className="spacer" />
         <button className="icon-btn" disabled={!canUndo} onClick={undo} title={keys('Undo (Ctrl/⌘ Z)')}>↶</button>
-        <button className="icon-btn" disabled={!canRedo} onClick={redo} title={keys('Redo (Ctrl/⌘ Shift Z)')}>↷</button>
-        <span className="sep" />
-        <button className="icon-btn" onClick={() => setZoom((z) => Math.max(0.02, z / 1.25))} title="Zoom out">−</button>
-        <button className="btn ghost zoom-label" onClick={fit} title="Fit to screen (Shift 0)" aria-label={`${Math.round(zoom * 100)}%, fit to screen`}>{Math.round(zoom * 100)}%</button>
-        <button className="icon-btn" onClick={() => setZoom((z) => Math.min(4, z * 1.25))} title="Zoom in">+</button>
-        <span className="sep" />
+        <button className="icon-btn phone-hide" disabled={!canRedo} onClick={redo} title={keys('Redo (Ctrl/⌘ Shift Z)')}>↷</button>
+        <span className="sep phone-hide" />
+        <button className="icon-btn phone-hide" onClick={() => setZoom((z) => Math.max(0.02, z / 1.25))} title="Zoom out">−</button>
+        <button className="btn ghost zoom-label phone-hide" onClick={fit} title="Fit to screen (Shift 0)" aria-label={`${Math.round(zoom * 100)}%, fit to screen`}>{Math.round(zoom * 100)}%</button>
+        <button className="icon-btn phone-hide" onClick={() => setZoom((z) => Math.min(4, z * 1.25))} title="Zoom in">+</button>
+        <span className="sep phone-hide" />
+        <div className="phone-hide topbar-group">
         <AppearanceMenu
           panels
           label="View"
@@ -1166,13 +1169,16 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           <label className="check" title="Line up with columns and other elements while dragging (hold Alt to skip)">
             <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap while dragging
           </label>
+          <div className="appearance-gap">
+            <VisionSelect mode={vision} onChange={setVision} />
+          </div>
         </AppearanceMenu>
-        <button className="icon-btn" aria-label="Settings" title="Settings: theme, contrast, interface size, panels, printing and backups" onClick={() => setSettingsOpen(true)}>
+        </div>
+        <button className="icon-btn phone-hide" aria-label="Settings" title="Settings: theme, contrast, interface size, panels, printing and backups" onClick={() => setSettingsOpen(true)}>
           <GearIcon />
         </button>
-        <VisionMenu mode={vision} onChange={setVision} />
         <button
-          className="icon-btn"
+          className="icon-btn phone-hide"
           aria-label="Help"
           title="Help: keyboard shortcuts, tour and settings"
           aria-haspopup="menu"
@@ -1184,9 +1190,9 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         >
           ?
         </button>
-        <span className="sep" />
+        <span className="sep phone-hide" />
         <button
-          className={'btn check-btn notes-btn' + (notesOpen ? ' active' : '')}
+          className={'btn check-btn notes-btn phone-hide' + (notesOpen ? ' active' : '')}
           onClick={() => {
             setCheckOpen(false);
             setFindOpen(false);
@@ -1214,9 +1220,22 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             </span>
           )}
         </button>
-        <button className={'btn' + (findOpen ? ' active' : '')} onClick={() => setFindOpen(!findOpen)} title={keys('Find and replace words on the poster (Ctrl/⌘ F)')}>Find</button>
-        <button className="btn" onClick={() => setViewing(true)} title="See the poster full screen, without editing tools">Preview</button>
-        <button className="btn" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
+        <button className={'btn phone-hide' + (findOpen ? ' active' : '')} onClick={() => setFindOpen(!findOpen)} title={keys('Find and replace words on the poster (Ctrl/⌘ F)')}>Find</button>
+        <button className="btn phone-hide" onClick={() => setViewing(true)} title="See the poster full screen, without editing tools">Preview</button>
+        <button className="btn phone-hide" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
+        <button
+          className="icon-btn phone-only"
+          aria-label="More"
+          title="More: notes, find, preview, zoom, settings and help"
+          aria-haspopup="menu"
+          aria-expanded={!!moreMenu}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setMoreMenu({ x: r.left, y: r.bottom + 4 });
+          }}
+        >
+          ☰
+        </button>
         <div className="menu-wrap" data-tour="export">
           <button ref={exportBtn} className="btn primary" aria-expanded={exportOpen} aria-controls="export-menu" onClick={() => setExportOpen((o) => !o)}>Export ▾</button>
           {exportOpen && (
@@ -1476,6 +1495,36 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           ]}
         />
       )}
+      {moreMenu && (
+        <ContextMenu
+          x={moreMenu.x}
+          y={moreMenu.y}
+          onClose={() => setMoreMenu(null)}
+          items={[
+            {
+              label: `Notes${openNotes(poster).length ? ` (${openNotes(poster).length})` : ''}`,
+              onClick: () => {
+                setCheckOpen(false);
+                setFindOpen(false);
+                setNotesOpen(true);
+              },
+            },
+            { label: 'Find and replace', onClick: () => setFindOpen(true) },
+            { label: 'Preview', onClick: () => setViewing(true) },
+            { label: 'Copy image', onClick: copyImage },
+            '-',
+            { label: 'Redo', disabled: !canRedo, onClick: redo },
+            { label: 'Zoom in', onClick: () => setZoom((z) => Math.min(4, z * 1.25)) },
+            { label: 'Zoom out', onClick: () => setZoom((z) => Math.max(0.02, z / 1.25)) },
+            { label: 'Fit to screen', onClick: fit },
+            '-',
+            { label: 'Poster options…', onClick: () => setPosterMenu({ x: moreMenu.x, y: moreMenu.y }) },
+            { label: 'Settings…', onClick: () => setSettingsOpen(true) },
+            { label: 'Keyboard shortcuts', onClick: () => setShortcutsOpen(true) },
+            { label: 'Take the tour', onClick: () => setTouring(true) },
+          ]}
+        />
+      )}
       {touring && <Tour onClose={() => setTouring(false)} />}
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && (
@@ -1488,6 +1537,13 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           onPickNote={pickNote}
           onPreview={setVision}
           onFix={fixIssue}
+          onAlt={(id, alt) => {
+            update((d) => {
+              const el = d.elements.find((x) => x.id === id);
+              if (el) el.alt = alt;
+            });
+            notify('Description saved. Change it any time in the side panel.');
+          }}
           onPickMany={(ids) => ids[0] && pickIssue(ids[0], ids)}
           onFixWord={(word, replacement) => {
             setEditingId(null);

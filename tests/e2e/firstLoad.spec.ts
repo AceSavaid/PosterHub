@@ -43,7 +43,7 @@ test('the editor opens without charts or PowerPoint import, and a graph still dr
 
   await page.getByRole('button', { name: /^.*Graph from (Excel or )?CSV…/ }).click();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Choose a CSV file…' }).click();
+  await page.getByRole('button', { name: 'Choose an Excel or CSV file…' }).click();
   await (await chooser).setFiles(path.join(FIXTURES, 'results.csv'));
   await page.getByRole('button', { name: 'Add graph to poster' }).click();
   const canvas = page.locator('.poster .el-chart canvas');

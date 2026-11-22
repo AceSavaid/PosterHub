@@ -25,3 +25,28 @@ jobs:
           name: playwright-results
           path: test-results
           retention-days: 7
+
+  # The same end-to-end tests in Firefox and in WebKit (the engine behind Safari).
+  browsers:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
+    name: e2e (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
+      - run: npm run build
+      - run: npx playwright test --project=${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-results-${{ matrix.browser }}
+          path: test-results
+          retention-days: 7

@@ -1,14 +1,13 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Poster } from './types';
 import Library from './components/Library';
-import Editor from './components/Editor';
 import { loadPoster } from './lib/storage';
 import { ensurePosterFonts } from './lib/fonts';
 import { sanitizePoster } from './lib/sanitize';
+import { hashPosterId, libraryUrl, pushPosterEntry } from './lib/posterHistory';
 
-const posterHash = (id: string) => `#/poster/${id}`;
-const hashPosterId = () => location.hash.match(/^#\/poster\/(.+)$/)?.[1] ?? null;
-const libraryUrl = () => location.pathname + location.search;
+// The editor (and everything only it uses) loads on first open, so My posters appears sooner.
+const Editor = lazy(() => import('./components/Editor'));
 
 export default function App() {
   const [open, setOpen] = useState<Poster | null>(null);
@@ -33,8 +32,9 @@ export default function App() {
 
   async function openPoster(p: Poster, message?: string, push = true) {
     sanitizePoster(p);
+    // Before any waiting, while the click still counts as the user's (see pushPosterEntry).
+    if (push) pushPosterEntry(p.id);
     await ensurePosterFonts(p);
-    if (push && hashPosterId() !== p.id) history.pushState({ posterhub: p.id }, '', posterHash(p.id));
     setNotice(message);
     setOpen(p);
   }
@@ -48,5 +48,11 @@ export default function App() {
     setOpen(null);
   }
 
-  return open ? <Editor key={open.id} initial={open} notice={notice} onClose={close} /> : <Library onOpen={openPoster} />;
+  return open ? (
+    <Suspense fallback={<div className="app-loading" role="status">Opening poster…</div>}>
+      <Editor key={open.id} initial={open} notice={notice} onClose={close} />
+    </Suspense>
+  ) : (
+    <Library onOpen={openPoster} />
+  );
 }

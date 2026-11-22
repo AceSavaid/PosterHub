@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ElementType, Poster, PosterElement } from '../types';
+import { scaleContent as scaleContentTo } from '../lib/copyAtSize';
 import { applyLayout, describeReport } from '../lib/relayout';
 import { PALETTE_ROLES, TEMPLATES, templateDef, typeScale, type TemplateId } from '../model';
 import { SizeFields } from './SizeFields';
@@ -7,7 +8,6 @@ import { PaletteSwatches } from './PaletteSwatches';
 import { FontSelect } from './FontSelect';
 import { fileToDataUrl, pickFile } from '../lib/storage';
 import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fonts';
-import { importPptx } from '../lib/pptxImport';
 import { askConfirm } from '../lib/dialogs';
 import { SHAPE_CHOICES } from '../lib/shapes';
 import { applyBrandKit } from '../lib/brandKit';
@@ -113,7 +113,7 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
           <span aria-hidden className="ib-icon">▤</span>Table
         </button>
         <button className="insert-btn" onClick={onInsertChart}>
-          <span aria-hidden className="ib-icon">📊</span>Graph from CSV…
+          <span aria-hidden className="ib-icon">📊</span>Graph from Excel or CSV…
         </button>
         <button className="insert-btn" onClick={onInsertQr}>
           <span aria-hidden className="ib-icon">▦</span>QR code
@@ -146,23 +146,7 @@ function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
 
   const resize = (o: string, preset: string, w: number, h: number) =>
     update((d) => {
-      const sx = w / d.width;
-      const sy = h / d.height;
-      if (scaleContent) {
-        const fs = Math.min(sx, sy);
-        for (const e of d.elements) {
-          e.x *= sx;
-          e.w *= sx;
-          e.y *= sy;
-          e.h *= sy;
-          if (e.style) e.style.fontSize = Math.max(4, Math.round(e.style.fontSize * fs * 10) / 10);
-          if (e.chart) e.chart.fontSize = Math.max(4, Math.round(e.chart.fontSize * fs));
-          if (e.table) e.table.fontSize = Math.max(4, Math.round(e.table.fontSize * fs * 10) / 10);
-          if (e.equation) e.equation.fontSize = Math.max(4, Math.round(e.equation.fontSize * fs * 10) / 10);
-        }
-        d.margin *= Math.min(sx, sy);
-        d.gutter *= Math.min(sx, sy);
-      }
+      if (scaleContent) scaleContentTo(d, w, h);
       d.width = w;
       d.height = h;
       d.sizePreset = preset;
@@ -210,9 +194,14 @@ function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
         <label className="span2">
           Layout
           <select value={template} onChange={(e) => setTemplate(e.target.value as TemplateId)}>
-            {TEMPLATES.map((t) => (
+            {TEMPLATES.filter((t) => !t.field).map((t) => (
               <option key={t.id} value={t.id}>{t.label}</option>
             ))}
+            <optgroup label="By research field">
+              {TEMPLATES.filter((t) => t.field).map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
+            </optgroup>
           </select>
         </label>
         <p className="hint span2">{templateDef(template).description} Your text, figures and logos carry over.</p>
@@ -282,6 +271,7 @@ function DesignTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
     const f = await pickFile('.pptx,.potx');
     if (!f) return;
     try {
+      const { importPptx } = await import('../lib/pptxImport');
       const r = await importPptx(f);
       update((d) => {
         d.palette = r.poster.palette;

@@ -1,18 +1,25 @@
 import AppearanceMenu from './AppearanceMenu';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Poster } from '../types';
 import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFile, readText, savePoster, storageInfo } from '../lib/storage';
 import { parsePosterText } from '../lib/posterFile';
 import { backupDue, daysSinceBackup, downloadLibraryBackup, parseBackupText, planRestore, restoreMessage, snoozeUntil } from '../lib/backup';
 import { useUiPrefs } from '../lib/uiPrefs';
-import SettingsDialog from './SettingsDialog';
 import GearIcon from './GearIcon';
-import { openPptx, posterFromImport, type PptxDeck } from '../lib/pptxImport';
+import type { PptxDeck } from '../lib/pptxImport';
 import { uid, PALETTES } from '../model';
-import NewPosterDialog from './NewPosterDialog';
-import SlidePicker from './SlidePicker';
+import { lazyPart } from '../lib/lazyPart';
+import { hashPosterId, pushPosterEntry } from '../lib/posterHistory';
 import ConfirmDialog from './ConfirmDialog';
 import SupportFooter from './SupportFooter';
+
+// PowerPoint import is rarely used, so it loads only when someone picks a file.
+const SlidePicker = lazy(() => import('./SlidePicker'));
+const loadPptx = () => import('../lib/pptxImport');
+// Dialogs load when opened, so My posters itself appears sooner.
+const NewPosterDialog = lazyPart(() => import('./NewPosterDialog'));
+const SettingsDialog = lazyPart(() => import('./SettingsDialog'));
+const CopySizeDialog = lazyPart(() => import('./CopySizeDialog'));
 
 const fmtSize = (p: Poster) => `${Math.round(p.width)} × ${Math.round(p.height)} mm · ${p.width > p.height ? 'landscape' : 'portrait'}`;
 const fmtDate = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
@@ -29,6 +36,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
   const [deleting, setDeleting] = useState<Poster | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notice, setNotice] = useState('');
+  const [resizing, setResizing] = useState<Poster | null>(null);
   const [prefs, changePrefs] = useUiPrefs();
 
   const refresh = () => listPosters().then(setPosters).catch((e) => setError(String(e)));
@@ -37,10 +45,22 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
     storageInfo().then(setWhere).catch(() => undefined);
   }, []);
 
+  // Once My posters is showing, fetch the editor and New poster dialog in the background,
+  // so the first click on a poster (or + New poster) doesn't wait for a download.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      import('./NewPosterDialog').catch(() => undefined);
+      import('./Editor').catch(() => undefined);
+    }, 1500);
+    return () => clearTimeout(t);
+  }, []);
+
   async function create(p: Poster) {
+    pushPosterEntry(p.id); // before saving, so Safari's Back button keeps it (see pushPosterEntry)
     try {
       await savePoster(p);
     } catch (e) {
+      if (hashPosterId() === p.id) history.back();
       setCreating(false);
       setError('Could not save the new poster: ' + String(e));
       return;
@@ -77,7 +97,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
     if (!f) return;
     setBusy('Reading PowerPoint template…');
     try {
-      const deck = await openPptx(f);
+      const deck = await (await loadPptx()).openPptx(f);
       const name = f.name.replace(/\.(pptx|potx)$/i, '');
       // With several slides (or layouts) let the user choose; otherwise import straight away.
       if (deck.pages.length > 1) setPicking({ deck, name, fileName: f.name });
@@ -94,7 +114,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
     setBusy('Importing…');
     try {
       const r = await deck.importPage(index);
-      const p = posterFromImport(r, name);
+      const p = (await loadPptx()).posterFromImport(r, name);
       await savePoster(p);
       onOpen(p, r.warnings.length ? 'Imported with a few notes:\n• ' + r.warnings.join('\n• ') : undefined);
     } catch (e) {
@@ -242,6 +262,9 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
                   <button className="link" onClick={() => onOpen(p)}>Open</button>
                   <button className="link" onClick={() => setRenaming({ id: p.id, name: p.name })}>Rename</button>
                   <button className="link" onClick={() => duplicate(p)}>Duplicate</button>
+                  <button className="link" onClick={() => setResizing(p)} aria-label={`Copy ${p.name} at another size`} title="Make a copy at another size or orientation, e.g. A1 landscape or an A4 handout">
+                    Copy at size…
+                  </button>
                   <button className="link" onClick={() => exportPosterFile(p)} title="Save a .poster.json copy you can open on another computer. For PDF or PowerPoint, open the poster and use Export.">
                     Download backup
                   </button>
@@ -253,8 +276,25 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
         </div>
       </main>
       <SupportFooter />
+      {resizing && (
+        <CopySizeDialog
+          poster={resizing}
+          onCancel={() => setResizing(null)}
+          onCopy={async (copy, message) => {
+            setResizing(null);
+            try {
+              await savePoster(copy);
+              onOpen(copy, message);
+            } catch (e) {
+              setError('Could not save the copy: ' + String(e));
+            }
+          }}
+        />
+      )}
       {picking && (
-        <SlidePicker deck={picking.deck} fileName={picking.fileName} onPick={(i) => finishImport(picking.deck, i, picking.name)} onCancel={() => setPicking(null)} />
+        <Suspense fallback={null}>
+          <SlidePicker deck={picking.deck} fileName={picking.fileName} onPick={(i) => finishImport(picking.deck, i, picking.name)} onCancel={() => setPicking(null)} />
+        </Suspense>
       )}
       {deleting && (
         <ConfirmDialog

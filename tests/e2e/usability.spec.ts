@@ -22,7 +22,7 @@ test('new poster dialog: layouts first, Create always in view, Esc closes it', a
   await page.getByRole('button', { name: '+ New poster' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'New poster' });
   // the layout gallery comes before the size settings
-  const layouts = await box(page, '.template-grid');
+  const layouts = await box(page, '.template-grid >> nth=0'); // general layouts; field layouts follow in a second grid
   const size = await page.getByText('Orientation', { exact: true }).boundingBox();
   expect(layouts.y).toBeLessThan(size!.y);
   // Create is on screen without scrolling
@@ -47,8 +47,9 @@ test('Export stays on the top bar on a 1280 px laptop screen', async ({ page }) 
 test('the browser Back button returns to My posters and Forward reopens the poster', async ({ page }) => {
   await page.goto('/');
   await newPoster(page, 'Blank', 'Back button test');
+  await expect(page).toHaveURL(/#\/poster\//);
   await page.goBack();
-  await expect(page.getByRole('heading', { name: 'My posters' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My posters' }), `after Back the page is ${page.url()}`).toBeVisible();
   await expect(page.locator('.poster-card', { hasText: 'Back button test' })).toBeVisible();
   await page.goForward();
   await expect(page.getByLabel('Poster name')).toHaveValue('Back button test');
@@ -70,9 +71,9 @@ test('a graph picks similar columns, warns about mixed scales and fills an empty
   await newPoster(page);
   const slots = page.locator('.poster .img-placeholder', { hasText: 'Figure' });
   const before = await slots.count();
-  await page.getByRole('button', { name: 'Graph from CSV…' }).click();
+  await page.getByRole('button', { name: 'Graph from Excel or CSV…' }).click();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Choose a CSV file…' }).click();
+  await page.getByRole('button', { name: 'Choose an Excel or CSV file…' }).click();
   await (await chooser).setFiles(path.join(FIXTURES, 'results.csv'));
   await expect(page.getByRole('checkbox', { name: 'Accuracy' })).toBeChecked();
   await expect(page.getByRole('checkbox', { name: 'Speed' })).not.toBeChecked();
@@ -84,9 +85,9 @@ test('a graph picks similar columns, warns about mixed scales and fills an empty
   await page.getByRole('button', { name: 'Discard changes' }).click();
   await expect(page.locator('.chart-dialog')).toHaveCount(0);
 
-  await page.getByRole('button', { name: 'Graph from CSV…' }).click();
+  await page.getByRole('button', { name: 'Graph from Excel or CSV…' }).click();
   const chooser2 = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Choose a CSV file…' }).click();
+  await page.getByRole('button', { name: 'Choose an Excel or CSV file…' }).click();
   await (await chooser2).setFiles(path.join(FIXTURES, 'results.csv'));
   await page.getByRole('button', { name: 'Add graph to poster' }).click();
   await expect(page.locator('.poster .el-chart')).toHaveCount(1);

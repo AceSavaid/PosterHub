@@ -6,6 +6,7 @@ import JSZip from 'jszip';
 import PptxGenJS from 'pptxgenjs';
 import { inspectPdf, localFontsource, pdfText } from '../helpers/pdf';
 import jsQR from 'jsqr';
+import { allowClipboard, copiedPng, recordClipboard } from '../helpers/clipboard';
 
 const FIXTURES = path.join(import.meta.dirname, '..', 'fixtures');
 
@@ -37,7 +38,8 @@ async function paste(page: Page, data: Record<string, string>) {
   await page.evaluate((d) => {
     const dt = new DataTransfer();
     for (const [k, v] of Object.entries(d)) dt.setData(k, v);
-    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    // Firefox drops clipboardData given to a script-made event, so attach it directly.
+    document.dispatchEvent(Object.defineProperty(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }), 'clipboardData', { value: dt }));
   }, data);
 }
 
@@ -95,6 +97,7 @@ test.describe('templates', () => {
     await page.goto('/');
     await page.getByRole('button', { name: '+ New poster' }).first().click();
     const cards = page.locator('.template-card');
+    await expect(cards.first()).toBeVisible();
     expect(await cards.count()).toBeGreaterThanOrEqual(10);
     const thumb = page.locator('[data-template="sidebar"] svg');
     const portrait = (await thumb.boundingBox())!;
@@ -175,13 +178,14 @@ test.describe('templates', () => {
 
   test('starter text fits its boxes in every template, even with narrow columns', async ({ page }) => {
     test.setTimeout(120_000);
-    const ids = ['classic', 'boxed', 'bars', 'minimal', 'sidebar', 'takeaway', 'showcase', 'framed', 'central', 'banner'];
+    const ids = ['classic', 'boxed', 'bars', 'minimal', 'sidebar', 'takeaway', 'showcase', 'framed', 'central', 'banner', 'clinical', 'lab', 'computing', 'humanities'];
     for (const [landscape, columns] of [[false, 5], [true, 6]] as const) {
       for (const id of ids) {
         await page.goto('/');
         await page.getByRole('button', { name: '+ New poster' }).first().click();
         if (landscape) await page.getByRole('button', { name: 'Landscape' }).click();
         await page.getByLabel('Columns').selectOption(String(columns));
+        if (['clinical', 'lab', 'computing', 'humanities'].includes(id)) await page.getByText('By research field').click();
         await page.locator(`[data-template="${id}"]`).click();
         await page.getByRole('button', { name: 'Create poster' }).click();
         await expect(page.locator('.poster .el-title')).toBeVisible();
@@ -287,7 +291,8 @@ test.describe('editing', () => {
       const dt = new DataTransfer();
       dt.setData('text/plain', 'Pasted words');
       dt.setData('text/html', '<span style="font-size:80px;color:red">Pasted words</span>');
-      document.activeElement!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      // Firefox drops clipboardData given to a script-made event, so attach it directly.
+      document.activeElement!.dispatchEvent(Object.defineProperty(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }), 'clipboardData', { value: dt }));
     });
     await expect(box).toHaveText('Pasted words');
     expect(await box.innerHTML()).not.toContain('font-size');
@@ -395,9 +400,9 @@ test.describe('fonts', () => {
 test.describe('graphs', () => {
   test('builds a graph from a CSV file', async ({ page }) => {
     await newPoster(page, { template: 'Blank' });
-    await page.getByRole('button', { name: 'Graph from CSV…' }).click();
+    await page.getByRole('button', { name: 'Graph from Excel or CSV…' }).click();
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Choose a CSV file…' }).click();
+    await page.getByRole('button', { name: 'Choose an Excel or CSV file…' }).click();
     await (await chooser).setFiles(path.join(FIXTURES, 'results.csv'));
     await expect(page.locator('.table-wrap tbody tr')).toHaveCount(4);
     // numeric columns are picked automatically
@@ -469,7 +474,7 @@ test.describe('graphs', () => {
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1\nB\t3\nC\t2' });
     // Pasted cells become a table first; one click turns them into a graph instead.
     await page.getByRole('button', { name: 'Make a graph instead' }).click();
-    await expect(page.getByRole('heading', { name: 'Graph from CSV' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Graph from Excel or CSV' })).toBeVisible();
     await expect(page.locator('.poster .poster-table')).toHaveCount(0);
     await page.getByRole('button', { name: 'Add graph to poster' }).click();
     await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
@@ -636,13 +641,13 @@ test.describe('export, import and sharing', () => {
     await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
   });
 
-  test('copies the poster as an image', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  test('copies the poster as an image', async ({ page, context, browserName }) => {
+    await allowClipboard(context, browserName);
+    await recordClipboard(page);
     await newPoster(page, { size: 'A4' });
     await page.getByRole('button', { name: 'Copy image' }).click();
     await expect(page.locator('.toast')).toContainText('copied');
-    const types = await page.evaluate(async () => (await navigator.clipboard.read())[0].types);
-    expect(types).toContain('image/png');
+    expect((await copiedPng(page)).subarray(1, 4).toString()).toBe('PNG');
   });
 
   test('view mode shows the poster read-only', async ({ page }) => {

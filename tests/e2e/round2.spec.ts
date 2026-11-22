@@ -116,6 +116,8 @@ test('duplicates and deletes the open poster from its options menu', async ({ pa
 test('zooms with keyboard shortcuts', async ({ page }) => {
   await newPoster(page);
   const label = page.locator('.zoom-label');
+  // start from "fit to screen", so a late first fit can't change the starting value
+  await page.keyboard.press('ControlOrMeta+0');
   const before = await label.textContent();
   await page.keyboard.press('ControlOrMeta+=');
   await expect(label).not.toHaveText(before!);

@@ -26,7 +26,8 @@ async function paste(page: Page, data: Record<string, string>) {
   await page.evaluate((d) => {
     const dt = new DataTransfer();
     for (const [k, v] of Object.entries(d)) dt.setData(k, v);
-    document.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }));
+    // Firefox drops clipboardData given to a script-made event, so attach it directly.
+    document.dispatchEvent(Object.defineProperty(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true }), 'clipboardData', { value: dt }));
   }, data);
 }
 
@@ -35,7 +36,8 @@ async function pasteInFocus(page: Page, data: Record<string, string>) {
   await page.evaluate((d) => {
     const dt = new DataTransfer();
     for (const [k, v] of Object.entries(d)) dt.setData(k, v);
-    document.activeElement!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    // Firefox drops clipboardData given to a script-made event, so attach it directly.
+    document.activeElement!.dispatchEvent(Object.defineProperty(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }), 'clipboardData', { value: dt }));
   }, data);
 }
 
@@ -162,13 +164,13 @@ test.describe('tables', () => {
     await expect(page.locator('.poster .poster-table')).toBeVisible();
   });
 
-  test('copies a table so it pastes back into a spreadsheet as cells', async ({ page, context }) => {
-    await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  test('copies a table so it pastes back into a spreadsheet as cells', async ({ page }) => {
     await newPoster(page);
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1' });
     const text = await page.evaluate(() => {
       const dt = new DataTransfer();
-      document.dispatchEvent(new ClipboardEvent('copy', { clipboardData: dt, bubbles: true }));
+      // Firefox drops clipboardData given to a script-made event, so attach it directly.
+      document.dispatchEvent(Object.defineProperty(new ClipboardEvent('copy', { clipboardData: dt, bubbles: true }), 'clipboardData', { value: dt }));
       return dt.getData('text/plain');
     });
     expect(text).toBe('Group\tScore\nA\t1');

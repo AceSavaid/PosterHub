@@ -55,6 +55,11 @@ const SYNONYMS: Record<string, string> = {
   'future work': 'future work', 'future directions': 'future work', 'next steps': 'future work',
   acknowledgements: 'acknowledgements', acknowledgments: 'acknowledgements', 'acknowledgement': 'acknowledgements', funding: 'funding',
   references: 'references', bibliography: 'references', 'literature cited': 'references',
+  // Names used by the research-field layouts, so content finds its place when switching to or from them.
+  problem: 'introduction', context: 'background', question: 'aims',
+  'learning points': 'conclusions', 'teaching points': 'conclusions',
+  'case summary': 'case summary', 'case presentation': 'case summary', 'case report': 'case summary', 'case description': 'case summary',
+  'code and data': 'data and code', 'data and code': 'data and code',
 };
 
 export function sectionKey(html: string): string {
@@ -241,7 +246,8 @@ export function applyLayout(poster: Poster, template: TemplateId): { elements: P
   }
 
   // Remaining figures go into empty figure spots, the big ones first.
-  const emptyFigures = byRole('figure').sort((a, b) => b.w * b.h - a.w * a.h);
+  // (Spots already holding one of the person's figures are not empty.)
+  const emptyFigures = byRole('figure').filter((f) => !hasContent(f)).sort((a, b) => b.w * b.h - a.w * a.h);
   for (const fig of figurePool) {
     const spot = emptyFigures.find((f) => els.includes(f));
     if (spot) {

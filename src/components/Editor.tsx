@@ -12,36 +12,27 @@ import { Canvas } from './Canvas';
 import { reducedMotion } from '../lib/a11y';
 import LeftPanel from './LeftPanel';
 import Inspector from './Inspector';
-import ChartDialog from './ChartDialog';
-import EquationDialog from './EquationDialog';
 import { equationBoxSize, typesetLatex } from '../lib/math';
-import ViewMode from './ViewMode';
 import { chartCanvases } from './ChartView';
 import { Logo } from './Library';
 import CheckPanel, { type CheckTab } from './CheckPanel';
 import FindPanel from './FindPanel';
 import ContextMenu, { type MenuItem } from './ContextMenu';
-import CropDialog from './CropDialog';
 import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
 import { replaceAllInPoster } from '../lib/textTools';
 import { ignoreKey } from '../lib/spelling';
 import AppearanceMenu from './AppearanceMenu';
 import SettingsDialog from './SettingsDialog';
-import ShortcutsDialog from './ShortcutsDialog';
 import GearIcon from './GearIcon';
 import { keys } from '../lib/keys';
 import { downloadLibraryBackup } from '../lib/backup';
-import AuthorsDialog from './AuthorsDialog';
-import AbstractDialog from './AbstractDialog';
-import { describeFill, fillPoster, type FillPlan } from '../lib/abstractImport';
+import type { FillPlan } from '../lib/abstractImport';
 import { PLACEHOLDER_TEXT } from '../lib/checks';
 import type { AuthorList } from '../types';
 import ConfirmDialog from './ConfirmDialog';
-import SaveTemplateDialog from './SaveTemplateDialog';
 import { saveAsTemplate } from '../lib/userTemplates';
 import { useUiPrefs } from '../lib/uiPrefs';
 import { sanitizeElement } from '../lib/sanitize';
-import ReferencesDialog from './ReferencesDialog';
 import { insertCitationAtCaret } from '../lib/refs/caret';
 import { refreshMarkersIn } from '../lib/refs/citations';
 import { replaceColor } from '../lib/printColor';
@@ -50,8 +41,22 @@ import { NotesLayer, NotesPanel } from './ReviewNotes';
 import { cleanText, createNote, loadReviewerName, MAX_NOTE_LENGTH, notePositionFor, openNotes, saveReviewerName } from '../lib/notes';
 import { VisionBanner, VisionFilters, VisionSelect, visionFilter } from './VisionFilters';
 import type { VisionMode } from '../lib/colorVision';
-import Tour from './Tour';
 import { hasSeenTour, markTourSeen } from '../lib/tour';
+import { lazyPart } from '../lib/lazyPart';
+import { loadChartJs } from '../lib/chartjs';
+
+// Dialogs most sessions never open download on first use, keeping the editor quick to open.
+const ChartDialog = lazyPart(() => import('./ChartDialog'));
+const EquationDialog = lazyPart(() => import('./EquationDialog'));
+const ViewMode = lazyPart(() => import('./ViewMode'));
+const CropDialog = lazyPart(() => import('./CropDialog'));
+const ShortcutsDialog = lazyPart(() => import('./ShortcutsDialog'));
+const AuthorsDialog = lazyPart(() => import('./AuthorsDialog'));
+const AbstractDialog = lazyPart(() => import('./AbstractDialog'));
+const SaveTemplateDialog = lazyPart(() => import('./SaveTemplateDialog'));
+const CopySizeDialog = lazyPart(() => import('./CopySizeDialog'));
+const ReferencesDialog = lazyPart(() => import('./ReferencesDialog'));
+const Tour = lazyPart(() => import('./Tour'));
 
 /** Start of the example reference in starter templates. */
 const EXAMPLE_REFS = 'Author, A. (2025). Title of work';
@@ -69,11 +74,19 @@ function plainTextOf(el: PosterElement) {
 
 export type TableAction = 'rowAbove' | 'rowBelow' | 'colLeft' | 'colRight' | 'deleteRow' | 'deleteCol';
 
+/** Loads an image. Waits for `load` rather than relying on `decode()` alone, which WebKit (Safari) can reject for images that aren't on the page. */
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('This image could not be opened.'));
+    img.src = src;
+  });
+}
+
 async function imageFileToDataUrl(file: Blob, maxSide = 4000): Promise<{ src: string; ratio: number }> {
   const src = await fileToDataUrl(file);
-  const img = new Image();
-  img.src = src;
-  await img.decode();
+  const img = await loadImage(src);
   const ratio = img.naturalWidth / img.naturalHeight || 1;
   if (Math.max(img.naturalWidth, img.naturalHeight) <= maxSide || file.type === 'image/svg+xml') return { src, ratio };
   const k = maxSide / Math.max(img.naturalWidth, img.naturalHeight);
@@ -107,7 +120,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [viewing, setViewing] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
   const [abstractOpen, setAbstractOpen] = useState(false);
-  const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string } | null>(null);
+  const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string; file?: File } | null>(null);
   const [cropFor, setCropFor] = useState<string | null>(null);
   const [eqDialog, setEqDialog] = useState<{ id?: string; spec: EquationSpec } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -175,6 +188,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   }, [exportOpen]);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
   const [templateDialog, setTemplateDialog] = useState(false);
+  const [copySizeOpen, setCopySizeOpen] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const [dpi, setDpi] = useState(200);
@@ -351,17 +365,34 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     return el;
   }
 
+  /** Replaces a table's cells with ones from an Excel or CSV file, keeping its style. */
+  function fillTable(el: PosterElement, cells: string[][]) {
+    const { colWidths: _old, ...rest } = normalizeTable(el.table);
+    const t = normalizeTable({ ...rest, rows: cells });
+    const p = posterRef.current;
+    // Like pasted cells: wide tables get two columns' width, and the box grows to fit every row.
+    const w = t.rows[0].length > 3 ? Math.max(el.w, Math.min(p.width - p.margin - el.x, el.w * 2 + p.gutter)) : el.w;
+    const h = Math.max(el.h, Math.min(p.height - p.margin - el.y, tableHeightMm(t.rows.length, t.fontSize)));
+    // one undo step, even when the box then grows to fit the rows
+    const key = `fill-${el.id}-${Date.now()}`;
+    updateElement(el.id, { table: t, w, h }, key);
+    fitTable(el.id, key);
+    const cut = cells.length > t.rows.length || Math.max(...cells.map((r) => r.length)) > t.rows[0].length;
+    notify(cut ? `Filled the table with the first ${t.rows.length} rows and ${t.rows[0].length} columns. Tables this big are hard to read on a poster; a graph may suit the rest.` : `Filled the table with ${t.rows.length} × ${t.rows[0].length} cells.`);
+  }
+
   /** Grows a table's box when its rows no longer fit (after typing, pasting or adding rows). */
-  function fitTable(id: string) {
+  /** Grows a table's box to show every row. Pass the change's coalesce key so the growth joins its undo step. */
+  function fitTable(id: string, key?: string) {
     requestAnimationFrame(() => {
       const n = textNode(id);
-      if (n && n.scrollHeight > n.clientHeight + 1) growToFit(id);
+      if (n && n.scrollHeight > n.clientHeight + 1) growToFit(id, key);
     });
   }
 
   function commitTable(id: string, t: TableSpec, key?: string) {
     updateElement(id, { table: t }, key);
-    fitTable(id);
+    fitTable(id, key);
   }
 
   function tableAction(el: PosterElement, action: TableAction) {
@@ -487,8 +518,9 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   }
 
   /** Drops the parts of an abstract into the poster's sections (one undo step). */
-  function fillFromAbstract(plan: FillPlan) {
+  async function fillFromAbstract(plan: FillPlan) {
     setAbstractOpen(false);
+    const { describeFill, fillPoster } = await import('../lib/abstractImport');
     let report = { sections: 0, title: false };
     update((d) => void (report = fillPoster(d, plan)));
     notify(describeFill(report));
@@ -580,12 +612,12 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     setOverflow(!!n && n.scrollHeight > n.clientHeight + 1);
   });
 
-  function growToFit(id = selectedId) {
+  function growToFit(id = selectedId, key?: string) {
     const n = id && textNode(id);
     if (!n) return;
     const el = posterRef.current.elements.find((e) => e.id === id)!;
     const extra = el.h * MM_TO_PX - n.clientHeight; // padding + border
-    updateElement(el.id, { h: (n.scrollHeight + extra) / MM_TO_PX + 0.5 });
+    updateElement(el.id, { h: (n.scrollHeight + extra) / MM_TO_PX + 0.5 }, key);
   }
 
   function shrinkToFit(id = selectedId) {
@@ -834,6 +866,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       if (f.type.startsWith('image/')) insertImageFile(f, at, targetEl?.type === 'image' ? targetEl.id : undefined);
       else if (/\.(csv|tsv|txt)$/i.test(f.name) || f.type === 'text/csv')
         f.text().then((text) => setChartDialog(targetEl?.type === 'chart' ? { id: targetEl.id, text } : { text }));
+      else if (/\.(xlsx|xlsm)$/i.test(f.name)) setChartDialog(targetEl?.type === 'chart' ? { id: targetEl.id, file: f } : { file: f });
     }
   }
 
@@ -896,6 +929,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     setOpenNoteId(null);
     const p = posterRef.current;
     await new Promise((r) => setTimeout(r, 50));
+    // Charts draw once Chart.js has loaded; make sure that has happened before capturing them.
+    if (p.elements.some((e) => e.type === 'chart')) await loadChartJs();
     try {
       if (kind === 'project') return exportPosterFile(p);
       notify(kind === 'pptx' ? 'Building PowerPoint…' : kind === 'pdf' ? 'Building print-quality PDF…' : `Rendering at ${effectiveDpi(p, dpi)} dpi… large posters can take a few seconds.`);
@@ -1455,6 +1490,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             onTableGraph={() => selected && tableToGraph(selected)}
             onEditTable={() => selected && setEditingId(selected.id)}
             onConvertTable={() => selected && convertToTable(selected)}
+            onFillTable={(cells) => selected && fillTable(selected, cells)}
             onEditEquation={() => selected && openEquation(selected)}
           />
         ) : (
@@ -1470,6 +1506,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           onClose={() => setPosterMenu(null)}
           items={[
             { label: 'Duplicate this poster', onClick: duplicatePoster },
+            { label: 'Copy at another size…', onClick: () => setCopySizeOpen(true) },
             { label: 'Download project file', onClick: () => exportPosterFile(posterRef.current) },
             { label: 'Save as my template…', onClick: () => setTemplateDialog(true) },
             '-',
@@ -1601,7 +1638,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         />
       )}
       <VisionFilters />
-      {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
+      {chartDialog && <ChartDialog poster={poster} initial={chartDialog.spec} initialText={chartDialog.text} initialFile={chartDialog.file} onSave={saveChart} onCancel={() => setChartDialog(null)} />}
       {cropEl && (
         <CropDialog
           el={cropEl}
@@ -1618,6 +1655,21 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       {eqDialog && <EquationDialog poster={poster} initial={eqDialog.spec} isNew={!eqDialog.id} onSave={saveEquation} onCancel={() => setEqDialog(null)} />}
       {abstractOpen && <AbstractDialog poster={poster} onFill={fillFromAbstract} onCancel={() => setAbstractOpen(false)} />}
       {authorsDialog && <AuthorsDialog initial={authorsDialog.initial} replacing={authorsDialog.replacing} onSave={saveAuthors} onCancel={() => setAuthorsDialog(null)} />}
+      {copySizeOpen && (
+        <CopySizeDialog
+          poster={posterRef.current}
+          onCancel={() => setCopySizeOpen(false)}
+          onCopy={async (copy, message) => {
+            setCopySizeOpen(false);
+            try {
+              await savePoster(copy);
+              notify(`${message} Saved as “${copy.name}” in My posters. You are still editing the original.`);
+            } catch (e) {
+              notify('Could not save the copy: ' + String(e));
+            }
+          }}
+        />
+      )}
       {templateDialog && <SaveTemplateDialog poster={poster} onSave={saveTemplate} onCancel={() => setTemplateDialog(false)} />}
       {confirmDelete && (
         <ConfirmDialog

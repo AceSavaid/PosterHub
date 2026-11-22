@@ -12,10 +12,14 @@ async function newPoster(page: Page) {
 }
 
 async function openPreview(page: Page) {
-  const preview = page.getByRole('button', { name: 'Preview', exact: true });
-  // a phone top bar may tuck Preview into a "More" menu
-  if (!(await preview.isVisible())) await page.getByRole('button', { name: /^More/ }).first().tap();
-  await preview.tap();
+  const button = page.getByRole('button', { name: 'Preview', exact: true });
+  if (await button.isVisible()) {
+    await button.tap();
+  } else {
+    // a phone top bar tucks Preview into the "More" menu
+    await page.getByRole('button', { name: /^More/ }).first().tap();
+    await page.getByRole('menuitem', { name: 'Preview', exact: true }).tap();
+  }
   await expect(page.locator('.view-mode')).toBeVisible();
 }
 

@@ -1,7 +1,6 @@
 import AppearanceMenu from './AppearanceMenu';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Poster } from '../types';
-import CopySizeDialog from './CopySizeDialog';
 import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFile, readText, savePoster, storageInfo } from '../lib/storage';
 import { parsePosterText } from '../lib/posterFile';
 import { backupDue, daysSinceBackup, downloadLibraryBackup, parseBackupText, planRestore, restoreMessage, snoozeUntil } from '../lib/backup';
@@ -19,6 +18,7 @@ const loadPptx = () => import('../lib/pptxImport');
 // Dialogs load when opened, so My posters itself appears sooner.
 const NewPosterDialog = lazyPart(() => import('./NewPosterDialog'));
 const SettingsDialog = lazyPart(() => import('./SettingsDialog'));
+const CopySizeDialog = lazyPart(() => import('./CopySizeDialog'));
 
 const fmtSize = (p: Poster) => `${Math.round(p.width)} × ${Math.round(p.height)} mm · ${p.width > p.height ? 'landscape' : 'portrait'}`;
 const fmtDate = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });

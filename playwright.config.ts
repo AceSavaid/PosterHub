@@ -13,7 +13,7 @@ export default defineConfig({
     serviceWorkers: 'block',
     viewport: { width: 1440, height: 900 },
     // Mark the first-time tour as seen so it doesn't sit over the editor in every test; tour.spec.ts turns it back on.
-    storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'posterhub.tour', value: 'done' }] }] },
+    storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'posterhub.tour', value: 'done' }, { name: 'posterhub.moreProps', value: 'open' }] }] },
   },
   // Chrome/Edge, Firefox and Safari's engine. `npm run test:e2e` runs Chromium only (fast);
   // `npm run test:e2e:all` runs all three, and CI runs Firefox and WebKit in their own job.

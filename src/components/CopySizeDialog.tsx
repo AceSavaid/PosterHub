@@ -1,21 +1,21 @@
 import { useState } from 'react';
 import type { Orientation, Poster } from '../types';
-import { TEMPLATES, sizeFor, type TemplateId } from '../model';
+import { TEMPLATES, type TemplateId } from '../model';
 import { useDialog } from '../lib/useDialog';
 import { SizeFields } from './SizeFields';
-import { canRearrange, copyAtSize, defaultCopyName, guessLayout, orientationOf, shapeChanges, suggestColumns, type CopyMode } from '../lib/copyAtSize';
+import { canRearrange, copyAtSize, defaultCopyName, exactCopy, guessLayout, orientationOf, shapeChanges, suggestColumns, type CopyMode } from '../lib/copyAtSize';
 
 interface Props {
   poster: Poster;
-  onCopy: (copy: Poster, message: string) => void;
+  /** `resized` is false for a same-size copy */
+  onCopy: (copy: Poster, message: string, resized: boolean) => void;
   onCancel: () => void;
 }
 
-/** "Copy at another size": pick a size and orientation; the copy is saved as a new poster. */
+/** "Make a copy": the same size by default, or another size and orientation; the copy is saved as a new poster. */
 export default function CopySizeDialog({ poster, onCopy, onCancel }: Props) {
   const dialog = useDialog<HTMLFormElement>(onCancel, 'copy-size-title');
-  const flipped: Orientation = orientationOf(poster) === 'portrait' ? 'landscape' : 'portrait';
-  const start = poster.sizePreset !== 'custom' ? { preset: poster.sizePreset, ...sizeFor(poster.sizePreset, flipped) } : { preset: 'custom', width: poster.height, height: poster.width };
+  const start = { preset: poster.sizePreset, width: poster.width, height: poster.height };
   const [size, setSize] = useState(start);
   const [name, setName] = useState<string | null>(null); // null: follow the size
   const [template, setTemplate] = useState<TemplateId>(() => guessLayout(poster));
@@ -40,10 +40,13 @@ export default function CopySizeDialog({ poster, onCopy, onCancel }: Props) {
       <form
         {...dialog}
         className="modal copy-size"
-        aria-label="Copy at another size"
+        aria-label="Make a copy"
         onSubmit={(e) => {
           e.preventDefault();
-          if (same) return;
+          if (same) {
+            const copy = exactCopy(poster, name ?? `${poster.name} (copy)`);
+            return onCopy(copy, 'Made an exact copy.', false);
+          }
           const { poster: copy, message } = copyAtSize(poster, {
             width: size.width,
             height: size.height,
@@ -53,16 +56,16 @@ export default function CopySizeDialog({ poster, onCopy, onCancel }: Props) {
             columns,
             name: name ?? undefined,
           });
-          onCopy(copy, message);
+          onCopy(copy, message, true);
         }}
       >
-        <h2 id="copy-size-title">Copy at another size</h2>
-        <p className="muted small copy-intro">A new poster at the size you pick. “{poster.name}” stays as it is.</p>
+        <h2 id="copy-size-title">Make a copy</h2>
+        <p className="muted small copy-intro">A new poster, the same size or another one, such as A1 landscape or an A4 handout. “{poster.name}” stays as it is.</p>
         <div className="form-grid">
           <SizeFields orientation={orientationOf(size)} preset={size.preset} width={size.width} height={size.height} onChange={pickSize} />
         </div>
         {same ? (
-          <p className="hint copy-note" role="status">That is the poster’s current size. Pick another size or orientation.</p>
+          <p className="hint copy-note" role="status">Same size and shape: an exact copy. Pick another size or orientation to resize it.</p>
         ) : offerRearrange ? (
           <fieldset className="copy-mode">
             <legend>The shape changes. How should your content fit?</legend>
@@ -103,11 +106,11 @@ export default function CopySizeDialog({ poster, onCopy, onCancel }: Props) {
         )}
         <label className="field">
           Name of the copy
-          <input value={name ?? defaultCopyName(poster, size.width, size.height, size.preset)} onChange={(e) => setName(e.target.value)} />
+          <input value={name ?? (same ? `${poster.name} (copy)` : defaultCopyName(poster, size.width, size.height, size.preset))} onChange={(e) => setName(e.target.value)} />
         </label>
         <div className="modal-actions">
           <button type="button" className="btn" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="btn primary" disabled={same}>Make copy</button>
+          <button type="submit" className="btn primary">Make copy</button>
         </div>
       </form>
     </div>

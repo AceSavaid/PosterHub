@@ -169,3 +169,9 @@ function keepIds(els: PosterElement[]) {
     return n;
   });
 }
+
+/** A same-size copy with a new id and name. */
+export function exactCopy(p: Poster, name: string): Poster {
+  const now = Date.now();
+  return { ...structuredClone(p), id: uid(), name: name.trim() || `${p.name} (copy)`, createdAt: now, updatedAt: now };
+}

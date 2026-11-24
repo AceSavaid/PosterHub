@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Author, AuthorList } from '../types';
 import { authorListProblems, authorsHtml, emptyAuthorList, removeAffiliation } from '../lib/authors';
 import { useDiscardGuard } from './useDiscardGuard';
-import { useEscape } from '../lib/useEscape';
+import { useDialog } from '../lib/useDialog';
 
 interface Props {
   initial?: AuthorList;
@@ -20,8 +20,8 @@ export default function AuthorsDialog({ initial, replacing, onSave, onCancel }: 
   const { request: cancel, prompt: discardPrompt } = useDiscardGuard(JSON.stringify(list) !== startRef.current, onCancel);
 
   useEffect(() => first.current?.focus(), []);
-  // Esc goes through the shared stack so a "Discard your changes?" box on top gets it first.
-  useEscape(cancel);
+  // Esc, Tab and focus like every other dialog; a "Discard your changes?" box on top gets Esc first.
+  const dialog = useDialog(cancel, 'authors-title');
 
   const setAuthor = (i: number, patch: Partial<Author>) =>
     setList((l) => ({ ...l, authors: l.authors.map((a, j) => (j === i ? { ...a, ...patch } : a)) }));
@@ -44,7 +44,7 @@ export default function AuthorsDialog({ initial, replacing, onSave, onCancel }: 
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && cancel()}>
-      <div className="modal wide authors-dialog" role="dialog" aria-modal="true" aria-labelledby="authors-title">
+      <div {...dialog} className="modal wide authors-dialog">
         <h2 id="authors-title">Authors and affiliations</h2>
         <p className="muted">Type each institution once, then tick which ones each author belongs to. Numbers, commas and the contact line are added for you.</p>
 

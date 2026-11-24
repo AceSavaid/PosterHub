@@ -26,6 +26,8 @@ export interface UiPrefs {
   pdfBleedMm: number;
   /** Add crop marks to PDFs. */
   pdfCropMarks: boolean;
+  /** PNG export resolution (and the PDF's fallback image), remembered between visits */
+  pngDpi: number;
   /** draw review-note pins on the poster while editing */
   showNotes: boolean;
   /** id of the brand kit new posters start with ('' = none) */
@@ -38,10 +40,45 @@ export interface UiPrefs {
   lastBackupAt: number;
   /** "Remind me later" hides the reminder until this time (ms) */
   backupSnoozedUntil: number;
+  /** what the last new poster was made with, so the New poster dialog starts there */
+  newPoster: NewPosterPrefs | null;
 }
 
-export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false, showNotes: true, brandKit: '', contrast: 'system', uiSize: 'normal', backupReminder: true, showTips: true, lastBackupAt: 0, backupSnoozedUntil: 0 };
+/** The New poster dialog's last choices. */
+export interface NewPosterPrefs {
+  template: string;
+  palette: string;
+  orientation: 'portrait' | 'landscape';
+  preset: string;
+  width: number;
+  height: number;
+  columns: number;
+  headingFont: string;
+  bodyFont: string;
+}
+
+const str = (v: unknown, max = 60) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : null);
+function sanitizeNewPoster(v: unknown): NewPosterPrefs | null {
+  if (!v || typeof v !== 'object') return null;
+  const r = v as Record<string, unknown>;
+  const mm = (n: unknown) => (typeof n === 'number' && Number.isFinite(n) && n >= 50 && n <= 5000 ? n : null);
+  const template = str(r.template, 40), palette = str(r.palette), preset = str(r.preset, 40);
+  const headingFont = str(r.headingFont, 80), bodyFont = str(r.bodyFont, 80);
+  const width = mm(r.width), height = mm(r.height);
+  const columns = typeof r.columns === 'number' && Number.isInteger(r.columns) && r.columns >= 1 && r.columns <= 6 ? r.columns : null;
+  const orientation = r.orientation === 'landscape' ? 'landscape' : r.orientation === 'portrait' ? 'portrait' : null;
+  if (!template || !palette || !preset || !headingFont || !bodyFont || !width || !height || !columns || !orientation) return null;
+  return { template, palette, orientation, preset, width, height, columns, headingFont, bodyFont };
+}
+
+export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false, pngDpi: 200, showNotes: true, brandKit: '', contrast: 'system', uiSize: 'normal', backupReminder: true, showTips: true, lastBackupAt: 0, backupSnoozedUntil: 0, newPoster: null };
 export const PREFS_KEY = 'posterhub.ui';
+export const PNG_DPI_CHOICES = [
+  { dpi: 100, label: 'Draft (100 dpi)' },
+  { dpi: 150, label: 'Good (150 dpi)' },
+  { dpi: 200, label: 'High (200 dpi)' },
+  { dpi: 300, label: 'Print (300 dpi)' },
+];
 
 /** Fills in defaults and drops anything malformed (old versions, hand-edited storage). */
 export function sanitizePrefs(raw: unknown): UiPrefs {
@@ -55,6 +92,7 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     showProperties: bool(r.showProperties, DEFAULT_PREFS.showProperties),
     pdfBleedMm: sanitizePrintOptions({ bleedMm: r.pdfBleedMm as number }).bleedMm,
     pdfCropMarks: bool(r.pdfCropMarks, DEFAULT_PREFS.pdfCropMarks),
+    pngDpi: PNG_DPI_CHOICES.some((c) => c.dpi === r.pngDpi) ? (r.pngDpi as number) : DEFAULT_PREFS.pngDpi,
     showNotes: bool(r.showNotes, DEFAULT_PREFS.showNotes),
     contrast: r.contrast === 'normal' || r.contrast === 'high' || r.contrast === 'system' ? r.contrast : DEFAULT_PREFS.contrast,
     uiSize: r.uiSize === 'large' || r.uiSize === 'xlarge' || r.uiSize === 'normal' ? r.uiSize : DEFAULT_PREFS.uiSize,
@@ -62,6 +100,7 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     showTips: bool(r.showTips, DEFAULT_PREFS.showTips),
     lastBackupAt: time(r.lastBackupAt),
     backupSnoozedUntil: time(r.backupSnoozedUntil),
+    newPoster: sanitizeNewPoster(r.newPoster),
     brandKit: typeof r.brandKit === 'string' && /^[a-z0-9-]{1,40}$/.test(r.brandKit) ? r.brandKit : DEFAULT_PREFS.brandKit,
   };
 }

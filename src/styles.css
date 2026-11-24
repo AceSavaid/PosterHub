@@ -205,7 +205,8 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .font-list li { display: flex; justify-content: space-between; padding: 4px 0; font-size: 15px; }
 
 .insp-head { display: flex; align-items: center; justify-content: space-between; }
-.insp-head h3 { margin: 0; }
+.insp-head { gap: 8px; }
+.insp-head h3 { margin: 0 auto 0 0; }
 .icon-row { display: flex; gap: 2px; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .row4 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
@@ -220,10 +221,10 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .swatch.none { background: linear-gradient(45deg, transparent 45%, var(--danger) 45%, var(--danger) 55%, transparent 55%), var(--bg); }
 .swatch.custom { background: conic-gradient(red, yellow, lime, aqua, blue, magenta, red); display: block; }
 .swatch.custom input { opacity: 0; position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
-.shortcuts { padding-left: 18px; margin: 0; line-height: 1.9; font-size: 12.5px; }
 
 /* ---------------- Stage + poster */
 .stage { flex: 1; overflow: auto; background: var(--stage); position: relative; }
+.stage-wrap { flex: 1; min-width: 0; display: flex; position: relative; }
 .stage-inner { min-width: 100%; min-height: 100%; display: flex; align-items: flex-start; justify-content: center; padding: 32px; width: max-content; }
 .surface-scroll-size { position: relative; flex-shrink: 0; margin: auto; }
 .poster { position: absolute; top: 0; left: 0; transform-origin: 0 0; box-shadow: 0 4px 24px rgba(0,0,0,.25); overflow: hidden; }
@@ -281,14 +282,16 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .menu button { text-align: left; padding: 8px 10px; border: none; background: none; border-radius: 6px; cursor: pointer; display: flex; flex-direction: column; gap: 1px; }
 .menu button:hover { background: var(--bg2); }
 .menu button span { color: var(--muted); font-size: 12px; }
-.menu-print { border-top: 1px solid var(--line); margin-top: 6px; padding: 10px 10px 4px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
-.menu-print > strong { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+/* a format's own options sit right under its button in the Export menu */
+.menu-print, .menu-dpi { margin: 0 0 6px 10px; padding: 2px 10px 8px; border-left: 2px solid var(--line); display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 .menu-print label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .menu-print label.check { justify-content: flex-start; }
 .menu-print small { color: var(--muted); font-size: 11.5px; line-height: 1.35; }
 .menu .menu-note { background: #fff4e0; margin-bottom: 4px; }
 .menu .menu-note:hover { background: #ffe9c2; }
-.menu-dpi { border-top: 1px solid var(--line); margin-top: 6px; padding: 10px 10px 4px; }
+.menu-dpi { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+.menu-dpi select { width: auto; flex: 1; min-width: 0; }
+.menu-dpi small { flex-basis: 100%; color: var(--muted); font-size: 11.5px; }
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: #1d2330; color: #fff; padding: 10px 16px; border-radius: 8px; box-shadow: var(--shadow); z-index: 100; max-width: min(560px, calc(100vw - 32px)); }
 
 /* ---------------- Chart dialog */
@@ -345,7 +348,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 /* Tablets held upright: the poster gets the full width on top and the two panels sit side by side underneath. */
 @media (max-width: 1024px) and (orientation: portrait) {
   .workspace { flex-wrap: wrap; align-content: stretch; }
-  .stage { order: -1; flex: 1 0 100%; height: 58%; }
+  .stage-wrap { order: -1; flex: 1 0 100%; height: 58%; }
   .panel, .panel.right { flex: 1 1 0; width: auto; height: 42%; border: none; border-top: 1px solid var(--line); }
   .panel.left { border-right: 1px solid var(--line); }
   .panel-reveal { height: 42%; border-top: 1px solid var(--line); }
@@ -353,7 +356,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 /* Phones: poster on top, then the panels one under the other; the page area scrolls. */
 @media (max-width: 680px) {
   .workspace { flex-direction: column; flex-wrap: nowrap; overflow-y: auto; }
-  .stage { order: -1; flex: 0 0 auto; height: 55vh; }
+  .stage-wrap { order: -1; flex: 0 0 auto; height: 55vh; }
   .panel, .panel.right { flex: 0 0 auto; width: 100%; height: auto; max-height: 45vh; border: none; border-top: 1px solid var(--line); }
   .panel-reveal { height: auto; }
   .form-grid { grid-template-columns: 1fr; }
@@ -385,7 +388,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .check-btn { position: relative; }
 .check-btn.active { background: var(--accent-soft); border-color: var(--accent); }
 .badge { background: #d93025; color: #fff; border-radius: 10px; font-size: 11px; padding: 0 6px; line-height: 17px; font-weight: 700; }
-.check-panel { position: fixed; top: 54px; right: 296px; width: 360px; max-height: calc(100vh - 80px); overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); z-index: 25; padding: 10px 12px 12px; }
+.check-panel { position: fixed; top: 54px; right: calc(var(--stage-right, 280px) + 16px); width: 360px; max-height: calc(100vh - 80px); overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); z-index: 25; padding: 10px 12px 12px; }
 .check-head { display: flex; justify-content: space-between; align-items: center; }
 .check-summary { margin: 2px 0 8px; }
 .check-ok { text-align: center; padding: 16px 8px; }
@@ -423,7 +426,6 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .menu .menu-warn { background: #fdecea; margin-bottom: 4px; }
 .menu .menu-warn:hover { background: #fbd9d5; }
 .menu .menu-warn strong { color: #8a1c1c; }
-@media (max-width: 900px) { .check-panel { right: 16px; } }
 .btn.active { background: var(--accent-soft); border-color: var(--accent); }
 .check-tabs { display: flex; margin: 6px 0 8px; }
 .check-tabs button { flex: 1; justify-content: center; font-size: 12.5px; }
@@ -627,11 +629,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .note-text { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 5.6em; overflow: hidden; }
 .note-item-actions { display: flex; gap: 14px; justify-content: flex-end; padding: 0 10px 6px; }
 .notes-clear { margin-top: 8px; }
-/* sits over the Properties panel so the poster stays visible while reviewing */
-.check-panel.notes-panel { right: 6px; width: 272px; top: 58px; max-height: calc(100vh - 70px); }
-.workspace.swapped ~ .notes-panel { right: auto; left: 6px; }
 .notes-tools { flex-direction: column; align-items: stretch; }
-@media (max-width: 900px) { .check-panel.notes-panel { right: 6px; } }
 /* ---------------- Equation dialog */
 .equation-dialog .eq-field { display: flex; flex-direction: column; gap: 4px; font-weight: 600; }
 .equation-dialog textarea { font: 15px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; width: 100%; resize: vertical; padding: 8px; }
@@ -793,6 +791,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 :root[data-ui-size] .topbar { flex-wrap: wrap; }
 .settings-grid .seg { justify-self: start; }
 /* the top bar can wrap when the interface is bigger, so float the Check and Notes panels below its real height (set by the editor) */
+:root[data-ui-size] .check-panel { right: calc((var(--stage-right, 280px) + 16px) / var(--ui-zoom, 1)); }
 :root[data-ui-size] .check-panel { top: calc((var(--topbar-h, 48px) + 6px) / var(--ui-zoom, 1)); max-height: calc((100vh - var(--topbar-h, 48px) - 24px) / var(--ui-zoom, 1)); }
 /* First-time tour: a ring around one part of the editor and a card next to it. Sits under dialogs. */
 .tour-ring { position: fixed; z-index: 45; border: 3px solid var(--accent); border-radius: 10px; box-shadow: 0 0 0 4px var(--accent-soft); pointer-events: none; transition: left 0.2s, top 0.2s, width 0.2s, height 0.2s; }
@@ -840,6 +839,14 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .copy-mode .copy-rearrange .hint { margin: 0; }
 .copy-size .field { margin-top: 4px; }
 
+/* Check / Find / Notes switcher at the top of the review panel */
+.check-head .review-switch { flex: 1; margin-right: 6px; }
+.review-switch button { flex: 1; justify-content: center; font-size: 12.5px; gap: 4px; }
+/* panel titles: "Insert" on the left, "Poster" on the right when nothing is selected */
+.panel-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 4px; }
+.insp-poster-title { padding: 14px 14px 4px; }
+.insp-poster-link { font-size: 12.5px; white-space: nowrap; }
+.modal-actions .from-abstract { margin-right: auto; font-size: 13px; }
 /* Replacing a picture with one of another shape: three choices with a preview each */
 .replace-image { max-width: 600px; }
 .replace-image h2 { margin-bottom: 6px; }
@@ -851,3 +858,47 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .replace-preview { display: flex; align-items: center; justify-content: center; width: 104px; height: 104px; }
 .replace-preview img { display: block; outline: 2px dashed var(--accent); outline-offset: 1px; background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0 / 10px 10px; }
 @media (max-width: 560px) { .replace-options { grid-template-columns: 1fr; } }
+/* Notes sit over the Properties panel instead, so the note pins on the poster stay visible and clickable */
+.check-panel.notes-panel { right: 6px; width: 272px; top: 58px; max-height: calc(100vh - 70px); }
+.workspace.swapped ~ .notes-panel { right: auto; left: 6px; }
+:root[data-ui-size] .check-panel.notes-panel { right: 6px; }
+:root[data-ui-size] .workspace.swapped ~ .notes-panel { right: auto; left: 6px; }
+.notes-panel .review-switch button { padding: 6px 6px; font-size: 12px; }
+
+/* New poster: colours, columns, fonts, brand kit and saved templates fold away under "More options". */
+.more-options { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.more-options > summary { cursor: pointer; font-weight: 600; }
+.more-options > summary .muted { font-weight: 400; }
+.more-options[open] > summary { margin-bottom: 12px; }
+
+/* Check: leftover example text grouped into one to-do with a "Go to an empty box" button */
+.issue.leftovers { display: flex; flex-direction: column; gap: 8px; padding: 8px 8px 8px 12px; border: 1px solid var(--line); border-left: 4px solid #f29900; border-radius: 8px; background: var(--bg); }
+.issue.leftovers button { width: auto; padding: 2px 4px; border: none; background: none; }
+.issue.leftovers .fill-next-btn { align-self: flex-start; margin-left: 26px; padding: 6px 12px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); font-weight: 600; border-radius: 6px; }
+.issue.leftovers .fill-next-btn:hover { background: var(--accent); filter: brightness(1.08); }
+.issue.leftovers .leftover-head { display: flex; gap: 8px; }
+.issue.leftovers .leftover-head > span:last-child { display: flex; flex-direction: column; }
+.leftover-list { margin-left: 26px; }
+.leftover-list summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.leftover-list ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.leftover-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.leftover-list .link { text-align: left; }
+.issue .issue-dismiss.inline { position: static; }
+/* "3 of 11 filled · Next box": a pill at the bottom of the poster area, out of the way of the top bar */
+.fill-next { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5; white-space: nowrap; font-variant-numeric: tabular-nums; border-radius: 999px; padding: 8px 16px; gap: 10px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); }
+.fill-next .fill-count { color: var(--muted); font-weight: 400; }
+.fill-next .fill-go { font-weight: 600; color: var(--accent); }
+
+/* Floating text toolbar above the words being typed */
+.text-toolbar { position: fixed; z-index: 60; display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); }
+.text-toolbar .fmt { min-width: 30px; height: 30px; padding: 0 6px; border-color: transparent; }
+.text-toolbar .fmt:hover { background: var(--bg2); }
+.text-toolbar .swatch { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); padding: 0; margin: 0 2px; cursor: pointer; }
+.text-toolbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
+@media (max-width: 600px) { .text-toolbar .swatch:nth-of-type(n+4) { display: none; } }
+
+/* Properties: background, border, position and size fold away under one heading */
+.more-props { border-top: 1px solid var(--bg3); padding-top: 8px; }
+.more-props > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); padding: 4px 0; }
+.more-props[open] > summary { margin-bottom: 8px; }
+.more-props > section { margin-bottom: 10px; }

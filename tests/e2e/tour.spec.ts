@@ -85,24 +85,24 @@ test('the tour can be skipped, with the button or Esc, and stays skipped', async
   await expect(card(page)).toHaveCount(0);
 
   // Esc closes it too (replayed from Help)
-  await page.getByRole('button', { name: 'Help' }).click();
+  await page.getByRole('button', { name: 'Settings and help' }).click();
   await page.getByRole('menuitem', { name: 'Take the tour' }).click();
   await expect(page.getByRole('dialog', { name: 'Click to edit' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(card(page)).toHaveCount(0);
 });
 
-test('Help → Take the tour replays it from the start', async ({ page }) => {
+test('Settings and help → Take the tour replays it from the start', async ({ page }) => {
   await newPoster(page);
   await page.getByRole('button', { name: 'Skip tour' }).click();
-  await page.getByRole('button', { name: 'Help' }).click();
+  await page.getByRole('button', { name: 'Settings and help' }).click();
   await page.getByRole('menuitem', { name: 'Take the tour' }).click();
   await expect(page.getByRole('dialog', { name: 'Click to edit' })).toBeVisible();
   await expect(page.getByText('Step 1 of 4')).toBeVisible();
   await page.getByRole('button', { name: 'Skip tour' }).click();
 
-  // The Help menu also opens the keyboard shortcuts sheet.
-  await page.getByRole('button', { name: 'Help' }).click();
+  // The same menu also opens the keyboard shortcuts sheet.
+  await page.getByRole('button', { name: 'Settings and help' }).click();
   await page.getByRole('menuitem', { name: /Keyboard shortcuts/ }).click();
   await expect(page.getByRole('dialog', { name: /Keyboard shortcuts/i })).toBeVisible();
 });

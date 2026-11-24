@@ -18,12 +18,12 @@ export const TOUR_STEPS: TourStep[] = [
   {
     targets: ['[data-tour="tools"]'],
     title: 'Add things from Insert',
-    body: 'Text, pictures, graphs from a spreadsheet, tables, equations, references and icons are all here. The Layout and Design tabs change columns, colours and fonts.',
+    body: 'Text, pictures, graphs, tables, equations, references and icons are all here. With nothing selected, the right-hand panel sets the poster’s size, columns, colours and fonts.',
   },
   {
     targets: ['[data-tour="check"]'],
     title: 'Check before you print',
-    body: 'Check looks for text too small to read, low contrast, blurry pictures and leftover example text. Click a problem to jump straight to it.',
+    body: 'Check finds text too small to read, low contrast, blurry pictures and leftover example text; click one to jump to it. Find and replace and co-authors’ notes are here too.',
   },
   {
     targets: ['[data-tour="export"]'],

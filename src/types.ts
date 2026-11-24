@@ -182,6 +182,8 @@ export interface PosterElement {
   refTitle?: string;
   /** Description of an image or graph for screen readers and exported files (alt text). */
   alt?: string;
+  /** text style when it isn't plain from the type: a subheading, or a caption outside a caption slot */
+  textStyle?: 'heading' | 'subheading' | 'normal' | 'caption';
   /** mm this text box has grown to fit its text, pushing the column below down (it shrinks back by up to this much) */
   grew?: number;
   /** clockwise rotation in degrees, around the element's centre */

@@ -169,7 +169,11 @@ export function htmlToRuns(html: string): Run[] {
     if (col) nf.color = cssColorToHex(col);
     const isBlock = BLOCK.test(n.tagName);
     if (isBlock && runs.length && !runs[runs.length - 1].options.breakLine) runs.push({ text: '', options: { breakLine: true } });
-    if (n.tagName === 'LI') runs.push({ text: '• ', options: {} });
+    if (n.tagName === 'LI') {
+      const list = n.parentElement;
+      const num = list?.tagName === 'OL' ? Number(list.getAttribute('start') || 1) + Array.from(list.children).filter((c) => c.tagName === 'LI').indexOf(n) : 0;
+      runs.push({ text: num ? `${num}. ` : '• ', options: {} });
+    }
     n.childNodes.forEach((c) => walk(c, nf));
     if (isBlock && runs.length && !runs[runs.length - 1].options.breakLine) runs.push({ text: '', options: { breakLine: true } });
   };

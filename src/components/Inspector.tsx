@@ -19,6 +19,7 @@ import { isCropped, normAngle } from '../lib/geometry';
 import { CITATION_STYLES, DEFAULT_STYLE, shortLabel } from '../lib/refs/format';
 import { TYPE_NAMES } from '../lib/a11y';
 import { keys } from '../lib/keys';
+import { TEXT_STYLES, styleNameOf, styleShortcut, type TextStyleName } from '../lib/textStyles';
 import { elementTip } from '../lib/tips';
 import { useUiPrefs } from '../lib/uiPrefs';
 
@@ -48,6 +49,10 @@ interface Props {
   onUngroup?: () => void;
   overflow: boolean;
   onShrinkText: () => void;
+  /** gives the box a named text style */
+  onTextStyle?: (name: TextStyleName) => void;
+  /** restyles every box with this box's style to match it */
+  onMatchTextStyle?: () => void;
   onGrowBox: () => void;
   onAlign: (mode: AlignMode) => void;
   onDistribute: (axis: 'x' | 'y') => void;
@@ -154,7 +159,7 @@ export default function Inspector(props: Props) {
             {props.onClearSelection && <PosterLink onClick={props.onClearSelection} />}
             <div className="icon-row">
               <button className="icon-btn" title={keys('Duplicate (Ctrl/⌘ D)')} onClick={onDuplicate}>⧉</button>
-              <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
+              <button className="icon-btn danger" title="Delete (Delete key)" onClick={onDelete}>🗑</button>
             </div>
           </div>
           {(props.onGroup || props.onUngroup) && (
@@ -248,7 +253,7 @@ export default function Inspector(props: Props) {
             <button className="icon-btn" title={el.locked ? 'Unlock' : 'Lock position'} aria-label="Lock position" aria-pressed={!!el.locked} onClick={() => onChange({ locked: !el.locked })}>
               {el.locked ? '🔒' : '🔓'}
             </button>
-            <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
+            <button className="icon-btn danger" title="Delete (Delete key)" onClick={onDelete}>🗑</button>
           </div>
         </div>
         <ElementTip el={el} />
@@ -274,6 +279,23 @@ export default function Inspector(props: Props) {
         {st && (
           <section>
             <h4>Text</h4>
+            {props.onTextStyle && styleNameOf(el) && (
+              <div className="row2 text-style-row">
+                <label>
+                  Text style
+                  <select value={styleNameOf(el)!} onChange={(e) => props.onTextStyle!(e.target.value as TextStyleName)} title={keys('Ctrl/⌘ Alt 1 heading, Ctrl/⌘ Alt 2 subheading, Ctrl/⌘ Alt 0 normal text, Ctrl/⌘ Alt 9 caption')}>
+                    {TEXT_STYLES.map((s) => (
+                      <option key={s.name} value={s.name}>
+                        {s.label} ({styleShortcut(s.name)})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="btn small-btn" onClick={props.onMatchTextStyle} title="Every box with this style takes this box’s font, size and colour">
+                  Update all to match
+                </button>
+              </div>
+            )}
             <label>
               Font
               <FontSelect poster={poster} value={st.fontFamily} allowTheme onChange={(f) => setStyle({ fontFamily: f })} />
@@ -289,13 +311,13 @@ export default function Inspector(props: Props) {
               </label>
             </div>
             <div className="toolbar-row">
-              <button className={'fmt' + (st.bold ? ' on' : '')} onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('bold', 'bold')} title="Bold">
+              <button className={'fmt' + (st.bold ? ' on' : '')} onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('bold', 'bold')} title={keys('Bold (Ctrl/⌘ B)')}>
                 <b>B</b>
               </button>
-              <button className={'fmt' + (st.italic ? ' on' : '')} onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('italic', 'italic')} title="Italic">
+              <button className={'fmt' + (st.italic ? ' on' : '')} onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('italic', 'italic')} title={keys('Italic (Ctrl/⌘ I)')}>
                 <i>I</i>
               </button>
-              <button className={'fmt' + (st.underline ? ' on' : '')} onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('underline', 'underline')} title="Underline">
+              <button className={'fmt' + (st.underline ? ' on' : '')} onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('underline', 'underline')} title={keys('Underline (Ctrl/⌘ U)')}>
                 <u>U</u>
               </button>
               {editing && (

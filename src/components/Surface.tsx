@@ -9,7 +9,10 @@ import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
 import { cleanHtml } from '../lib/sanitize';
 import { PT_TO_PX, layoutEquation, mathSvg, svgDataUrl, typesetLatex } from '../lib/math';
 import { useMathReady } from '../lib/useMath';
-import { IconBody } from './IconBody';
+import { IconBody, IconSvg } from './IconBody';
+import { headingIconLayout, headingIconSpec } from '../lib/headingIcon';
+import { iconArt, iconColors } from '../lib/icons/library';
+import { useIconsReady } from '../lib/useIcons';
 
 const px = (mm: number) => mm * MM_TO_PX;
 
@@ -160,8 +163,15 @@ export function ElementView({ el, poster, editing, onCommitText, onCommitTable, 
     case 'icon':
       inner = <IconBody el={el} poster={poster} />;
       break;
-    default:
-      inner = <TextBody el={el} poster={poster} editing={!!editing} onCommit={onCommitText} onDone={onEditDone} />;
+    default: {
+      const end = headingIconLayout(el);
+      inner = (
+        <>
+          <TextBody el={el} poster={poster} editing={!!editing} onCommit={onCommitText} onDone={onEditDone} reserve={end} />
+          {end && <HeadingIcon el={el} poster={poster} />}
+        </>
+      );
+    }
   }
 
   return (
@@ -202,7 +212,22 @@ export function EquationBody({ el, poster, widthPx, heightPx }: { el: PosterElem
   );
 }
 
-function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement; poster: Poster; editing: boolean; onCommit?: (html: string) => void; onDone?: () => void }) {
+/** The icon at the end of a heading, right-aligned on its first line (see lib/headingIcon). */
+function HeadingIcon({ el, poster }: { el: PosterElement; poster: Poster }) {
+  const ready = useIconsReady();
+  const at = headingIconLayout(el);
+  const spec = headingIconSpec(el);
+  const art = ready && el.headingIcon ? iconArt(el.headingIcon.id) : undefined;
+  if (!at || !spec || !art || at.size <= 0) return null;
+  const pad = px(el.padding ?? 0);
+  return (
+    <span className="el-heading-icon" data-icon={el.headingIcon!.id} style={{ left: pad + at.x, top: pad + at.y, width: at.size, height: at.size }}>
+      <IconSvg art={art} colors={iconColors(spec, poster.palette)} />
+    </span>
+  );
+}
+
+function TextBody({ el, poster, editing, onCommit, onDone, reserve }: { el: PosterElement; poster: Poster; editing: boolean; onCommit?: (html: string) => void; onDone?: () => void; reserve?: { reserve: number; reserveLeft: number } | null }) {
   const ref = useRef<HTMLDivElement>(null);
   const st = el.style!;
   const pal = poster.palette;
@@ -245,6 +270,8 @@ function TextBody({ el, poster, editing, onCommit, onDone }: { el: PosterElement
     textDecoration: st.underline ? 'underline' : 'none',
     textAlign: st.align,
     lineHeight: st.lineHeight,
+    paddingRight: reserve?.reserve || undefined,
+    paddingLeft: reserve?.reserveLeft || undefined,
   };
 
   return (

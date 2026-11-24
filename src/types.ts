@@ -116,6 +116,19 @@ export interface IconSpec {
   color2?: ColorValue;
 }
 
+/**
+ * An icon shown at the end of a heading: right-aligned on the heading's first line
+ * and sized from its font size, so it always matches the text.
+ */
+export interface HeadingIconSpec {
+  /** library id, e.g. "health/dna" */
+  id: string;
+  /** main colour; unset = the heading's text colour */
+  color?: ColorValue;
+  /** colour of the light shading on two-tone icons; unset = a pale tint of the main colour */
+  color2?: ColorValue;
+}
+
 export interface PosterElement {
   id: string;
   type: ElementType;
@@ -144,6 +157,8 @@ export interface PosterElement {
   table?: TableSpec;
   equation?: EquationSpec;
   icon?: IconSpec;
+  /** headings only: an icon drawn at the right-hand end of the heading */
+  headingIcon?: HeadingIconSpec;
   shape?: ShapeKind;
   /** which way an arrow points */
   direction?: 'right' | 'left' | 'up' | 'down';

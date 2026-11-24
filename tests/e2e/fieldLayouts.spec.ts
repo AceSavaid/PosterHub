@@ -53,12 +53,12 @@ test('Switch layout moves written text from a clinical poster into another field
   await page.keyboard.type('A 54-year-old with a rare rash.');
   await page.keyboard.press('Escape');
   await expect(page.locator('.poster .el-text .el-body', { hasText: 'A 54-year-old with a rare rash.' })).toHaveCount(1);
+  await page.locator('.stage').click({ position: { x: 5, y: 5 } }); // nothing selected: Properties shows the poster settings
   await page.getByRole('tab', { name: 'Layout' }).click();
   const select = page.getByRole('combobox', { name: 'Layout' });
   await expect(select.locator('optgroup[label="By research field"] option')).toHaveCount(4);
   await select.selectOption('lab');
   await page.getByRole('button', { name: /^Apply to/ }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
   await expect(page.locator('.toast')).toContainText('Moved your 1 section');
   // The lab layout is in place, and the case summary landed in its first free section.
   await expect(page.locator('.poster .el', { hasText: 'The gap in what is known' }).first()).toBeVisible();

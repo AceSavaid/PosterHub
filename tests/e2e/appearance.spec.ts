@@ -17,22 +17,26 @@ test('follows the system theme by default and can be switched to light or dark',
   expect(await theme(page)).toBeNull();
   expect(await bg(page)).toBe('rgb(26, 29, 35)');
 
-  await page.getByRole('button', { name: 'View ▾' }).click();
-  await page.getByRole('radio', { name: /Light/ }).click();
+  // the theme is set in one place: Settings (in the editor, under the gear)
+  await page.getByRole('button', { name: 'Settings and help' }).click();
+  await page.getByRole('menuitem', { name: 'Settings…' }).click();
+  const settings = page.getByRole('dialog', { name: 'Settings' });
+  await settings.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: /Light/ }).click();
   expect(await theme(page)).toBe('light');
   expect(await bg(page)).toBe('rgb(255, 255, 255)');
 
   // a forced dark theme wins over a light system setting
   await page.emulateMedia({ colorScheme: 'light' });
-  await page.getByRole('radio', { name: /Dark/ }).click();
+  await settings.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: /Dark/ }).click();
   expect(await bg(page)).toBe('rgb(26, 29, 35)');
 
-  // remembered after a reload, including on the My posters page
+  // remembered after a reload, including on the My posters page, whose gear opens the same Settings
   await page.goto('/');
   expect(await theme(page)).toBe('dark');
-  await page.getByRole('button', { name: 'Appearance' }).click();
-  await expect(page.getByRole('radio', { name: /Dark/ })).toHaveAttribute('aria-checked', 'true');
-  await page.getByRole('radio', { name: /Auto/ }).click();
+  await expect(page.getByRole('button', { name: 'Appearance' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(settings.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: /Dark/ })).toHaveAttribute('aria-checked', 'true');
+  await settings.getByRole('radiogroup', { name: 'Theme' }).getByRole('radio', { name: /Auto/ }).click();
   expect(await theme(page)).toBeNull();
 });
 

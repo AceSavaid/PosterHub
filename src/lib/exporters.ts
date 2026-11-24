@@ -9,6 +9,7 @@ import { CELL_PAD, cellLook, columnAlign, columnWeights, normalizeTable, type Bo
 import { PT_TO_PX, layoutEquation, loadMath, mathSvg, typesetLatex } from './math';
 import { isCropped } from './geometry';
 import { iconArt, iconColors, iconInfo, iconSvg, layoutIcon, loadIcons } from './icons/library';
+import { normalizeHex } from './color';
 import { contentBox, headingIconLayout, headingIconSpec, headingIconSpot } from './headingIcon';
 
 const MAX_SIDE = 16000;
@@ -185,11 +186,10 @@ export function htmlToRuns(html: string): Run[] {
   return out.length ? out : [{ text: '', options: {} }];
 }
 
+/** PowerPoint's colour form: RRGGBB in capitals, no #. */
 function cssColorToHex(c: string): string | undefined {
-  if (c.startsWith('#')) return hex(c.length === 4 ? '#' + [...c.slice(1)].map((x) => x + x).join('') : c);
-  const m = c.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
-  if (m) return [m[1], m[2], m[3]].map((x) => Number(x).toString(16).padStart(2, '0')).join('').toUpperCase();
-  return undefined;
+  const n = normalizeHex(c);
+  return n ? hex(n) : undefined;
 }
 
 const PPT_MAX_IN = 56;

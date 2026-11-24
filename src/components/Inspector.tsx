@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { EquationSpec, IconSpec, Poster, PosterElement, TableSpec, TableStyleId, TextStyle } from '../types';
 import { TABLE_STYLES, cellLook, normalizeTable } from '../lib/table';
 import { useDataFile } from './DataFilePicker';
@@ -20,16 +20,16 @@ import { PALETTE_ROLES } from '../model';
 import { CITATION_STYLES, DEFAULT_STYLE, shortLabel } from '../lib/refs/format';
 import { TYPE_NAMES } from '../lib/a11y';
 import { keys } from '../lib/keys';
-import { SHORTCUTS } from '../lib/shortcuts';
 import { elementTip } from '../lib/tips';
 import { useUiPrefs } from '../lib/uiPrefs';
 
-/** The few shortcuts shown in the empty Properties panel; the rest are on the ? sheet. */
-const QUICK = new Set(['Undo', 'Redo', 'Copy, cut and paste elements, text or images', 'Duplicate', 'Move between elements on the poster', 'Edit the selected text, table, equation, image or graph', 'Nudge 1 mm', 'Stop editing, or clear the selection']);
 
 interface Props {
   /** opens the full keyboard shortcut list */
-  onShowShortcuts?: () => void;
+  /** page, layout, colours and fonts for the whole poster, shown when nothing is selected */
+  posterSettings?: ReactNode;
+  /** deselects everything, which brings back the poster settings */
+  onClearSelection?: () => void;
   poster: Poster;
   el: PosterElement | null;
   editing: boolean;
@@ -105,6 +105,15 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: 
 }
 
 
+/** Deselects, so the panel goes back to the whole poster's settings. */
+function PosterLink({ onClick }: { onClick: () => void }) {
+  return (
+    <button className="link insp-poster-link" onClick={onClick} title={keys('Poster size, layout, colours and fonts (or press Esc)')}>
+      Poster settings
+    </button>
+  );
+}
+
 function ElementTip({ el }: { el: PosterElement }) {
   const [prefs, change] = useUiPrefs();
   const tip = elementTip(el);
@@ -127,6 +136,7 @@ export default function Inspector(props: Props) {
         <div className="panel-body">
           <div className="insp-head">
             <h3>{props.grouped ? `Group of ${multi}` : `${multi} elements selected`}</h3>
+            {props.onClearSelection && <PosterLink onClick={props.onClearSelection} />}
             <div className="icon-row">
               <button className="icon-btn" title={keys('Duplicate (Ctrl/⌘ D)')} onClick={onDuplicate}>⧉</button>
               <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
@@ -155,31 +165,8 @@ export default function Inspector(props: Props) {
   if (!el) {
     return (
       <aside className="panel right" aria-label="Properties">
-        <div className="panel-body">
-          <h3>Nothing selected</h3>
-          <p className="hint">Click an element on the poster to change its text, colours, size and position. Double-click text to type.</p>
-          <h3>Shortcuts</h3>
-          <ul className="shortcuts">
-            {SHORTCUTS.flatMap((g) => g.items)
-              .filter((x) => QUICK.has(x.what))
-              .map((x) => (
-                <li key={x.what}>
-                  {x.combos.map((c, i) => (
-                    <span key={c}>
-                      {i > 0 && ' '}
-                      <kbd>{keys(c)}</kbd>
-                    </span>
-                  ))}{' '}
-                  {x.what.charAt(0).toLowerCase() + x.what.slice(1)}
-                </li>
-              ))}
-          </ul>
-          {props.onShowShortcuts && (
-            <button className="btn small-btn" onClick={props.onShowShortcuts}>
-              All shortcuts <kbd>?</kbd>
-            </button>
-          )}
-        </div>
+        <h2 className="panel-title insp-poster-title">Poster</h2>
+        {props.posterSettings}
       </aside>
     );
   }
@@ -197,6 +184,7 @@ export default function Inspector(props: Props) {
       <div className="panel-body">
         <div className="insp-head">
           <h3>{el.refList ? 'Reference list' : TYPE_NAMES[el.type]}</h3>
+          {props.onClearSelection && <PosterLink onClick={props.onClearSelection} />}
           <div className="icon-row">
             <button className="icon-btn" title={keys('Duplicate (Ctrl/⌘ D)')} onClick={onDuplicate}>⧉</button>
             <button className="icon-btn" title={el.locked ? 'Unlock' : 'Lock position'} aria-label="Lock position" aria-pressed={!!el.locked} onClick={() => onChange({ locked: !el.locked })}>

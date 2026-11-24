@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backgroundBehind, checkPoster, contrastRatio, minReadablePt, splitDismissed, withDismissed } from '../../src/lib/checks';
+import { backgroundBehind, checkPoster, contrastRatio, exportWarningFor, minReadablePt, splitDismissed, withDismissed, type Issue } from '../../src/lib/checks';
 import { PALETTES, createPoster, makeElement, sizeFor } from '../../src/model';
 import type { Poster } from '../../src/types';
 
@@ -82,6 +82,16 @@ describe('poster check', () => {
   });
 });
 
+describe('Export menu warning', () => {
+  const issue = (id: string, severity: 'problem' | 'warning', leftover = false) => ({ id, severity, leftover }) as unknown as Issue;
+  it('is one line, most serious first', () => {
+    expect(exportWarningFor([])).toBeNull();
+    const w = exportWarningFor([issue('a', 'warning', true), issue('b', 'warning', true), issue('cmyk-1', 'warning'), issue('c', 'problem')]);
+    expect(w).toEqual({ headline: '⛔ 1 problem to fix before printing', more: ['2 boxes still have example text or no picture', '🎨 1 colour will print duller'], urgent: true });
+    expect(exportWarningFor([issue('a', 'warning', true)])).toEqual({ headline: '1 box still has example text or no picture', more: [], urgent: false });
+  });
+});
+
 describe('dismissed check items', () => {
   const issues = [
     { id: 'ph-a', severity: 'warning', title: 'A', detail: '' },
@@ -103,5 +113,4 @@ describe('dismissed check items', () => {
     expect(withDismissed(['a', 'b'], ['a'], false)).toEqual(['b']);
     expect(withDismissed(['a'], ['a'], false)).toBeUndefined();
   });
-
 });

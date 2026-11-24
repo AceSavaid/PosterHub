@@ -1,4 +1,3 @@
-import AppearanceMenu from './AppearanceMenu';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Poster } from '../types';
 import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFile, readText, savePoster, storageInfo } from '../lib/storage';
@@ -12,6 +11,8 @@ import { lazyPart } from '../lib/lazyPart';
 import { hashPosterId, pushPosterEntry } from '../lib/posterHistory';
 import ConfirmDialog from './ConfirmDialog';
 import SupportFooter from './SupportFooter';
+import ContextMenu from './ContextMenu';
+import { posterActionItems } from './posterActions';
 
 // PowerPoint import is rarely used, so it loads only when someone picks a file.
 const SlidePicker = lazy(() => import('./SlidePicker'));
@@ -20,11 +21,12 @@ const loadPptx = () => import('../lib/pptxImport');
 const NewPosterDialog = lazyPart(() => import('./NewPosterDialog'));
 const SettingsDialog = lazyPart(() => import('./SettingsDialog'));
 const CopySizeDialog = lazyPart(() => import('./CopySizeDialog'));
+const SaveTemplateDialog = lazyPart(() => import('./SaveTemplateDialog'));
 
 const fmtSize = (p: Poster) => `${Math.round(p.width)} × ${Math.round(p.height)} mm · ${p.width > p.height ? 'landscape' : 'portrait'}`;
 const fmtDate = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
-export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: string) => void }) {
+export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: string, start?: 'abstract') => void }) {
   const [posters, setPosters] = useState<Poster[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState('');
@@ -37,6 +39,8 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const [resizing, setResizing] = useState<Poster | null>(null);
+  const [templating, setTemplating] = useState<Poster | null>(null);
+  const [cardMenu, setCardMenu] = useState<{ x: number; y: number; poster: Poster } | null>(null);
   const [prefs, changePrefs] = useUiPrefs();
 
   const refresh = () => listPosters().then(setPosters).catch((e) => setError(String(e)));
@@ -55,7 +59,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
     return () => clearTimeout(t);
   }, []);
 
-  async function create(p: Poster) {
+  async function create(p: Poster, opts: { fromAbstract?: boolean } = {}) {
     pushPosterEntry(p.id); // before saving, so Safari's Back button keeps it (see pushPosterEntry)
     try {
       await savePoster(p);
@@ -66,7 +70,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
       return;
     }
     setCreating(false);
-    onOpen(p);
+    onOpen(p, undefined, opts.fromAbstract ? 'abstract' : undefined);
   }
 
   async function importProject() {
@@ -124,11 +128,6 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
     }
   }
 
-  async function duplicate(p: Poster) {
-    const copy = { ...structuredClone(p), id: uid(), name: p.name + ' (copy)', createdAt: Date.now(), updatedAt: Date.now() };
-    await savePoster(copy);
-    refresh();
-  }
 
   async function finishRename() {
     if (!renaming) return;
@@ -173,7 +172,6 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
           <button className="btn" onClick={importTemplate}>Import PowerPoint template</button>
           <button className="btn" onClick={importProject}>Open project file</button>
           <button className="btn primary" onClick={() => setCreating(true)}>+ New poster</button>
-          <AppearanceMenu />
           <button className="icon-btn" aria-label="Settings" title="Settings" onClick={() => setSettingsOpen(true)}>
             <GearIcon />
           </button>
@@ -184,8 +182,8 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
           <h1>My posters</h1>
           {!!posters?.length && <input className="search" placeholder="Search posters" aria-label="Search posters" value={query} onChange={(e) => setQuery(e.target.value)} />}
           {!!posters?.length && where?.kind === 'browser' && (
-            <button className="btn" onClick={backupAll} title="One file with every poster. Open it with “Open project file” to restore.">
-              Back up all posters
+            <button className="btn" onClick={backupAll} title="One project file with every poster. Open it with “Open project file” to restore.">
+              Download all posters
             </button>
           )}
         </div>
@@ -213,7 +211,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
               <strong>{prefs.lastBackupAt ? `Last backup ${backupDays} days ago.` : 'You haven’t made a backup yet.'}</strong> Your posters are only saved in this browser, so clearing browsing data
               would delete them.
             </p>
-            <button className="btn primary" onClick={backupAll}>Download backup</button>
+            <button className="btn primary" onClick={backupAll}>Download all posters</button>
             <button className="btn" onClick={() => changePrefs({ backupSnoozedUntil: snoozeUntil() })}>Remind me later</button>
           </div>
         )}
@@ -259,16 +257,20 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
                 <div className="muted small">{fmtSize(p)}</div>
                 <div className="muted small">Edited {fmtDate(p.updatedAt)}</div>
                 <div className="card-actions">
-                  <button className="link" onClick={() => onOpen(p)}>Open</button>
-                  <button className="link" onClick={() => setRenaming({ id: p.id, name: p.name })}>Rename</button>
-                  <button className="link" onClick={() => duplicate(p)}>Duplicate</button>
-                  <button className="link" onClick={() => setResizing(p)} aria-label={`Copy ${p.name} at another size`} title="Make a copy at another size or orientation, e.g. A1 landscape or an A4 handout">
-                    Copy at size…
+                  <button className="btn small-btn" onClick={() => onOpen(p)}>Open</button>
+                  <button
+                    className="icon-btn"
+                    aria-label={`More for ${p.name}`}
+                    title="Rename, copy, download, save as template or delete"
+                    aria-haspopup="menu"
+                    aria-expanded={cardMenu?.poster.id === p.id}
+                    onClick={(e) => {
+                      const r = e.currentTarget.getBoundingClientRect();
+                      setCardMenu({ x: r.left, y: r.bottom + 4, poster: p });
+                    }}
+                  >
+                    ⋯
                   </button>
-                  <button className="link" onClick={() => exportPosterFile(p)} title="Save a .poster.json copy you can open on another computer. For PDF or PowerPoint, open the poster and use Export.">
-                    Download backup
-                  </button>
-                  <button className="link danger" onClick={() => setDeleting(p)}>Delete</button>
                 </div>
               </div>
             </div>
@@ -280,13 +282,46 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
         <CopySizeDialog
           poster={resizing}
           onCancel={() => setResizing(null)}
-          onCopy={async (copy, message) => {
+          onCopy={async (copy, message, resized) => {
             setResizing(null);
             try {
               await savePoster(copy);
-              onOpen(copy, message);
+              // a resized copy usually needs a look straight away; an exact copy just joins the list
+              if (resized) onOpen(copy, message);
+              else refresh();
             } catch (e) {
               setError('Could not save the copy: ' + String(e));
+            }
+          }}
+        />
+      )}
+      {cardMenu && (
+        <ContextMenu
+          x={cardMenu.x}
+          y={cardMenu.y}
+          onClose={() => setCardMenu(null)}
+          items={posterActionItems({
+            onRename: () => setRenaming({ id: cardMenu.poster.id, name: cardMenu.poster.name }),
+            onCopy: () => setResizing(cardMenu.poster),
+            onDownload: () => exportPosterFile(cardMenu.poster),
+            onSaveTemplate: () => setTemplating(cardMenu.poster),
+            onDelete: () => setDeleting(cardMenu.poster),
+          })}
+        />
+      )}
+      {templating && (
+        <SaveTemplateDialog
+          poster={templating}
+          onCancel={() => setTemplating(null)}
+          onSave={async (name, keepPictures) => {
+            const p = templating;
+            setTemplating(null);
+            try {
+              const { saveAsTemplate } = await import('../lib/userTemplates');
+              const t = await saveAsTemplate(p, name, { keepPictures });
+              setNotice(`Saved “${t.name}” to My templates. Pick it under New poster → My templates.`);
+            } catch (e) {
+              setError('Could not save the template: ' + String(e));
             }
           }}
         />
@@ -299,7 +334,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
       {deleting && (
         <ConfirmDialog
           title={`Delete “${deleting.name}”?`}
-          message="This cannot be undone. Use “Download backup” first if you might want it again."
+          message="This cannot be undone. Use “Download project file” first if you might want it again."
           confirmLabel="Delete poster"
           danger
           onConfirm={() => remove(deleting)}

@@ -1,6 +1,7 @@
 import type { PosterElement } from '../types';
 import { isCropped } from './geometry';
 import { iconInfo } from './icons/library';
+import { htmlToText } from './sanitize';
 
 export const TYPE_NAMES: Record<string, string> = { title: 'Title', subtitle: 'Subtitle', heading: 'Section header', text: 'Text box', image: 'Image', chart: 'Graph', shape: 'Shape', table: 'Table', equation: 'Equation', icon: 'Icon' };
 
@@ -15,9 +16,7 @@ const textCache = new Map<string, string>();
 function plainText(html: string) {
   let text = textCache.get(html);
   if (text === undefined) {
-    // Parse in an inert document so nothing in the HTML can run.
-    const doc = new DOMParser().parseFromString(html.replace(/<br\s*\/?>/gi, ' '), 'text/html');
-    text = (doc.body.textContent ?? '').replace(/\s+/g, ' ').trim();
+    text = htmlToText(html).replace(/\s+/g, ' ').trim();
     if (textCache.size > 500) textCache.clear();
     textCache.set(html, text);
   }

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { Poster, ReviewNote } from '../types';
 import { MM_TO_PX } from '../model';
 import { MAX_AUTHOR_LENGTH, MAX_NOTE_LENGTH, authorName, notesOf, preview, timeAgo } from '../lib/notes';
@@ -153,6 +153,8 @@ function NoteCard({ note, number, left, top, onText, onResolve, onDelete, onClos
 }
 
 interface PanelProps {
+  /** the Check / Find / Notes switcher shown in place of the title */
+  switcher?: ReactNode;
   poster: Poster;
   reviewer: string;
   onReviewer: (name: string) => void;
@@ -170,7 +172,7 @@ interface PanelProps {
 
 /** Side list of all notes: add, find, resolve and delete them, and show or hide them on the poster. */
 export function NotesPanel(props: PanelProps) {
-  const { poster, reviewer, onReviewer, showNotes, onShowNotes, showResolved, onShowResolved, onAdd, onPick, onResolve, onDelete, onDeleteResolved, onClose } = props;
+  const { switcher, poster, reviewer, onReviewer, showNotes, onShowNotes, showResolved, onShowResolved, onAdd, onPick, onResolve, onDelete, onDeleteResolved, onClose } = props;
   const all = notesOf(poster);
   const openCount = all.filter((n) => !n.resolved).length;
   const resolvedCount = all.length - openCount;
@@ -178,7 +180,7 @@ export function NotesPanel(props: PanelProps) {
   return (
     <div className="check-panel notes-panel" role="dialog" aria-label="Review notes">
       <div className="check-head">
-        <strong>Review notes</strong>
+        {switcher ?? <strong>Review notes</strong>}
         <button className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
       </div>
       <p className="hint notes-hint">

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDialog } from '../lib/useDialog';
 import type { CitationStyle, Poster, RefKind, RefName, Reference } from '../types';
 import { uid } from '../model';
 import { pickFile } from '../lib/storage';
@@ -60,16 +61,8 @@ export default function ReferencesDialog({ poster, update, selectedTextId, onAdd
   useEffect(() => {
     box.current?.focus();
   }, []);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopPropagation();
-      if (editing) setEditing(null);
-      else onClose();
-    };
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [editing, onClose]);
+  // Esc leaves the reference being edited first, then closes the dialog.
+  const dialog = useDialog(() => (editing ? setEditing(null) : onClose()), 'refs-title');
 
   function addAll(found: Reference[], errors: string[]) {
     let added = 0;
@@ -113,7 +106,7 @@ export default function ReferencesDialog({ poster, update, selectedTextId, onAdd
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal wide refs-dialog" role="dialog" aria-modal="true" aria-labelledby="refs-title">
+      <div {...dialog} className="modal wide refs-dialog">
         <div className="refs-head">
           <h2 id="refs-title">References</h2>
           <button className="icon-btn" aria-label="Close" title="Close (Esc)" onClick={onClose}>✕</button>

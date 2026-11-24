@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { Issue } from '../lib/checks';
 import type { Poster } from '../types';
 import { findMisspellings, loadSpeller, type Misspelling, type Speller } from '../lib/spelling';
@@ -13,6 +13,8 @@ const ICON = { problem: '⛔', warning: '⚠️', tip: '💡' };
 export type CheckTab = 'problems' | 'spelling' | 'words' | 'conference';
 
 interface Props {
+  /** the Check / Find / Notes switcher shown in place of the title */
+  switcher?: ReactNode;
   issues: Issue[];
   /** items the person dismissed on this poster (still found by the check, just hidden) */
   dismissed?: Issue[];
@@ -45,6 +47,7 @@ interface Props {
 
 /** Poster problems, a spelling pass and word counts, in three tabs. */
 export default function CheckPanel(props: Props) {
+  const { switcher } = props;
   const { issues, tab, onTab, onClose } = props;
   const problems = issues.filter((i) => i.severity !== 'tip').length;
   const tabs: { id: CheckTab; label: string }[] = [
@@ -56,7 +59,7 @@ export default function CheckPanel(props: Props) {
   return (
     <div className="check-panel" role="dialog" aria-label="Poster check">
       <div className="check-head">
-        <strong>Poster check</strong>
+        {switcher ?? <strong>Poster check</strong>}
         <button className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
       </div>
       <div className="seg check-tabs" role="tablist">

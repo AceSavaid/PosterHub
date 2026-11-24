@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Poster } from '../types';
 import { BLOCK_TAG_NAMES, findInPoster, replaceAllInPoster, replaceInHtml, searchPattern, searchableText, type FindOptions, type PosterMatch } from '../lib/textTools';
 
 interface Props {
+  /** the Check / Find / Notes switcher shown in place of the title */
+  switcher?: ReactNode;
   poster: Poster;
   /** the poster page in the editor, used to highlight matches */
   posterNode: HTMLElement | null;
@@ -14,7 +16,7 @@ interface Props {
 }
 
 /** Find (and optionally replace) words across every text box on the poster. */
-export default function FindPanel({ poster, posterNode, onPick, onChange, onNotify, onClose }: Props) {
+export default function FindPanel({ poster, posterNode, onPick, onChange, onNotify, onClose, switcher }: Props) {
   const [query, setQuery] = useState('');
   const [replacement, setReplacement] = useState('');
   const [matchCase, setMatchCase] = useState(false);
@@ -84,7 +86,7 @@ export default function FindPanel({ poster, posterNode, onPick, onChange, onNoti
       }}
     >
       <div className="check-head">
-        <strong>Find and replace</strong>
+        {switcher ?? <strong>Find and replace</strong>}
         <button className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
       </div>
       <label className="find-field">

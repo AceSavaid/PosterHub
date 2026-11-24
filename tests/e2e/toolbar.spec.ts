@@ -29,8 +29,8 @@ test('no field in the Layout panel or the Export menu is cut off', async ({ page
   await page.setViewportSize({ width: 1280, height: 800 });
   await newPoster(page);
   await page.getByRole('tab', { name: 'Layout' }).click();
-  await expect(page.locator('.panel.left').getByRole('combobox', { name: 'Size', exact: true })).toBeVisible();
-  expect(await clippedFields(page, '.panel.left')).toEqual([]);
+  await expect(page.locator('.panel.right').getByRole('combobox', { name: 'Size', exact: true })).toBeVisible();
+  expect(await clippedFields(page, '.panel.right')).toEqual([]);
 
   await page.getByRole('button', { name: 'Export ▾' }).click();
   const bleed = page.getByLabel('Bleed');
@@ -83,7 +83,7 @@ test.describe('on a phone', () => {
 
     await page.getByRole('button', { name: 'More' }).click();
     const menu = page.getByRole('menu');
-    for (const item of ['Notes', 'Find and replace', 'Preview', 'Copy image', 'Redo', 'Zoom in', 'Zoom out', 'Fit to screen', 'Poster options…', 'Settings…', 'Keyboard shortcuts', 'Take the tour']) {
+    for (const item of ['Notes', 'Find and replace', 'Preview', 'Redo', 'Zoom in', 'Zoom out', 'Fit to screen', 'Poster options…', 'Settings…', 'Keyboard shortcuts', 'Take the tour']) {
       await expect(menu.getByRole('menuitem', { name: item })).toBeVisible();
     }
     await expect(menu.getByRole('menuitem', { name: 'Redo' })).toBeDisabled();
@@ -93,7 +93,7 @@ test.describe('on a phone', () => {
 
     await page.getByRole('button', { name: 'More' }).click();
     await page.getByRole('menuitem', { name: 'Poster options…' }).click();
-    await expect(page.getByRole('menuitem', { name: 'Duplicate this poster' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Make a copy…' })).toBeVisible();
   });
 
   test('the Export menu still opens from the phone toolbar', async ({ page }) => {
@@ -101,4 +101,88 @@ test.describe('on a phone', () => {
     await page.getByRole('button', { name: 'Export ▾' }).click();
     await expect(page.locator('#export-menu')).toBeVisible();
   });
+});
+
+test('the Export menu stays open when the pointer drifts off it', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await newPoster(page);
+  await page.getByRole('button', { name: 'Export ▾' }).click();
+  const menu = page.locator('#export-menu');
+  const box = (await menu.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + 40);
+  await page.mouse.move(box.x - 30, box.y + 40);
+  await expect(menu).toBeVisible();
+  // a click elsewhere still closes it
+  await page.locator('.stage').click({ position: { x: 10, y: 10 } });
+  await expect(menu).toBeHidden();
+});
+
+test('Check sits beside the poster area wherever the side panels are', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await newPoster(page);
+  const gapToStage = async () => {
+    const [panel, stage] = await Promise.all([page.locator('.check-panel').boundingBox(), page.locator('.stage').boundingBox()]);
+    return Math.round(stage!.x + stage!.width - (panel!.x + panel!.width));
+  };
+  await page.getByRole('button', { name: /^Check/ }).click();
+  expect(await gapToStage()).toBe(16);
+  // hide both panels: the Check panel follows the poster area's edge instead of floating mid-poster
+  await page.keyboard.press('Control+\\');
+  await expect(page.locator('.panel.right')).toHaveCount(0);
+  await expect.poll(gapToStage).toBe(16);
+});
+
+test('one Check button opens the review panel, which switches between Check, Find and Notes', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await newPoster(page);
+  // the top bar no longer has separate Notes, Find, Copy image or ? buttons
+  for (const gone of ['Notes', 'Find', 'Copy image', 'Help']) await expect(page.getByRole('button', { name: gone, exact: true })).toHaveCount(0);
+  await expect(page.locator('.topbar')).toHaveJSProperty('scrollWidth', await page.locator('.topbar').evaluate((n) => n.clientWidth));
+
+  await page.getByRole('button', { name: 'Text box', exact: true }).click(); // leaves example text, so Export has a warning
+  await page.getByRole('button', { name: /^Check/ }).click();
+  const sw = page.locator('.review-switch');
+  await expect(page.getByRole('dialog', { name: 'Poster check' })).toBeVisible();
+  await sw.getByRole('button', { name: 'Notes' }).click();
+  await expect(page.getByRole('dialog', { name: 'Review notes' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Poster check' })).toHaveCount(0);
+  // the Check button closes whichever is showing
+  await page.getByRole('button', { name: /^Check/ }).click();
+  await expect(sw).toHaveCount(0);
+
+  await page.getByRole('button', { name: /^Check/ }).click();
+  await sw.getByRole('button', { name: 'Notes' }).click();
+  await page.getByRole('button', { name: 'Export ▾' }).click();
+  await page.locator('#export-menu .menu-note').click();
+  await expect(page.getByRole('dialog', { name: 'Poster check' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Review notes' })).toHaveCount(0);
+  await page.keyboard.press('Control+f');
+  await expect(page.locator('.find-panel')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Poster check' })).toHaveCount(0);
+});
+
+test('Properties shows the whole poster’s settings when nothing is selected', async ({ page }) => {
+  await newPoster(page);
+  const props = page.getByRole('complementary', { name: 'Properties' });
+  await expect(props.getByRole('heading', { name: 'Poster' })).toBeVisible();
+  await expect(props.getByRole('tab', { name: 'Layout' })).toHaveAttribute('aria-selected', 'true');
+  // the left panel is just for adding things now
+  await expect(page.locator('.panel.left').getByRole('tab')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Text box', exact: true }).click();
+  await expect(props.getByRole('heading', { name: 'Text box' })).toBeVisible();
+  await props.getByRole('button', { name: 'Poster settings' }).click();
+  await expect(props.getByRole('heading', { name: 'Poster' })).toBeVisible();
+});
+
+test('Export keeps each format’s options under it and remembers the PNG quality', async ({ page }) => {
+  await newPoster(page);
+  await page.getByRole('button', { name: 'Export ▾' }).click();
+  const menu = page.locator('#export-menu');
+  const names = await menu.locator(':scope > button strong').allTextContents();
+  expect(names).toEqual(['PDF', 'PNG image', 'Copy as image', 'PowerPoint (.pptx)', 'Project file (.poster.json)']);
+  await menu.getByRole('combobox').last().selectOption('300');
+  await page.reload();
+  await expect(page.locator('.poster')).toBeVisible();
+  await page.getByRole('button', { name: 'Export ▾' }).click();
+  await expect(menu.getByRole('combobox').last()).toHaveValue('300');
 });

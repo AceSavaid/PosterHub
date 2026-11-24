@@ -61,7 +61,6 @@ test('previews the poster as colour-blind readers and greyscale print see it', a
   // the filter really changes what is drawn: a red box looks olive under deuteranopia
   await page.getByRole('tab', { name: 'Design', exact: true }).click();
   await page.getByRole('button', { name: 'Sunset' }).first().click(); // primary #c0392b
-  await page.getByRole('tab', { name: 'Insert', exact: true }).click();
   await page.getByRole('button', { name: 'Box / panel', exact: true }).click();
   await page.getByRole('button', { name: 'Primary (follows palette)' }).click();
   await page.locator('.stage').click({ position: { x: 5, y: 5 } }); // deselect so handles don't cover it

@@ -18,8 +18,8 @@ test('warns about colours that print dull and swaps in a printable one', async (
   await page.locator('aside.panel.right input[type="color"]').first().fill('#0000ff');
 
   await page.getByRole('button', { name: 'Export ▾' }).click();
-  await expect(page.getByRole('button', { name: /colour\(s\) will print duller/ })).toBeVisible();
-  await page.getByRole('button', { name: /colour\(s\) will print duller/ }).click();
+  await expect(page.getByRole('button', { name: /colours? will print duller/ })).toBeVisible();
+  await page.getByRole('button', { name: /colours? will print duller/ }).click();
 
   const panel = page.getByRole('dialog', { name: 'Poster check' });
   await expect(panel).toContainText('#0000FF will print duller than on screen');

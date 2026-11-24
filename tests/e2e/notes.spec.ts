@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
 async function newPoster(page: Page, name = 'Notes test', template = 'Classic columns') {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Poster title').fill(name);
   await page.getByLabel('Size').selectOption('A4');
   await page.getByRole('button', { name: new RegExp('^' + template) }).click();
   await page.getByRole('button', { name: 'Create poster' }).click();
@@ -88,7 +88,7 @@ test('adds, edits, resolves, reopens and deletes notes; all of it can be undone'
   await expect(notesPanel(page).locator('.note-text')).toHaveText('Shorter title?\nMaybe drop "novel".');
 
   // typing in the note did not touch the poster's text
-  await expect(page.locator('.poster .el-title')).toContainText('Your Poster Title');
+  await expect(page.locator('.poster .el-title')).toContainText('Notes test');
 
   // Esc closes the card; clicking the pin opens it again
   await page.getByLabel('Note text').press('Escape');
@@ -185,7 +185,7 @@ test('notes never appear in PDF, PowerPoint, PNG or copied images, but travel in
 
   const pdf = await download(page, /^PDF/);
   const text = await pdfText(pdf.data);
-  expect(text).toContain('Your Poster Title Goes Here');
+  expect(text).toContain('Shared draft');
   expect(text).not.toContain(secret);
   expect(text).not.toContain('Prof. Ada');
 

@@ -79,7 +79,7 @@ test('dialogs take focus, keep Tab inside, close on Escape and hand focus back',
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'New poster' });
   await expect(dialog).toHaveAttribute('aria-modal', 'true');
-  await expect(page.getByLabel('Name')).toBeFocused();
+  await expect(page.getByLabel('Poster title')).toBeFocused();
   for (let i = 0; i < 40; i++) {
     await page.keyboard.press('Tab');
     expect(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))).toBe(true);

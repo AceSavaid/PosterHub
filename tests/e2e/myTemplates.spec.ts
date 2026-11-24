@@ -8,8 +8,9 @@ const els = (page: Page) => page.locator('.poster > .el');
 async function makeStyledPoster(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  await page.getByLabel('Name').fill('Sleep study');
+  await page.getByLabel('Poster title').fill('Sleep study');
   await page.getByRole('button', { name: /^Boxed sections/ }).click();
+  await page.getByText('More options').click();
   await page.getByRole('button', { name: 'Dark Mode' }).click();
   await page.getByLabel('Heading font').selectOption('Lora');
   await page.getByRole('button', { name: 'Create poster' }).click();
@@ -57,14 +58,14 @@ test('saves a poster as my template and makes a new poster from it', async ({ pa
   await expect(page.getByText('Using your template “Lab style”')).toBeVisible();
   // size, colour and font choices are hidden: the template brings its own
   await expect(page.getByLabel('Heading font')).toHaveCount(0);
-  await page.getByLabel('Name', { exact: true }).fill('Second study');
+  await page.getByLabel('Poster title').fill('Second study');
   await page.getByRole('button', { name: 'Create poster' }).click();
 
   await expect(page.locator('.poster')).toBeVisible();
   await expect(page.getByLabel('Poster name')).toHaveValue('Second study');
   await expect(els(page)).toHaveCount(count);
-  // example text instead of the old title, same headings, logo kept, same colours and fonts
-  await expect(page.locator('.poster .el-title .el-body')).toHaveText('Your Poster Title Goes Here');
+  // the new title instead of the old one, same headings, logo kept, same colours and fonts
+  await expect(page.locator('.poster .el-title .el-body')).toHaveText('Second study');
   await expect(page.locator('.poster .el-heading', { hasText: 'Methods' })).toHaveCount(1);
   await expect(page.locator('.poster .el-image img')).toHaveCount(1);
   await expect(page.locator('.poster')).toHaveCSS('background-color', 'rgb(20, 24, 31)');

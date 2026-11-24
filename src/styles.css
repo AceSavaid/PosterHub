@@ -223,6 +223,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 
 /* ---------------- Stage + poster */
 .stage { flex: 1; overflow: auto; background: var(--stage); position: relative; }
+.stage-wrap { flex: 1; min-width: 0; display: flex; position: relative; }
 .stage-inner { min-width: 100%; min-height: 100%; display: flex; align-items: flex-start; justify-content: center; padding: 32px; width: max-content; }
 .surface-scroll-size { position: relative; flex-shrink: 0; margin: auto; }
 .poster { position: absolute; top: 0; left: 0; transform-origin: 0 0; box-shadow: 0 4px 24px rgba(0,0,0,.25); overflow: hidden; }
@@ -346,7 +347,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 /* Tablets held upright: the poster gets the full width on top and the two panels sit side by side underneath. */
 @media (max-width: 1024px) and (orientation: portrait) {
   .workspace { flex-wrap: wrap; align-content: stretch; }
-  .stage { order: -1; flex: 1 0 100%; height: 58%; }
+  .stage-wrap { order: -1; flex: 1 0 100%; height: 58%; }
   .panel, .panel.right { flex: 1 1 0; width: auto; height: 42%; border: none; border-top: 1px solid var(--line); }
   .panel.left { border-right: 1px solid var(--line); }
   .panel-reveal { height: 42%; border-top: 1px solid var(--line); }
@@ -354,7 +355,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 /* Phones: poster on top, then the panels one under the other; the page area scrolls. */
 @media (max-width: 680px) {
   .workspace { flex-direction: column; flex-wrap: nowrap; overflow-y: auto; }
-  .stage { order: -1; flex: 0 0 auto; height: 55vh; }
+  .stage-wrap { order: -1; flex: 0 0 auto; height: 55vh; }
   .panel, .panel.right { flex: 0 0 auto; width: 100%; height: auto; max-height: 45vh; border: none; border-top: 1px solid var(--line); }
   .panel-reveal { height: auto; }
   .form-grid { grid-template-columns: 1fr; }
@@ -862,3 +863,41 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 :root[data-ui-size] .check-panel.notes-panel { right: 6px; }
 :root[data-ui-size] .workspace.swapped ~ .notes-panel { right: auto; left: 6px; }
 .notes-panel .review-switch button { padding: 6px 6px; font-size: 12px; }
+
+/* New poster: colours, columns, fonts, brand kit and saved templates fold away under "More options". */
+.more-options { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.more-options > summary { cursor: pointer; font-weight: 600; }
+.more-options > summary .muted { font-weight: 400; }
+.more-options[open] > summary { margin-bottom: 12px; }
+
+/* Check: leftover example text grouped into one to-do with a "Go to an empty box" button */
+.issue.leftovers { display: flex; flex-direction: column; gap: 8px; padding: 8px 8px 8px 12px; border: 1px solid var(--line); border-left: 4px solid #f29900; border-radius: 8px; background: var(--bg); }
+.issue.leftovers button { width: auto; padding: 2px 4px; border: none; background: none; }
+.issue.leftovers .fill-next-btn { align-self: flex-start; margin-left: 26px; padding: 6px 12px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-fg); font-weight: 600; border-radius: 6px; }
+.issue.leftovers .fill-next-btn:hover { background: var(--accent); filter: brightness(1.08); }
+.issue.leftovers .leftover-head { display: flex; gap: 8px; }
+.issue.leftovers .leftover-head > span:last-child { display: flex; flex-direction: column; }
+.leftover-list { margin-left: 26px; }
+.leftover-list summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.leftover-list ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.leftover-list li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.leftover-list .link { text-align: left; }
+.issue .issue-dismiss.inline { position: static; }
+/* "3 of 11 filled · Next box": a pill at the bottom of the poster area, out of the way of the top bar */
+.fill-next { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 5; white-space: nowrap; font-variant-numeric: tabular-nums; border-radius: 999px; padding: 8px 16px; gap: 10px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); }
+.fill-next .fill-count { color: var(--muted); font-weight: 400; }
+.fill-next .fill-go { font-weight: 600; color: var(--accent); }
+
+/* Floating text toolbar above the words being typed */
+.text-toolbar { position: fixed; z-index: 60; display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.16); }
+.text-toolbar .fmt { min-width: 30px; height: 30px; padding: 0 6px; border-color: transparent; }
+.text-toolbar .fmt:hover { background: var(--bg2); }
+.text-toolbar .swatch { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); padding: 0; margin: 0 2px; cursor: pointer; }
+.text-toolbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
+@media (max-width: 600px) { .text-toolbar .swatch:nth-of-type(n+4) { display: none; } }
+
+/* Properties: background, border, position and size fold away under one heading */
+.more-props { border-top: 1px solid var(--bg3); padding-top: 8px; }
+.more-props > summary { cursor: pointer; font-size: 13px; font-weight: 600; color: var(--muted); padding: 4px 0; }
+.more-props[open] > summary { margin-bottom: 8px; }
+.more-props > section { margin-bottom: 10px; }

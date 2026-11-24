@@ -22,10 +22,11 @@ async function paste(page: Page, html: string, text: string, plain = false) {
   await page.locator('.el.editing .el-body').evaluate(
     (node, { html, text, plain }) => {
       if (plain) node.dispatchEvent(new KeyboardEvent('keydown', { key: 'V', code: 'KeyV', ctrlKey: true, shiftKey: true, bubbles: true }));
-      const dt = new DataTransfer();
-      dt.setData('text/html', html);
-      dt.setData('text/plain', text);
-      node.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+      // Firefox empties the clipboard of a paste event made by a script, so hand the data over directly
+      const data: Record<string, string> = { 'text/html': html, 'text/plain': text };
+      const ev = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(ev, 'clipboardData', { value: { getData: (t: string) => data[t] ?? '', types: Object.keys(data), files: [] } });
+      node.dispatchEvent(ev);
     },
     { html, text, plain },
   );

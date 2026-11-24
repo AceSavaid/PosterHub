@@ -12,6 +12,7 @@
 import type { Orientation, Poster, PosterElement } from '../types';
 import { SIZE_PRESETS, TEMPLATES, buildTemplate, sizeFor, typeScale, uid, type TemplateId } from '../model';
 import { applyLayout, describeReport, sectionHeadings } from './relayout';
+import { syncCaptions } from './captions';
 
 export type CopyMode = 'scale' | 'rearrange';
 
@@ -141,12 +142,16 @@ export function copyAtSize(p: Poster, o: CopyOptions): { poster: Poster; message
   copy.height = o.height;
   copy.sizePreset = o.sizePreset;
 
-  if (!rearrange) return { poster: copy, message: `Made a ${label} copy with everything scaled to fit.` };
+  if (!rearrange) {
+    syncCaptions(copy);
+    return { poster: copy, message: `Made a ${label} copy with everything scaled to fit.` };
+  }
 
   copy.columns = Math.min(6, Math.max(1, Math.round(o.columns ?? suggestColumns(p, o.width, o.height))));
   const template = o.template ?? guessLayout(p);
   const { elements, report } = applyLayout(copy, template);
   copy.elements = keepIds(elements);
+  syncCaptions(copy);
   const moved = describeReport(report).replace(/^Layout applied\. ?/, '').replace(/ ?Undo with Ctrl\/⌘ Z\.$/, '');
   return { poster: copy, message: `Made a ${label} copy in ${copy.columns} column${copy.columns > 1 ? 's' : ''}. ${moved}`.trim() };
 }

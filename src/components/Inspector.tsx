@@ -2,7 +2,8 @@ import { useState, type ReactNode } from 'react';
 import type { EquationSpec, IconSpec, Poster, PosterElement, TableSpec, TableStyleId, TextStyle } from '../types';
 import { TABLE_STYLES, cellLook, normalizeTable } from '../lib/table';
 import { useDataFile } from './DataFilePicker';
-import type { TableAction } from './Editor';
+import type { CaptionAction, TableAction } from './Editor';
+import { canCaption, captionOf, captionText, figureNumbers } from '../lib/captions';
 import { typesetLatex } from '../lib/math';
 import { useMathReady } from '../lib/useMath';
 import { useIconsReady } from '../lib/useIcons';
@@ -67,6 +68,8 @@ interface Props {
   onConvertTable?: () => void;
   /** replace the table's cells with ones read from an Excel or CSV file */
   onFillTable?: (cells: string[][]) => void;
+  /** numbered captions for images, graphs and tables (figure id, action) */
+  onCaption?: (figId: string, a: CaptionAction) => void;
 }
 
 const ALIGN: { mode: AlignMode; label: string; icon: string }[] = [
@@ -408,6 +411,8 @@ export default function Inspector(props: Props) {
           </section>
         )}
 
+        {canCaption(el) && props.onCaption && <CaptionSection key={'caption-' + el.id} poster={poster} el={el} onCaption={props.onCaption} />}
+
         {el.type === 'image' && <QrSection key={el.id} el={el} onChange={onChange} />}
 
         {el.type === 'chart' && (
@@ -424,6 +429,16 @@ export default function Inspector(props: Props) {
               Description (alt text)
               <textarea rows={2} value={el.alt ?? ''} placeholder="What does it show? Read aloud by screen readers." onChange={(e) => onChange({ alt: e.target.value || undefined }, 'alt')} />
             </label>
+          </section>
+        )}
+
+        {el.captionOf && props.onCaption && (
+          <section className="caption-note">
+            <h4>Caption</h4>
+            <p className="hint">
+              This is the caption of {figureNumbers(poster).get(el.captionOf) ?? 'a figure'}. It stays with the figure, and its number updates by itself.
+            </p>
+            <button className="btn small-btn" onClick={() => props.onCaption!(el.captionOf!, { kind: 'select', id: el.captionOf! })}>Select the figure</button>
           </section>
         )}
 
@@ -867,6 +882,46 @@ function EquationSection({ poster, el, onChange, onEdit }: { poster: Poster; el:
       <div className="field-label">Colour</div>
       <ColorInput value={eq.color} palette={poster.palette} onChange={(c) => set({ color: c ?? '@text' })} />
       <p className="hint">If the box is too small the equation shrinks to fit; drag a corner to make it bigger.</p>
+    </section>
+  );
+}
+
+/** Add a numbered caption ("Figure 1: …") above or below an image, graph or table. */
+function CaptionSection({ poster, el, onCaption }: { poster: Poster; el: PosterElement; onCaption: NonNullable<Props['onCaption']> }) {
+  const cap = captionOf(poster, el.id);
+  const label = figureNumbers(poster).get(el.id);
+  const what = el.type === 'table' ? 'table' : el.type === 'chart' ? 'graph' : 'picture';
+  if (!cap)
+    return (
+      <section className="caption-section">
+        <h4>Caption</h4>
+        <p className="hint">Add a numbered description. Numbers (Figure 1, Figure 2{el.type === 'table' ? '; tables get Table 1, 2' : ''}…) follow the reading order and update by themselves.</p>
+        <div className="toolbar-row">
+          <button className="btn" onClick={() => onCaption(el.id, { kind: 'add', pos: 'below' })}>Add caption below</button>
+          <button className="btn small-btn" onClick={() => onCaption(el.id, { kind: 'add', pos: 'above' })}>Above</button>
+        </div>
+      </section>
+    );
+  return (
+    <section className="caption-section">
+      <h4>Caption{label ? ` · ${label}` : ''}</h4>
+      <label>
+        Caption text
+        <textarea
+          id="caption-text"
+          rows={3}
+          value={captionText(cap)}
+          placeholder={`Describe what the ${what} shows.`}
+          onChange={(e) => onCaption(el.id, { kind: 'text', text: e.target.value })}
+        />
+      </label>
+      <div className="toolbar-row" role="group" aria-label="Caption position">
+        <button className={'fmt wide' + (cap.captionPos === 'above' ? ' on' : '')} aria-pressed={cap.captionPos === 'above'} onClick={() => onCaption(el.id, { kind: 'pos', pos: 'above' })}>Above</button>
+        <button className={'fmt wide' + (cap.captionPos !== 'above' ? ' on' : '')} aria-pressed={cap.captionPos !== 'above'} onClick={() => onCaption(el.id, { kind: 'pos', pos: 'below' })}>Below</button>
+        <span className="sep" />
+        <button className="btn small-btn" onClick={() => onCaption(el.id, { kind: 'remove' })}>Remove caption</button>
+      </div>
+      <p className="hint">To change the caption's font or size, click it on the poster.</p>
     </section>
   );
 }

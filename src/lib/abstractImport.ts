@@ -135,7 +135,7 @@ export function splitSentences(text: string): string[] {
   const out: string[] = [];
   for (const para of text.split('\n')) {
     let cur = '';
-    const pieces = para.split(/(?<=[.!?][”"’')\]]?)\s+(?=[A-Z0-9“"‘'(\[])/);
+    const pieces = para.split(/(?<=[.!?][”"’')\]]?)\s+(?=[A-Z0-9“"‘'([])/);
     for (const piece of pieces) {
       cur = cur ? `${cur} ${piece}` : piece;
       if (!ABBREV.test(cur) && !/\b[A-Z]\.$/.test(cur)) {

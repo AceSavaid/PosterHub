@@ -190,6 +190,12 @@ export interface PosterElement {
   rotation?: number;
   /** part of the image to show, as fractions of the original (0–1) */
   crop?: CropRect;
+  /** This text box is the numbered caption of the image, graph or table with this id. */
+  captionOf?: string;
+  /** which side of its figure the caption sits on (default below) */
+  captionPos?: 'above' | 'below';
+  /** mm of height the figure gave up to make room for the caption; given back when it is removed */
+  captionRoom?: number;
 }
 
 export interface CropRect {

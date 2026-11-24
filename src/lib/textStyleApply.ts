@@ -22,7 +22,7 @@ export function defaultLook(p: Poster, name: TextStyleName): TextStyle {
 /** The look of a style on this poster: copied from the first other box that uses it, else the built-in look. */
 export function lookOf(p: Poster, name: TextStyleName, except?: string): TextStyle {
   const other = p.elements.find((e) => e.id !== except && styleNameOf(e) === name);
-  return structuredClone(other?.style ?? defaultLook(p, name));
+  return { ...(other?.style ?? defaultLook(p, name)) }; // a flat copy: inside an edit the style is a draft, which structuredClone can't copy
 }
 
 /** Gives box `id` a style: its type, role and look change, its words stay. Returns false if it can't take one. */
@@ -54,7 +54,7 @@ export function updateStyleToMatch(p: Poster, id: string): number {
   let n = 0;
   for (const e of p.elements) {
     if (e.id === id || styleNameOf(e) !== name) continue;
-    e.style = { ...structuredClone(el.style!), align: e.style!.align };
+    e.style = { ...el.style!, align: e.style!.align };
     n++;
   }
   return n;

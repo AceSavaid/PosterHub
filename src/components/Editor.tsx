@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { current } from 'immer';
 import type { ChartSpec, ElementType, EquationSpec, Poster, PosterElement, ReviewNote, TableSpec } from '../types';
 import { MM_TO_PX, makeElement, tableHeightMm, uid } from '../model';
 import { cellsFromClipboard, deleteColumn, deleteRow, insertColumn, insertRow, normalizeTable, tableFromHtml, tableToCsv, tableToTsv } from '../lib/table';
@@ -1315,7 +1316,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
         if (contact) {
           const w = el.w;
           el.w = w * 0.72;
-          d.elements.push({ ...structuredClone(el), id: uid(), x: el.x + w * 0.75, w: w * 0.25, html: contact, refList: undefined, refTitle: undefined });
+          d.elements.push({ ...structuredClone(current(el)), id: uid(), x: el.x + w * 0.75, w: w * 0.25, html: contact, refList: undefined, refTitle: undefined });
         }
         el.refList = true;
         el.refTitle = 'References';

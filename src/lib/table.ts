@@ -259,7 +259,7 @@ function onFill(fill: string, text: string): string {
  * How one cell looks in a given table style. The editor, the PDF and the
  * PowerPoint export all use this so the table looks the same everywhere.
  */
-export function cellLook(t: TableSpec, palette: Palette, r: number, c: number): CellLook {
+export function cellLook(t: TableSpec, palette: Palette, r: number, _c: number): CellLook {
   const text = resolveColor('@text', palette);
   const bg = resolveColor('@background', palette);
   const primary = resolveColor('@primary', palette);

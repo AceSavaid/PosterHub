@@ -66,7 +66,7 @@ export interface RestorePlan {
 }
 
 /** Never overwrites newer work: a poster edited since the backup keeps its current version. */
-export function planRestore(library: Poster[], backup: Poster[]): RestorePlan {
+export function planRestore(library: Pick<Poster, 'id' | 'updatedAt'>[], backup: Poster[]): RestorePlan {
   const have = new Map(library.map((p) => [p.id, p]));
   const plan: RestorePlan = { add: [], replace: [], keep: [] };
   for (const p of backup) {
@@ -93,7 +93,7 @@ export function restoreMessage(plan: RestorePlan, skipped: number) {
  * Days since the library was last backed up, counted from the first poster's
  * creation when there has never been a backup. Null when nothing needs backing up.
  */
-export function daysSinceBackup(posters: Poster[], lastBackupAt: number, now = Date.now()): number | null {
+export function daysSinceBackup(posters: Pick<Poster, 'createdAt' | 'updatedAt'>[], lastBackupAt: number, now = Date.now()): number | null {
   const changed = posters.filter((p) => (p.updatedAt ?? 0) > lastBackupAt);
   if (!changed.length) return null;
   const since = lastBackupAt || Math.min(...posters.map((p) => p.createdAt || p.updatedAt || now));
@@ -101,7 +101,7 @@ export function daysSinceBackup(posters: Poster[], lastBackupAt: number, now = D
 }
 
 /** Whether the library page should show the weekly backup reminder. */
-export function backupDue(posters: Poster[], prefs: Pick<UiPrefs, 'backupReminder' | 'lastBackupAt' | 'backupSnoozedUntil'>, now = Date.now()) {
+export function backupDue(posters: Pick<Poster, 'createdAt' | 'updatedAt'>[], prefs: Pick<UiPrefs, 'backupReminder' | 'lastBackupAt' | 'backupSnoozedUntil'>, now = Date.now()) {
   if (!prefs.backupReminder || now < prefs.backupSnoozedUntil) return false;
   const days = daysSinceBackup(posters, prefs.lastBackupAt, now);
   return days !== null && days >= BACKUP_EVERY_DAYS;

@@ -83,6 +83,8 @@ test("fills a template's author line instead of adding a new box", async ({ page
 test('Escape closes the dialog without changes (asking first, once something was typed)', async ({ page }) => {
   await newPoster(page);
   await page.getByRole('button', { name: 'Authors and affiliations…' }).click();
+  // The dialog loads on first use: wait for it, or Escape lands before it opens.
+  await expect(dialog(page)).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog(page)).toHaveCount(0);
   await page.getByRole('button', { name: 'Authors and affiliations…' }).click();

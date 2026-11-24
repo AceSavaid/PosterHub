@@ -4,6 +4,7 @@
 import DOMPurify from 'dompurify';
 import { cleanRules } from './conference';
 import type { Poster, PosterElement } from '../types';
+import { cleanHeadingIcon } from './headingIcon';
 
 /** The formatting tags text boxes use. Anything else is dropped, keeping its text. */
 const TAGS = [
@@ -69,6 +70,11 @@ export function sanitizeElement(el: PosterElement): PosterElement {
       const c2 = safeColor(ic.color2);
       if (c2) el.icon.color2 = c2;
     } else delete el.icon;
+  }
+  if (el.headingIcon != null) {
+    const hi = cleanHeadingIcon(el.headingIcon, safeColor);
+    if (hi) el.headingIcon = hi;
+    else delete el.headingIcon;
   }
   if (el.src != null) {
     const s = safeImageUrl(el.src);

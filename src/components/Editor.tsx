@@ -32,7 +32,7 @@ import { fillProgress, nextToFill } from '../lib/fillProgress';
 import TextToolbar from './TextToolbar';
 import SettingsDialog from './SettingsDialog';
 import GearIcon from './GearIcon';
-import { keys } from '../lib/keys';
+import { isCommandSearchKey, keys } from '../lib/keys';
 import { downloadLibraryBackup } from '../lib/backup';
 import type { FillPlan } from '../lib/abstractImport';
 import { PLACEHOLDER_TEXT } from '../lib/checks';
@@ -53,6 +53,8 @@ import type { VisionMode } from '../lib/colorVision';
 import { hasSeenTour, markTourSeen } from '../lib/tour';
 import { lazyPart } from '../lib/lazyPart';
 import { loadChartJs } from '../lib/chartjs';
+import type { CommandContext } from '../lib/commandList';
+import { scaleContent } from '../lib/copyAtSize';
 
 // Dialogs most sessions never open download on first use, keeping the editor quick to open.
 const ChartDialog = lazyPart(() => import('./ChartDialog'));
@@ -65,6 +67,7 @@ const AbstractDialog = lazyPart(() => import('./AbstractDialog'));
 const SaveTemplateDialog = lazyPart(() => import('./SaveTemplateDialog'));
 const CopySizeDialog = lazyPart(() => import('./CopySizeDialog'));
 const ReferencesDialog = lazyPart(() => import('./ReferencesDialog'));
+const CommandSearch = lazyPart(() => import('./CommandSearch'));
 const Tour = lazyPart(() => import('./Tour'));
 
 /** Start of the example reference in starter templates. */
@@ -180,6 +183,8 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
   const [reviewer, setReviewer] = useState(loadReviewerName);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  /** "Search the menus" (Alt+/) */
+  const [commandOpen, setCommandOpen] = useState(false);
   // The top bar wraps onto two rows with a bigger interface; floating panels sit under its real height.
   const topbarRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -742,7 +747,13 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
   const shortcuts = useLatest((() => {
     const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     const onKey = (e: KeyboardEvent) => {
-      if (viewing || chartDialog || authorsDialog || confirmDelete || eqDialog || settingsOpen || shortcutsOpen) return;
+      if (viewing || chartDialog || authorsDialog || confirmDelete || eqDialog || settingsOpen || shortcutsOpen || commandOpen) return;
+      // Alt+/ works even while typing, as in Google Docs
+      if (isCommandSearchKey(e) && !document.querySelector('[aria-modal="true"]')) {
+        e.preventDefault();
+        setCommandOpen(true);
+        return;
+      }
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
@@ -1102,7 +1113,123 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
     return items;
   }
 
+  function setOrientation(o: 'portrait' | 'landscape') {
+    const p = posterRef.current;
+    if ((p.width > p.height ? 'landscape' : 'portrait') === o) return notify(`The poster is already ${o}.`);
+    update((d) => {
+      const w = d.height;
+      const h = d.width;
+      scaleContent(d, w, h);
+      d.width = w;
+      d.height = h;
+    });
+    notify(`The poster is now ${o === 'landscape' ? 'landscape (wide)' : 'portrait (tall)'}.`, { label: 'Undo', run: undo });
+  }
+
+  /** What "Search the menus" (Alt+/) can do; the list of commands itself loads with the search box. */
+  function commandContext(): CommandContext {
+    const posterTab = (tab?: string) => {
+      setEditingId(null);
+      setSelectedIds([]);
+      setPrefs({ showProperties: true });
+      if (tab) setTimeout(() => document.getElementById(tab)?.click(), 50);
+    };
+    const opens: Record<Parameters<CommandContext['open']>[0], () => void> = {
+      authors: () => openAuthors(),
+      refs: () => setRefsOpen(true),
+      equation: () => openEquation(),
+      image: () => chooseImage(),
+      chart: () => setChartDialog({}),
+      qr: insertQr,
+      icons: () => {
+        setPrefs({ showTools: true });
+        setTimeout(() => document.querySelector<HTMLInputElement>('.icon-search input')?.focus(), 50);
+      },
+      poster: () => posterTab(),
+      design: () => posterTab('tab-design'),
+      abstract: () => setAbstractOpen(true),
+      rename: () => document.querySelector<HTMLInputElement>('.poster-name')?.select(),
+      copySize: () => setCopySizeOpen(true),
+      template: () => setTemplateDialog(true),
+      deletePoster: () => setConfirmDelete(true),
+      find: () => setSidePanel('find'),
+      notes: () => setSidePanel('notes'),
+      note: () => addNote(),
+      preview: () => setViewing(true),
+      settings: () => setSettingsOpen(true),
+      shortcuts: () => setShortcutsOpen(true),
+      tour: () => setTouring(true),
+    };
+    const edits: Record<Parameters<CommandContext['edit']>[0], () => void> = {
+      undo,
+      redo,
+      selectAll: () => setSelectedIds(posterRef.current.elements.filter((x) => !x.locked).map((x) => x.id)),
+      duplicate: () => duplicate(),
+      delete: removeSelected,
+      group: groupSelected,
+      ungroup: ungroupSelected,
+      front: () => layer('front'),
+      back: () => layer('back'),
+    };
+    const panelsShown = prefs.showTools || prefs.showProperties;
+    const views: Record<Parameters<CommandContext['view']>[0], () => void> = {
+      zoomIn: () => setZoom((z) => Math.min(4, z * 1.25)),
+      zoomOut: () => setZoom((z) => Math.max(0.02, z / 1.25)),
+      fit,
+      grid: () => setShowGrid(!showGrid),
+      snap: () => setSnap(!snap),
+      panels: () => setPrefs({ showTools: !panelsShown, showProperties: !panelsShown }),
+    };
+    return {
+      insert,
+      open: (w) => opens[w](),
+      edit: (w) => edits[w](),
+      view: (w) => views[w](),
+      check: (tab) => {
+        runCheck();
+        setCheckTab(tab);
+        setSidePanel('check');
+      },
+      vision: setVision,
+      orientation: setOrientation,
+      exportAs: (k) => (k === 'copyImage' ? copyImage() : runExport(k)),
+      can: { undo: canUndo, redo: canRedo, group: canGroup(selectedIds, poster.elements), ungroup: canUngroup(selectedIds, poster.elements) },
+      hasSelection: selectedIds.length > 0,
+      landscape: poster.width > poster.height,
+      showGrid,
+      snap,
+      panelsShown,
+    };
+  }
+
   function fixIssue(issue: Issue) {
+    const id = issue.elementId;
+    if (id && issue.textColor) {
+      const { color, label } = issue.textColor;
+      updateElement(id, (e) => {
+        if (e.style) e.style.color = color;
+      });
+      notify(`${label.replace(/^Use/, 'Now using')} for this text. Undo with Ctrl/⌘ Z if you prefer the old colour.`);
+      return;
+    }
+    if (id && issue.textSize) {
+      const { pt } = issue.textSize;
+      const key = `fix-size-${id}-${Date.now()}`;
+      updateElement(
+        id,
+        (e) => {
+          if (e.type === 'table') e.table = { ...normalizeTable(e.table), fontSize: pt };
+          else if (e.type === 'equation' && e.equation) e.equation = { ...e.equation, fontSize: pt };
+          else if (e.type === 'chart' && e.chart) e.chart = { ...e.chart, fontSize: pt };
+          else if (e.style) e.style.fontSize = pt;
+        },
+        key,
+      );
+      // bigger text needs a taller box: grow it and move the rest of the column down, in the same undo step
+      requestAnimationFrame(() => fitColumnRef.current(id, key));
+      notify(`Text is now ${pt} pt. Undo with Ctrl/⌘ Z to go back.`);
+      return;
+    }
     const fix = issue.fix;
     if (!fix) return;
     update((d) => void Object.assign(d, replaceColor(d, fix.from, fix.to)));
@@ -1314,7 +1441,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
         <button
           className="icon-btn phone-hide"
           aria-label="Settings and help"
-          title="Settings, keyboard shortcuts and the tour"
+          title="Settings, search the menus, keyboard shortcuts and the tour"
           aria-haspopup="menu"
           aria-expanded={!!helpMenu}
           onClick={(e) => {
@@ -1537,6 +1664,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
           items={[
             { label: 'Settings…', onClick: () => setSettingsOpen(true) },
             '-',
+            { label: 'Search the menus', shortcut: keys('Alt /'), onClick: () => setCommandOpen(true) },
             { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setShortcutsOpen(true) },
             {
               label: 'Take the tour',
@@ -1565,6 +1693,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             '-',
             { label: 'Poster options…', onClick: () => setPosterMenu({ x: moreMenu.x, y: moreMenu.y }) },
             { label: 'Settings…', onClick: () => setSettingsOpen(true) },
+            { label: 'Search the menus', onClick: () => setCommandOpen(true) },
             { label: 'Keyboard shortcuts', onClick: () => setShortcutsOpen(true) },
             { label: 'Take the tour', onClick: () => setTouring(true) },
           ]}
@@ -1732,6 +1861,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
         />
       )}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
+      {commandOpen && <CommandSearch context={commandContext()} onClose={() => setCommandOpen(false)} />}
       <div className="toast-region" role="status" aria-live="polite">
         {editingEl && (
           <TextToolbar

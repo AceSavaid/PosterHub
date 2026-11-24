@@ -58,6 +58,7 @@ export const SHORTCUTS: ShortcutGroup[] = [
       { combos: ['Ctrl/⌘ -'], what: 'Zoom out' },
       { combos: ['Shift 0', 'Ctrl/⌘ 0'], what: 'Fit the poster to the screen' },
       { combos: ['Ctrl/⌘ \\'], what: 'Hide or show both side panels' },
+      { combos: ['Alt /'], what: 'Search the menus: type what you want to do, e.g. landscape or QR code' },
       { combos: ['?'], what: 'Show this list' },
     ],
   },

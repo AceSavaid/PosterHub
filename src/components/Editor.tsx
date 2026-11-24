@@ -29,7 +29,7 @@ import { useLatest } from '../lib/useLatest';
 import { reflowColumn } from '../lib/reflow';
 import { nameAfterTitleEdit, titleText } from '../lib/startText';
 import { fillProgress, nextToFill } from '../lib/fillProgress';
-import TextToolbar from './TextToolbar';
+import { TEXT_STYLES, applyTextStyle, styleForKey, styleNameOf, updateStyleToMatch, type TextStyleName } from '../lib/textStyles';
 import SettingsDialog from './SettingsDialog';
 import GearIcon from './GearIcon';
 import { keys } from '../lib/keys';
@@ -56,6 +56,8 @@ import { loadChartJs } from '../lib/chartjs';
 
 // Dialogs most sessions never open download on first use, keeping the editor quick to open.
 const ChartDialog = lazyPart(() => import('./ChartDialog'));
+// the formatting bar shows only while typing; its code (and the special characters) loads the first time
+const TextToolbar = lazyPart(() => import('./TextToolbar'));
 const EquationDialog = lazyPart(() => import('./EquationDialog'));
 const ViewMode = lazyPart(() => import('./ViewMode'));
 const CropDialog = lazyPart(() => import('./CropDialog'));
@@ -387,6 +389,35 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
       const next = nameAfterTitleEdit(d.name, titleText(d));
       if (next) d.name = next;
     });
+  }
+
+  /** Gives the box being typed in (or the selected boxes) a text style such as Heading or Normal text. */
+  function setTextStyle(name: TextStyleName, ids = editingId ? [editingId] : selectedIds) {
+    const live = editingId ? posterNode.current?.querySelector<HTMLElement>(`[data-id="${editingId}"] .el-body`)?.innerHTML : undefined;
+    let n = 0;
+    update((d) => {
+      for (const id of ids) {
+        const el = d.elements.find((e) => e.id === id);
+        if (!el) continue;
+        if (id === editingId && live != null) el.html = live;
+        if (applyTextStyle(d, id, name)) n++;
+      }
+    });
+    const label = TEXT_STYLES.find((s) => s.name === name)!.label;
+    if (n) notify(`${n === 1 ? 'Now' : `${n} boxes are now`} ${label.toLowerCase()}.`);
+    else notify('Text styles work on text boxes and headings.');
+  }
+
+  /** "Update Heading to match": every box with this box's style takes its look. */
+  function matchTextStyle(id = editingId ?? selectedId) {
+    if (!id) return;
+    const el = posterRef.current.elements.find((e) => e.id === id);
+    const name = el && styleNameOf(el);
+    if (!name) return;
+    let n = 0;
+    update((d) => void (n = updateStyleToMatch(d, id)));
+    const label = TEXT_STYLES.find((s) => s.name === name)!.label.toLowerCase();
+    notify(n ? `Updated ${n} other ${label} ${n === 1 ? 'box' : 'boxes'} to match.` : `No other ${label} boxes to update.`);
   }
 
   function commitTable(id: string, t: TableSpec, key?: string) {
@@ -762,6 +793,12 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
         return;
       }
       if (isTyping(e.target)) return;
+      const styleName = styleForKey(e);
+      if (styleName && selectedIds.length) {
+        e.preventDefault();
+        setTextStyle(styleName);
+        return;
+      }
       if (e.key === '?' && !mod) {
         e.preventDefault();
         setShortcutsOpen(true);
@@ -1293,9 +1330,9 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
         <button className="icon-btn" disabled={!canUndo} onClick={undo} title={keys('Undo (Ctrl/⌘ Z)')}>↶</button>
         <button className="icon-btn phone-hide" disabled={!canRedo} onClick={redo} title={keys('Redo (Ctrl/⌘ Shift Z)')}>↷</button>
         <span className="sep phone-hide" />
-        <button className="icon-btn phone-hide" onClick={() => setZoom((z) => Math.max(0.02, z / 1.25))} title="Zoom out">−</button>
-        <button className="btn ghost zoom-label phone-hide" onClick={fit} title="Fit to screen (Shift 0)" aria-label={`${Math.round(zoom * 100)}%, fit to screen`}>{Math.round(zoom * 100)}%</button>
-        <button className="icon-btn phone-hide" onClick={() => setZoom((z) => Math.min(4, z * 1.25))} title="Zoom in">+</button>
+        <button className="icon-btn phone-hide" onClick={() => setZoom((z) => Math.max(0.02, z / 1.25))} title={keys('Zoom out (Ctrl/⌘ -)')}>−</button>
+        <button className="btn ghost zoom-label phone-hide" onClick={fit} title={keys('Fit to screen (Shift 0 or Ctrl/⌘ 0)')} aria-label={`${Math.round(zoom * 100)}%, fit to screen`}>{Math.round(zoom * 100)}%</button>
+        <button className="icon-btn phone-hide" onClick={() => setZoom((z) => Math.min(4, z * 1.25))} title={keys('Zoom in (Ctrl/⌘ =)')}>+</button>
         <span className="sep phone-hide" />
         <div className="phone-hide topbar-group">
         <ViewMenu>
@@ -1392,7 +1429,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             onInsertEquation={() => openEquation()}
           />
         ) : (
-          <button className="panel-reveal tools" title="Show tools panel" aria-label="Show tools panel" onClick={() => setPrefs({ showTools: true })}>
+          <button className="panel-reveal tools" title={keys('Show tools panel (Ctrl/⌘ \\)')} aria-label="Show tools panel" onClick={() => setPrefs({ showTools: true })}>
             <span>Tools</span>
           </button>
         )}
@@ -1486,6 +1523,8 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             onUngroup={canUngroup(selectedIds, poster.elements) ? ungroupSelected : undefined}
             overflow={overflow}
             onShrinkText={() => shrinkToFit()}
+            onTextStyle={(name) => setTextStyle(name, [selectedId!])}
+            onMatchTextStyle={() => matchTextStyle()}
             onGrowBox={() => growToFit()}
             onAlign={(mode) => arrange((els, d) => align(els, mode, pageBox(d)))}
             onDistribute={(axis) => arrange((els) => distribute(els, axis))}
@@ -1511,7 +1550,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             onEditEquation={() => selected && openEquation(selected)}
           />
         ) : (
-          <button className="panel-reveal props" title="Show properties panel" aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>
+          <button className="panel-reveal props" title={keys('Show properties panel (Ctrl/⌘ \\)')} aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>
             <span>Properties</span>
           </button>
         )}
@@ -1565,7 +1604,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             '-',
             { label: 'Poster options…', onClick: () => setPosterMenu({ x: moreMenu.x, y: moreMenu.y }) },
             { label: 'Settings…', onClick: () => setSettingsOpen(true) },
-            { label: 'Keyboard shortcuts', onClick: () => setShortcutsOpen(true) },
+            { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setShortcutsOpen(true) },
             { label: 'Take the tour', onClick: () => setTouring(true) },
           ]}
         />
@@ -1740,6 +1779,9 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             poster={poster}
             node={posterNode.current?.querySelector<HTMLElement>(`[data-id="${editingEl.id}"]`) ?? null}
             onStyle={(patch) => updateElement(editingEl.id, (e) => void Object.assign(e.style!, patch))}
+            onTextStyle={(name) => setTextStyle(name)}
+            onUpdateStyle={() => matchTextStyle()}
+            onDone={() => setEditingId(null)}
           />
         )}
         {toast && (

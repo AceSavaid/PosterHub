@@ -14,6 +14,12 @@ export type CheckTab = 'problems' | 'spelling' | 'words' | 'conference';
 
 interface Props {
   issues: Issue[];
+  /** items the person dismissed on this poster (still found by the check, just hidden) */
+  dismissed?: Issue[];
+  /** hide an item on this poster */
+  onDismiss?: (issue: Issue) => void;
+  /** bring dismissed items back */
+  onRestore?: (issues: Issue[]) => void;
   poster: Poster;
   tab: CheckTab;
   onTab: (t: CheckTab) => void;
@@ -68,15 +74,18 @@ export default function CheckPanel(props: Props) {
   );
 }
 
-function Problems({ issues, onPick, onPickNote, onFix, onPreview, onAlt }: Props) {
+function Problems({ issues, dismissed = [], onDismiss, onRestore, onPick, onPickNote, onFix, onPreview, onAlt }: Props) {
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const warnings = issues.filter((i) => i.severity === 'warning').length;
   if (issues.length === 0)
     return (
-      <div className="check-ok">
-        <div className="big-tick">✓</div>
-        <p>No problems found. Your poster is ready to export.</p>
-      </div>
+      <>
+        <div className="check-ok">
+          <div className="big-tick">✓</div>
+          <p>{dismissed.length ? 'Nothing left to look at. Your poster is ready to export.' : 'No problems found. Your poster is ready to export.'}</p>
+        </div>
+        <Dismissed dismissed={dismissed} onRestore={onRestore} />
+      </>
     );
   return (
     <>
@@ -93,7 +102,7 @@ function Problems({ issues, onPick, onPickNote, onFix, onPreview, onAlt }: Props
             <button disabled={!i.elementId && !(i.noteId && onPickNote)} onClick={() => (i.noteId ? onPickNote?.(i.noteId) : i.elementId && onPick(i.elementId))}>
               <span className="issue-icon" aria-hidden>{ICON[i.severity]}</span>
               <span>
-                <strong>{i.title}</strong>
+                <strong id={'issue-title-' + i.id}>{i.title}</strong>
                 <span className="issue-detail">{i.detail}</span>
               </span>
             </button>
@@ -109,10 +118,43 @@ function Problems({ issues, onPick, onPickNote, onFix, onPreview, onAlt }: Props
                 👁 Preview as {visionInfo(i.preview).label.toLowerCase()}
               </button>
             )}
+            {onDismiss && (
+              <button className="issue-dismiss" aria-label="Dismiss" aria-describedby={'issue-title-' + i.id} title="Dismiss: hide this on this poster" onClick={() => onDismiss(i)}>
+                ×
+              </button>
+            )}
           </li>
         ))}
       </ul>
+      <Dismissed dismissed={dismissed} onRestore={onRestore} />
     </>
+  );
+}
+
+/** A folded list of dismissed items at the bottom of Problems, each with a way back. */
+function Dismissed({ dismissed, onRestore }: { dismissed: Issue[]; onRestore?: (issues: Issue[]) => void }) {
+  const [open, setOpen] = useState(false);
+  if (!dismissed.length || !onRestore) return null;
+  return (
+    <div className="dismissed">
+      <div className="dismissed-head">
+        <button className="link" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          {open ? '▾' : '▸'} {dismissed.length} dismissed
+        </button>
+        <button className="link" onClick={() => onRestore(dismissed)}>Show all again</button>
+      </div>
+      {open && (
+        <ul className="dismissed-list" aria-label="Dismissed">
+          {dismissed.map((i) => (
+            <li key={i.id}>
+              <span className="issue-icon" aria-hidden>{ICON[i.severity]}</span>
+              <span className="dismissed-title">{i.title}</span>
+              <button className="link" aria-label={`Bring back: ${i.title}`} onClick={() => onRestore([i])}>Bring back</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

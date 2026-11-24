@@ -79,7 +79,9 @@ test('fills a table from an Excel sheet, and from a CSV without asking', async (
 
   await choose(page, 'Fill from an Excel or CSV file…', path.join(FIXTURES, 'results.csv'));
   await expect(page.getByRole('group', { name: /Which one has your data/ })).toHaveCount(0);
-  expect((await tableCells(page))[0]).toEqual(fs.readFileSync(path.join(FIXTURES, 'results.csv'), 'utf8').split(/\r?\n/)[0].split(','));
+  // the CSV is read in the background, so wait for the table to change rather than reading it straight away
+  const csvHeader = fs.readFileSync(path.join(FIXTURES, 'results.csv'), 'utf8').split(/\r?\n/)[0].split(',');
+  await expect.poll(() => tableCells(page).then((c) => c[0])).toEqual(csvHeader);
   expect(errors).toEqual([]);
 });
 

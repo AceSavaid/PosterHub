@@ -273,6 +273,8 @@ export interface Poster {
   elements: PosterElement[];
   /** words the spelling check should accept on this poster (names, jargon) */
   ignoredWords?: string[];
+  /** Check items (by issue id) the person dismissed on this poster; they stay hidden until brought back */
+  dismissedIssues?: string[];
   /** optional word limit set by a conference; the check warns when the poster goes over it */
   wordLimit?: number;
   /** rules from the conference call for posters; Check reports what doesn't meet them */

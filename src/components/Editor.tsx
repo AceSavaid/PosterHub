@@ -18,7 +18,7 @@ import { Logo } from './Library';
 import CheckPanel, { type CheckTab } from './CheckPanel';
 import FindPanel from './FindPanel';
 import ContextMenu, { type MenuItem } from './ContextMenu';
-import { checkPoster, exportWarningFor, type ImageInfo, type Issue } from '../lib/checks';
+import { checkPoster, exportWarningFor, splitDismissed, withDismissed, type ImageInfo, type Issue } from '../lib/checks';
 import { replaceAllInPoster } from '../lib/textTools';
 import { ignoreKey } from '../lib/spelling';
 import AppearanceMenu from './AppearanceMenu';
@@ -30,6 +30,8 @@ import type { FillPlan } from '../lib/abstractImport';
 import { PLACEHOLDER_TEXT } from '../lib/checks';
 import type { AuthorList } from '../types';
 import ConfirmDialog from './ConfirmDialog';
+import ReplaceImageDialog from './ReplaceImageDialog';
+import { applyReplacement, needsFitChoice } from '../lib/replaceImage';
 import { saveAsTemplate } from '../lib/userTemplates';
 import { useUiPrefs } from '../lib/uiPrefs';
 import { sanitizeElement } from '../lib/sanitize';
@@ -125,6 +127,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [abstractOpen, setAbstractOpen] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string; file?: File } | null>(null);
   const [cropFor, setCropFor] = useState<string | null>(null);
+  /** A picture waiting for the user to say how it fits the box it replaces. */
+  const [replaceAsk, setReplaceAsk] = useState<{ id: string; src: string; ratio: number; boxRatio: number } | null>(null);
   const [eqDialog, setEqDialog] = useState<{ id?: string; spec: EquationSpec } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   /** open authors dialog; `id` is the text box it fills (none = add a new one) */
@@ -182,7 +186,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [templateDialog, setTemplateDialog] = useState(false);
   const [copySizeOpen, setCopySizeOpen] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
-  const [issues, setIssues] = useState<Issue[]>([]);
+  const [allIssues, setIssues] = useState<Issue[]>([]);
   const [dpi, setDpi] = useState(200);
   const [toast, setToast] = useState<{ msg: string; action?: { label: string; run: () => void } } | null>(null);
   const [activeCell, setActiveCell] = useState<{ r: number; c: number } | null>(null);
@@ -441,11 +445,11 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   async function insertImageFile(file: Blob, at?: { x: number; y: number }, replaceId?: string) {
     const { src, ratio } = await imageFileToDataUrl(file);
     if (replaceId) {
-      updateElement(replaceId, (e) => {
-        e.src = src;
-        delete e.qr;
-        if (!e.src || e.fit !== 'cover') e.h = e.w / ratio;
-      });
+      const old = posterRef.current.elements.find((e) => e.id === replaceId);
+      if (!old) return;
+      // A different-shaped picture replacing another: ask whether it keeps the old box size.
+      if (needsFitChoice(old, ratio)) return setReplaceAsk({ id: replaceId, src, ratio, boxRatio: old.w / old.h });
+      updateElement(replaceId, (e) => applyReplacement(e, src, ratio, e.fit === 'cover' ? 'cover' : 'natural'));
       return;
     }
     const base = makeElement('image', posterRef.current);
@@ -1062,6 +1066,28 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     notify(`Changed ${fix.from.toUpperCase()} to ${fix.to.toUpperCase()} everywhere. Undo with Ctrl+Z if you prefer the old colour.`);
   }
 
+  function dismissIssues(ids: string[], hide: boolean) {
+    update((d) => {
+      const next = withDismissed(d.dismissedIssues, ids, hide);
+      if (next) d.dismissedIssues = next;
+      else delete d.dismissedIssues;
+    });
+  }
+
+  function dismissIssue(issue: Issue) {
+    dismissIssues([issue.id], true);
+    notify('Dismissed. Bring it back any time from the bottom of the Problems list.', { label: 'Undo', run: () => dismissIssues([issue.id], false) });
+  }
+
+  // A dismissed "text is hidden" warning also drops the red line under that box.
+  useEffect(() => {
+    const off = new Set(poster.dismissedIssues ?? []);
+    posterNode.current?.querySelectorAll<HTMLElement>(':scope > .el').forEach((n) => {
+      if (off.has('overflow-' + n.dataset.id)) n.dataset.warnOff = 'true';
+      else delete n.dataset.warnOff;
+    });
+  }, [poster]);
+
   function pickIssue(id: string, ids?: string[], focus = true) {
     if (ids) setSelectedIds(ids);
     else setSelectedId(id);
@@ -1156,6 +1182,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const cropEl = cropFor ? poster.elements.find((e) => e.id === cropFor && e.src) ?? null : null;
   // Leftover example text and empty figure boxes are a to-do list, not errors: they don't turn the
   // Check badge red (a brand-new poster is full of them) but are pointed out again in the Export menu.
+  // Items the person dismissed on this poster are left out of the badge, the Export menu and the list.
+  const { shown: issues, hidden: dismissedIssues } = splitDismissed(allIssues, poster.dismissedIssues);
   const exportWarning = exportWarningFor(issues);
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const badge = { count: problems || issues.filter((i) => i.severity === 'warning' && !i.leftover).length, urgent: problems > 0 };
@@ -1536,6 +1564,9 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       {checkOpen && (
         <CheckPanel
           issues={issues}
+          dismissed={dismissedIssues}
+          onDismiss={dismissIssue}
+          onRestore={(list) => dismissIssues(list.map((i) => i.id), false)}
           poster={poster}
           tab={checkTab}
           onTab={setCheckTab}
@@ -1621,6 +1652,19 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           }}
         />
       )}
+      {replaceAsk && (
+        <ReplaceImageDialog
+          src={replaceAsk.src}
+          ratio={replaceAsk.ratio}
+          boxRatio={replaceAsk.boxRatio}
+          onCancel={() => setReplaceAsk(null)}
+          onPick={(fit) => {
+            const { id, src, ratio } = replaceAsk;
+            setReplaceAsk(null);
+            updateElement(id, (e) => applyReplacement(e, src, ratio, fit));
+          }}
+        />
+      )}
       {eqDialog && <EquationDialog poster={poster} initial={eqDialog.spec} isNew={!eqDialog.id} onSave={saveEquation} onCancel={() => setEqDialog(null)} />}
       {abstractOpen && <AbstractDialog poster={poster} onFill={fillFromAbstract} onCancel={() => setAbstractOpen(false)} />}
       {authorsDialog && <AuthorsDialog initial={authorsDialog.initial} replacing={authorsDialog.replacing} onSave={saveAuthors} onCancel={() => setAuthorsDialog(null)} />}
@@ -1688,6 +1732,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
                 {toast.action.label}
               </button>
             )}
+            <button className="toast-close" aria-label="Dismiss message" title="Dismiss" onClick={() => setToast(null)}>×</button>
           </div>
         )}
       </div>

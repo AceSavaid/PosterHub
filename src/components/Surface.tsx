@@ -7,6 +7,8 @@ import { TYPE_NAMES } from '../lib/a11y';
 import { isCropped, placeImage } from '../lib/geometry';
 import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
 import { cleanHtml } from '../lib/sanitize';
+import { curlQuote, dashBefore, listFor } from '../lib/autoformat';
+import { loadPrefs } from '../lib/uiPrefs';
 import { PT_TO_PX, layoutEquation, mathSvg, svgDataUrl, typesetLatex } from '../lib/math';
 import { useMathReady } from '../lib/useMath';
 import { IconBody, IconSvg } from './IconBody';
@@ -294,6 +296,7 @@ function TextBody({ el, poster, editing, onCommit, onDone, reserve }: { el: Post
 
   // Content is managed imperatively so React never fights the caret while typing.
   const filled = useRef(false);
+  const plainNext = useRef(false);
   useLayoutEffect(() => {
     // Fill on first mount (even if it starts in editing mode), then only while not typing.
     if (ref.current && (!editing || !filled.current)) {
@@ -309,6 +312,47 @@ function TextBody({ el, poster, editing, onCommit, onDone, reserve }: { el: Post
     if (!node) return;
     if (node.parentElement) node.parentElement.dataset.overflow = String(node.scrollHeight > node.clientHeight + 1);
   });
+
+  // Lists from "- " or "1. ", curly quotes and en dashes while typing (Settings can turn this off).
+  useEffect(() => {
+    const node = ref.current;
+    if (!editing || !node) return;
+    const onBefore = (ev: InputEvent) => {
+      if (ev.inputType !== 'insertText' || !ev.data || !loadPrefs().autoFormat) return;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount || !sel.isCollapsed) return;
+      const at = sel.getRangeAt(0);
+      const t = at.startContainer;
+      if (t.nodeType !== Node.TEXT_NODE || !node.contains(t)) return;
+      const before = (t.textContent ?? '').slice(0, at.startOffset);
+      const select = (from: number, to: number) => {
+        const r = document.createRange();
+        r.setStart(t, from);
+        r.setEnd(t, to);
+        sel.removeAllRanges();
+        sel.addRange(r);
+      };
+      if (ev.data === '"' || ev.data === "'") {
+        ev.preventDefault();
+        document.execCommand('insertText', false, curlQuote(before.slice(-1), ev.data));
+      } else if (ev.data === ' ') {
+        const prev = t.previousSibling;
+        const lineStart = (!prev || prev.nodeName === 'BR') && !(t.parentElement?.closest('li'));
+        const list = lineStart ? listFor(before) : null;
+        if (!list) return;
+        ev.preventDefault();
+        select(0, before.length);
+        document.execCommand('delete');
+        document.execCommand(list === 'ul' ? 'insertUnorderedList' : 'insertOrderedList');
+      } else if (dashBefore(before, ev.data)) {
+        ev.preventDefault();
+        select(before.length - 1, before.length);
+        document.execCommand('insertText', false, '\u2013' + ev.data);
+      }
+    };
+    node.addEventListener('beforeinput', onBefore);
+    return () => node.removeEventListener('beforeinput', onBefore);
+  }, [editing]);
 
   useEffect(() => {
     const node = ref.current;
@@ -345,13 +389,16 @@ function TextBody({ el, poster, editing, onCommit, onDone, reserve }: { el: Post
       aria-label={editing ? `Editing ${TYPE_NAMES[el.type].toLowerCase()}. Press Escape when done.` : undefined}
       suppressContentEditableWarning
       spellCheck={editing}
-      onBlur={() => {
+      onBlur={(e) => {
         if (!editing) return;
         const html = ref.current?.innerHTML ?? '';
         if (html !== el.html) onCommit?.(html);
+        // typing in the formatting bar (e.g. searching special characters) keeps the box open
+        if (e.relatedTarget instanceof HTMLElement && e.relatedTarget.closest('.text-toolbar')) return;
         onDone?.();
       }}
       onKeyDown={(e) => {
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyV') plainNext.current = true;
         if (e.key === 'Escape') {
           e.preventDefault();
           const box = e.currentTarget.parentElement as HTMLElement | null;
@@ -362,15 +409,57 @@ function TextBody({ el, poster, editing, onCommit, onDone, reserve }: { el: Post
         e.stopPropagation();
       }}
       onPaste={(e) => {
-        // Paste as clean text (keeps the poster's styling) — formatting can be reapplied with B / I / U.
+        // Like Docs: Ctrl/⌘ V keeps bold, italic, lists and line breaks in the poster's own font;
+        // Ctrl/⌘ Shift V pastes the words only.
+        const plain = plainNext.current;
+        plainNext.current = false;
         const text = e.clipboardData.getData('text/plain');
-        if (!text) return;
+        const html = plain ? '' : e.clipboardData.getData('text/html');
+        if (!text && !html) return;
         e.preventDefault();
         e.stopPropagation();
-        document.execCommand('insertText', false, text);
+        if (!html) {
+          document.execCommand('insertText', false, text);
+          return;
+        }
+        // the clean-up code loads on the first formatted paste; keep the caret where it was meanwhile
+        const host = e.currentTarget;
+        const sel = window.getSelection();
+        const at = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+        import('../lib/paste').then(({ simplifyPastedHtml }) => {
+          const simple = simplifyPastedHtml(html);
+          const now = window.getSelection();
+          if (at && now) {
+            now.removeAllRanges();
+            now.addRange(at);
+          }
+          if (simple) insertHtmlAtCaret(host, simple);
+          else document.execCommand('insertText', false, text);
+        });
       }}
     />
   );
+}
+
+/**
+ * Puts cleaned HTML where the caret is. Done by hand rather than with execCommand('insertHTML'),
+ * which each browser rewrites differently (Firefox, for one, drops the formatting).
+ */
+function insertHtmlAtCaret(host: HTMLElement, html: string) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !host.contains(sel.anchorNode)) return;
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  const frag = range.createContextualFragment(html);
+  const last = frag.lastChild;
+  range.insertNode(frag);
+  if (last) {
+    range.setStartAfter(last);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  host.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 /** An image showing only its crop region, placed in the box by its fit setting. */

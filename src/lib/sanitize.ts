@@ -79,6 +79,7 @@ export function sanitizeElement(el: PosterElement): PosterElement {
     if (hi) el.headingIcon = hi;
     else delete el.headingIcon;
   }
+  if (el.textStyle != null && !['heading', 'subheading', 'normal', 'caption'].includes(el.textStyle)) delete el.textStyle;
   if (el.src != null) {
     const s = safeImageUrl(el.src);
     if (s) el.src = s;

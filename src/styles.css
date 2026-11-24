@@ -896,6 +896,27 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .text-toolbar .swatch { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); padding: 0; margin: 0 2px; cursor: pointer; }
 .text-toolbar .sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 4px; }
 @media (max-width: 600px) { .text-toolbar .swatch:nth-of-type(n+4) { display: none; } }
+.text-toolbar { flex-wrap: wrap; max-width: calc(100vw - 8px); }
+.tt-menu-wrap { position: relative; display: inline-flex; }
+.text-toolbar .tt-style { min-width: 108px; justify-content: space-between; font-weight: 500; }
+.tt-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 61; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18); padding: 4px; }
+.tt-styles { display: flex; flex-direction: column; min-width: 230px; }
+.tt-style-item { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; text-align: left; background: none; border: 0; border-radius: 6px; padding: 6px 8px; color: var(--fg); cursor: pointer; font: inherit; }
+.tt-style-item:hover, .tt-style-item:focus-visible { background: var(--bg2); }
+.tt-style-item[aria-pressed='true'] { background: var(--accent-soft, var(--bg2)); font-weight: 600; }
+.tt-style-item kbd { font-size: 11px; color: var(--muted); }
+.tt-style-item.style-heading span { font-weight: 700; font-size: 1.15em; }
+.tt-style-item.style-subheading span { font-weight: 600; }
+.tt-style-item.style-caption span { font-style: italic; font-size: 0.92em; }
+.tt-style-item.update { border-top: 1px solid var(--line); border-radius: 0 0 6px 6px; margin-top: 4px; padding-top: 8px; color: var(--accent); }
+.tt-chars { right: 0; left: auto; width: min(300px, calc(100vw - 16px)); max-height: 320px; overflow: auto; padding: 8px; }
+.tt-chars input { width: 100%; margin-bottom: 6px; }
+.tt-chars-head { font-size: 11px; color: var(--muted); margin: 6px 0 2px; }
+.tt-chars-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 2px; }
+.tt-char { height: 30px; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--fg); font-size: 16px; cursor: pointer; }
+.tt-char:hover, .tt-char:focus-visible { background: var(--bg2); border-color: var(--line); }
+.tt-chars-none { color: var(--muted); font-size: 13px; margin: 6px 2px; }
+.text-style-row { align-items: end; }
 
 /* Properties: background, border, position and size fold away under one heading */
 .more-props { border-top: 1px solid var(--bg3); padding-top: 8px; }

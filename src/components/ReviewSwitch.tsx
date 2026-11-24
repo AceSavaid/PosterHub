@@ -1,8 +1,10 @@
+import { keys } from '../lib/keys';
+
 export type SidePanel = 'check' | 'find' | 'notes';
 
-const PANELS: { id: SidePanel; label: string }[] = [
+const PANELS: { id: SidePanel; label: string; title?: string }[] = [
   { id: 'check', label: 'Poster check' },
-  { id: 'find', label: 'Find' },
+  { id: 'find', label: 'Find', title: 'Find and replace (Ctrl/⌘ F)' },
   { id: 'notes', label: 'Notes' },
 ];
 
@@ -14,7 +16,7 @@ export default function ReviewSwitch({ current, notes, onPick }: { current: Side
   return (
     <div className="seg review-switch" role="group" aria-label="Review">
       {PANELS.map((p) => (
-        <button key={p.id} aria-pressed={current === p.id} className={current === p.id ? 'active' : ''} onClick={() => onPick(p.id)}>
+        <button key={p.id} aria-pressed={current === p.id} className={current === p.id ? 'active' : ''} title={p.title && keys(p.title)} onClick={() => onPick(p.id)}>
           {p.label}
           {p.id === 'notes' && notes > 0 && <span className="badge note-badge">{notes}</span>}
         </button>

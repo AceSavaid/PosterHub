@@ -18,7 +18,7 @@ import { Logo } from './Library';
 import CheckPanel, { type CheckTab } from './CheckPanel';
 import FindPanel from './FindPanel';
 import ContextMenu, { type MenuItem } from './ContextMenu';
-import { checkPoster, type ImageInfo, type Issue } from '../lib/checks';
+import { checkPoster, exportWarningFor, type ImageInfo, type Issue } from '../lib/checks';
 import { replaceAllInPoster } from '../lib/textTools';
 import { ignoreKey } from '../lib/spelling';
 import AppearanceMenu from './AppearanceMenu';
@@ -97,6 +97,9 @@ async function imageFileToDataUrl(file: Blob, maxSide = 4000): Promise<{ src: st
   return { src: c.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.92), ratio };
 }
 
+/** the floating panels that share the top-right corner of the poster area */
+type SidePanel = 'check' | 'find' | 'notes';
+
 interface Props {
   initial: Poster;
   /** A message to show when the poster opens, e.g. notes from a PowerPoint import. */
@@ -126,24 +129,13 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [exportOpen, setExportOpen] = useState(false);
   /** open authors dialog; `id` is the text box it fills (none = add a new one) */
   const [authorsDialog, setAuthorsDialog] = useState<{ id?: string; initial?: AuthorList; replacing?: boolean } | null>(null);
-  const [checkOpen, setCheckOpenRaw] = useState(false);
+  // Check, Find and Notes float in the same corner, so only one of them is open at a time.
+  const [sidePanel, setSidePanel] = useState<SidePanel | null>(null);
+  const toggleSidePanel = (p: SidePanel) => setSidePanel((cur) => (cur === p ? null : p));
+  const checkOpen = sidePanel === 'check';
+  const findOpen = sidePanel === 'find';
+  const notesOpen = sidePanel === 'notes';
   const [checkTab, setCheckTab] = useState<CheckTab>('problems');
-  const [findOpen, setFindOpenRaw] = useState(false);
-  // The check and find panels sit in the same spot, so only one is open at a time.
-  const setCheckOpen = useCallback((v: boolean | ((o: boolean) => boolean)) => {
-    setCheckOpenRaw((o) => {
-      const n = typeof v === 'function' ? v(o) : v;
-      if (n) setFindOpenRaw(false);
-      return n;
-    });
-  }, []);
-  const setFindOpen = useCallback((v: boolean) => {
-    setFindOpenRaw(v);
-    if (v) {
-      setCheckOpenRaw(false);
-      setNotesOpen(false);
-    }
-  }, []);
   const [vision, setVision] = useState<VisionMode>('normal');
   // The tour starts by itself the first time someone opens a poster; Help → Take the tour replays it.
   const [touring, setTouring] = useState(false);
@@ -201,7 +193,6 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const scroller = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<number>(undefined);
   const [prefs, setPrefs] = useUiPrefs();
-  const [notesOpen, setNotesOpen] = useState(false);
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const [reviewer, setReviewer] = useState(loadReviewerName);
@@ -218,6 +209,20 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     set();
     return () => ro.disconnect();
   }, []);
+  // The Check and Find panels float at the poster area's right edge, wherever the side panels are.
+  useLayoutEffect(() => {
+    const stage = scroller.current;
+    if (!stage) return;
+    const set = () => document.documentElement.style.setProperty('--stage-right', `${Math.max(0, Math.round(window.innerWidth - stage.getBoundingClientRect().right))}px`);
+    set();
+    window.addEventListener('resize', set);
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(set);
+    ro?.observe(stage);
+    return () => {
+      window.removeEventListener('resize', set);
+      ro?.disconnect();
+    };
+  }, [prefs.showTools, prefs.showProperties, prefs.swapPanels]);
 
   const notify = useCallback((msg: string, action?: { label: string; run: () => void }) => {
     setToast({ msg: keys(msg), action });
@@ -704,7 +709,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       if (mod && (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'h') && !e.altKey) {
         e.preventDefault();
         setEditingId(null);
-        setFindOpen(true);
+        setSidePanel('find');
         return;
       }
       if (isTyping(e.target)) return;
@@ -887,8 +892,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     setEditingId(null);
     setOpenNoteId(note.id);
     if (!reviewer) {
-      setCheckOpen(false);
-      setNotesOpen(true);
+      setSidePanel('notes');
       notify('Tip: type your name in the Notes panel so co-authors can see who left each note.');
     }
   }
@@ -1152,7 +1156,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const cropEl = cropFor ? poster.elements.find((e) => e.id === cropFor && e.src) ?? null : null;
   // Leftover example text and empty figure boxes are a to-do list, not errors: they don't turn the
   // Check badge red (a brand-new poster is full of them) but are pointed out again in the Export menu.
-  const leftovers = issues.filter((i) => i.leftover).length;
+  const exportWarning = exportWarningFor(issues);
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const badge = { count: problems || issues.filter((i) => i.severity === 'warning' && !i.leftover).length, urgent: problems > 0 };
 
@@ -1228,11 +1232,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         <span className="sep phone-hide" />
         <button
           className={'btn check-btn notes-btn phone-hide' + (notesOpen ? ' active' : '')}
-          onClick={() => {
-            setCheckOpen(false);
-            setFindOpen(false);
-            setNotesOpen((o) => !o);
-          }}
+          onClick={() => toggleSidePanel('notes')}
           title="Comments for co-authors and supervisors. Saved with the poster, never printed."
         >
           Notes
@@ -1243,8 +1243,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           data-tour="check"
           onClick={() => {
             runCheck();
-            setNotesOpen(false);
-            setCheckOpen((o) => !o);
+            toggleSidePanel('check');
           }}
           title="Look for small text, low contrast, blurry images and leftover example text"
         >
@@ -1255,7 +1254,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             </span>
           )}
         </button>
-        <button className={'btn phone-hide' + (findOpen ? ' active' : '')} onClick={() => setFindOpen(!findOpen)} title={keys('Find and replace words on the poster (Ctrl/⌘ F)')}>Find</button>
+        <button className={'btn phone-hide' + (findOpen ? ' active' : '')} onClick={() => toggleSidePanel('find')} title={keys('Find and replace words on the poster (Ctrl/⌘ F)')}>Find</button>
         <button className="btn phone-hide" onClick={() => setViewing(true)} title="See the poster full screen, without editing tools">Preview</button>
         <button className="btn phone-hide" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
         <button
@@ -1274,45 +1273,18 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         <div className="menu-wrap" data-tour="export">
           <button ref={exportBtn} className="btn primary" aria-expanded={exportOpen} aria-controls="export-menu" onClick={() => setExportOpen((o) => !o)}>Export ▾</button>
           {exportOpen && (
-            <div className="menu" id="export-menu" role="group" aria-label="Export" ref={exportMenu} onMouseLeave={() => setExportOpen(false)}>
-              {issues.some((i) => i.severity === 'problem') && (
+            <div className="menu" id="export-menu" role="group" aria-label="Export" ref={exportMenu}>
+              {exportWarning && (
                 <button
-                  className="menu-warn"
+                  className={exportWarning.urgent ? 'menu-warn' : 'menu-note'}
                   onClick={() => {
                     setExportOpen(false);
                     setCheckTab('problems');
-                    setCheckOpen(true);
+                    setSidePanel('check');
                   }}
                 >
-                  <strong>⛔ {issues.filter((i) => i.severity === 'problem').length} problem(s) found</strong>
-                  <span>Review them before printing</span>
-                </button>
-              )}
-              {leftovers > 0 && (
-                <button
-                  className="menu-note"
-                  onClick={() => {
-                    setExportOpen(false);
-                    setCheckOpen(true);
-                  }}
-                >
-                  <strong>
-                    {leftovers} box{leftovers > 1 ? 'es' : ''} still {leftovers > 1 ? 'have' : 'has'} example text or no picture
-                  </strong>
-                  <span>Show me which</span>
-                </button>
-              )}
-              {issues.some((i) => i.id.startsWith('cmyk-')) && (
-                <button
-                  className="menu-note"
-                  onClick={() => {
-                    setExportOpen(false);
-                    setCheckTab('problems');
-                    setCheckOpen(true);
-                  }}
-                >
-                  <strong>🎨 {issues.filter((i) => i.id.startsWith('cmyk-')).length} colour(s) will print duller</strong>
-                  <span>See printable alternatives</span>
+                  <strong>{exportWarning.headline}</strong>
+                  <span>{[...exportWarning.more, 'Show me'].join(' · ')}</span>
                 </button>
               )}
               <button onClick={() => runExport('pdf')}>
@@ -1385,6 +1357,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             onInsertEquation={() => openEquation()}
             onFillFromAbstract={() => setAbstractOpen(true)}
             notify={notify}
+            onUndo={undo}
           />
         ) : (
           <button className="panel-reveal tools" title="Show tools panel" aria-label="Show tools panel" onClick={() => setPrefs({ showTools: true })}>
@@ -1540,13 +1513,9 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           items={[
             {
               label: `Notes${openNotes(poster).length ? ` (${openNotes(poster).length})` : ''}`,
-              onClick: () => {
-                setCheckOpen(false);
-                setFindOpen(false);
-                setNotesOpen(true);
-              },
+              onClick: () => setSidePanel('notes'),
             },
-            { label: 'Find and replace', onClick: () => setFindOpen(true) },
+            { label: 'Find and replace', onClick: () => setSidePanel('find') },
             { label: 'Preview', onClick: () => setViewing(true) },
             { label: 'Copy image', onClick: copyImage },
             '-',
@@ -1598,7 +1567,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           }
           onWordLimit={(n) => update((d) => void (d.wordLimit = n), 'word-limit')}
           onConference={(rules, key) => update((d) => void (rules ? (d.conference = rules) : delete d.conference), key)}
-          onClose={() => setCheckOpen(false)}
+          onClose={() => setSidePanel(null)}
         />
       )}
       {findOpen && (
@@ -1611,7 +1580,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             update(fn);
           }}
           onNotify={notify}
-          onClose={() => setFindOpen(false)}
+          onClose={() => setSidePanel(null)}
         />
       )}
       {notesOpen && (
@@ -1634,7 +1603,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           onResolve={resolveNote}
           onDelete={deleteNote}
           onDeleteResolved={deleteResolvedNotes}
-          onClose={() => setNotesOpen(false)}
+          onClose={() => setSidePanel(null)}
         />
       )}
       <VisionFilters />
@@ -1731,3 +1700,4 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     </div>
   );
 }
+

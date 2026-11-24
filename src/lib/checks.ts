@@ -13,6 +13,7 @@ import { seriesColors, seriesData } from './chart';
 import { confusablePairs, visionInfo, type VisionMode } from './colorVision';
 import { normalizeTable } from './table';
 import { conferenceIssues } from './conference';
+import { parseColor } from './color';
 
 export type Severity = 'problem' | 'warning' | 'tip';
 
@@ -37,15 +38,8 @@ export interface Issue {
 export const PLACEHOLDER_TEXT = ['Your Poster Title Goes Here', 'Replace this text with your own', 'Type or paste your text here', 'Section Heading', 'Author One, Author Two', 'Describe what the figure shows', 'State your main result in one clear sentence', 'Author, A. (2025). Title of work'];
 
 // ---- colour maths (WCAG relative luminance)
-function parseHex(c: string): [number, number, number] | null {
-  const m = c.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (!m) return null;
-  const h = m[1].length === 3 ? [...m[1]].map((x) => x + x).join('') : m[1];
-  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
-}
-
 export function luminance(hex: string): number | null {
-  const rgb = parseHex(hex);
+  const rgb = parseColor(hex);
   if (!rgb) return null;
   const [r, g, b] = rgb.map((v) => {
     const s = v / 255;
@@ -340,4 +334,19 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
 
   const order: Record<Severity, number> = { problem: 0, warning: 1, tip: 2 };
   return issues.sort((a, b) => order[a.severity] - order[b.severity]);
+}
+
+/** The one line at the top of the Export menu that points at the poster check, most serious first. */
+export function exportWarningFor(issues: Issue[]): { headline: string; more: string[]; urgent: boolean } | null {
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const problems = issues.filter((i) => i.severity === 'problem').length;
+  const leftovers = issues.filter((i) => i.leftover).length;
+  const dull = issues.filter((i) => i.id.startsWith('cmyk-')).length;
+  const parts = [
+    problems && `⛔ ${plural(problems, 'problem', 'problems')} to fix before printing`,
+    leftovers && `${plural(leftovers, 'box still has', 'boxes still have')} example text or no picture`,
+    dull && `🎨 ${plural(dull, 'colour', 'colours')} will print duller`,
+  ].filter((x): x is string => !!x);
+  if (!parts.length) return null;
+  return { headline: parts[0], more: parts.slice(1), urgent: problems > 0 };
 }

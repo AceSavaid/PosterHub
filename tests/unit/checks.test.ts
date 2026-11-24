@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backgroundBehind, checkPoster, contrastRatio, minReadablePt } from '../../src/lib/checks';
+import { backgroundBehind, checkPoster, contrastRatio, exportWarningFor, minReadablePt, type Issue } from '../../src/lib/checks';
 import { PALETTES, createPoster, makeElement, sizeFor } from '../../src/model';
 import type { Poster } from '../../src/types';
 
@@ -79,5 +79,15 @@ describe('poster check', () => {
     const p = blank();
     expect(minReadablePt(p)).toBe(20);
     expect(minReadablePt({ ...p, ...sizeFor('A4', 'portrait') })).toBeLessThan(10);
+  });
+});
+
+describe('Export menu warning', () => {
+  const issue = (id: string, severity: 'problem' | 'warning', leftover = false) => ({ id, severity, leftover }) as unknown as Issue;
+  it('is one line, most serious first', () => {
+    expect(exportWarningFor([])).toBeNull();
+    const w = exportWarningFor([issue('a', 'warning', true), issue('b', 'warning', true), issue('cmyk-1', 'warning'), issue('c', 'problem')]);
+    expect(w).toEqual({ headline: '⛔ 1 problem to fix before printing', more: ['2 boxes still have example text or no picture', '🎨 1 colour will print duller'], urgent: true });
+    expect(exportWarningFor([issue('a', 'warning', true)])).toEqual({ headline: '1 box still has example text or no picture', more: [], urgent: false });
   });
 });

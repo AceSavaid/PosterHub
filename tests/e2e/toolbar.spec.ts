@@ -102,3 +102,46 @@ test.describe('on a phone', () => {
     await expect(page.locator('#export-menu')).toBeVisible();
   });
 });
+
+test('the Export menu stays open when the pointer drifts off it', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await newPoster(page);
+  await page.getByRole('button', { name: 'Export ▾' }).click();
+  const menu = page.locator('#export-menu');
+  const box = (await menu.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + 40);
+  await page.mouse.move(box.x - 30, box.y + 40);
+  await expect(menu).toBeVisible();
+  // a click elsewhere still closes it
+  await page.locator('.stage').click({ position: { x: 10, y: 10 } });
+  await expect(menu).toBeHidden();
+});
+
+test('Check sits beside the poster area wherever the side panels are', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await newPoster(page);
+  const gapToStage = async () => {
+    const [panel, stage] = await Promise.all([page.locator('.check-panel').boundingBox(), page.locator('.stage').boundingBox()]);
+    return Math.round(stage!.x + stage!.width - (panel!.x + panel!.width));
+  };
+  await page.getByRole('button', { name: /^Check/ }).click();
+  expect(await gapToStage()).toBe(16);
+  // hide both panels: the Check panel follows the poster area's edge instead of floating mid-poster
+  await page.keyboard.press('Control+\\');
+  await expect(page.locator('.panel.right')).toHaveCount(0);
+  await expect.poll(gapToStage).toBe(16);
+});
+
+test('only one of Check, Find and Notes is open at a time', async ({ page }) => {
+  await newPoster(page);
+  await page.getByRole('button', { name: 'Text box', exact: true }).click(); // leaves example text, so Export has a warning
+  await page.getByRole('button', { name: 'Notes' }).click();
+  await expect(page.getByRole('dialog', { name: 'Review notes' })).toBeVisible();
+  await page.getByRole('button', { name: 'Export ▾' }).click();
+  await page.locator('#export-menu .menu-note').click();
+  await expect(page.getByRole('dialog', { name: 'Poster check' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Review notes' })).toHaveCount(0);
+  await page.keyboard.press('Control+f');
+  await expect(page.locator('.find-panel')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Poster check' })).toHaveCount(0);
+});

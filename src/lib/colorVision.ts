@@ -42,17 +42,8 @@ export function feColorMatrixValues(mode: Exclude<VisionMode, 'normal'>): string
 }
 
 // ---- colour conversion
-export function parseColor(c: string): [number, number, number] | null {
-  const s = c.trim();
-  const hex = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (hex) {
-    const h = hex[1].length === 3 ? [...hex[1]].map((x) => x + x).join('') : hex[1];
-    return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
-  }
-  const rgb = s.match(/^rgba?\(\s*(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)[\s,]+(\d+(?:\.\d+)?)/i);
-  if (rgb) return [+rgb[1], +rgb[2], +rgb[3]];
-  return null;
-}
+export { parseColor } from './color';
+import { parseColor } from './color';
 
 const toLinear = (v: number) => {
   const s = v / 255;

@@ -203,7 +203,6 @@ test.describe('templates', () => {
     await page.getByRole('combobox', { name: 'Layout' }).selectOption('boxed');
     await expect(page.getByText('Logos either side of the title')).toBeVisible();
     await page.getByRole('button', { name: /^Apply to/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
     await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(2);
   });
 });
@@ -233,7 +232,6 @@ test.describe('switching layouts', () => {
     await page.getByRole('tab', { name: 'Layout' }).click();
     await page.getByRole('combobox', { name: 'Layout' }).selectOption('sidebar');
     await page.getByRole('button', { name: /^Apply to/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
     await expect(page.locator('.toast')).toContainText('Moved your 1 section');
 
     await expect(page.locator('.poster .el-title .el-body')).toHaveText('Sleep and memory');
@@ -264,7 +262,6 @@ test.describe('editing', () => {
     await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
     await expect(elements(page)).toHaveCount(before);
     await page.getByRole('button', { name: /^Apply to/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
     await expect(elements(page)).toHaveCount(0);
   });
 

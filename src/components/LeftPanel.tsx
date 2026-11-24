@@ -8,7 +8,6 @@ import { PaletteSwatches } from './PaletteSwatches';
 import { FontSelect } from './FontSelect';
 import { fileToDataUrl, pickFile } from '../lib/storage';
 import { fontNameFromFile, loadGoogleFont, registerCustomFont } from '../lib/fonts';
-import { askConfirm } from '../lib/dialogs';
 import { SHAPE_CHOICES } from '../lib/shapes';
 import { applyBrandKit } from '../lib/brandKit';
 import { BRAND_KITS, brandKitById } from '../brandKits';
@@ -30,12 +29,14 @@ interface Props {
   onInsertTable: () => void;
   onInsertEquation: () => void;
   onFillFromAbstract: () => void;
-  notify: (msg: string) => void;
+  notify: (msg: string, action?: { label: string; run: () => void }) => void;
+  /** steps back one change, offered as a button on the toast after a big change */
+  onUndo: () => void;
 }
 
 const TABS: Tab[] = ['insert', 'layout', 'design'];
 
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, onFillFromAbstract, notify }: Props) {
+export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, onFillFromAbstract, notify, onUndo }: Props) {
   const [tab, setTab] = useState<Tab>('insert');
   return (
     <aside className="panel left" aria-label="Tools" data-tour="tools">
@@ -67,8 +68,8 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
       <div className="panel-body" id="tools-panel" role="tabpanel" aria-labelledby={'tab-' + tab}>
         <h2 className="sr-only">{tab[0].toUpperCase() + tab.slice(1)}</h2>
         {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} onInsertReferences={onInsertReferences} onInsertTable={onInsertTable} onInsertEquation={onInsertEquation} onFillFromAbstract={onFillFromAbstract} />}
-        {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} />}
-        {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} />}
+        {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} onUndo={onUndo} />}
+        {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} onUndo={onUndo} />}
       </div>
     </aside>
   );
@@ -140,7 +141,7 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
   );
 }
 
-function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' | 'notify'>) {
+function LayoutTab({ poster, update, notify, onUndo }: Pick<Props, 'poster' | 'update' | 'notify' | 'onUndo'>) {
   const [scaleContent, setScaleContent] = useState(true);
   const [template, setTemplate] = useState<TemplateId>('classic');
 
@@ -207,11 +208,11 @@ function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
         <p className="hint span2">{templateDef(template).description} Your text, figures and logos carry over.</p>
         <button
           className="btn span2"
-          onClick={async () => {
-            if (!(await askConfirm('Switch to this layout?', 'Your title, authors, section text, figures, logos and QR codes move into the matching places. You can undo afterwards.', 'Apply layout'))) return;
+          onClick={() => {
+            // No "are you sure?": it's one undo step, and the toast offers Undo right there.
             const { elements, report } = applyLayout(poster, template);
             update((d) => void (d.elements = elements));
-            notify(describeReport(report));
+            notify(describeReport(report), { label: 'Undo', run: onUndo });
           }}
         >
           Apply to {poster.columns} column{poster.columns > 1 ? 's' : ''}
@@ -221,7 +222,7 @@ function LayoutTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
   );
 }
 
-function DesignTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' | 'notify'>) {
+function DesignTab({ poster, update, notify, onUndo }: Pick<Props, 'poster' | 'update' | 'notify' | 'onUndo'>) {
   const [gfont, setGfont] = useState('');
   const [kitId, setKitId] = useState(BRAND_KITS[0]?.id ?? '');
 
@@ -231,7 +232,7 @@ function DesignTab({ poster, update, notify }: Pick<Props, 'poster' | 'update' |
     [kit.headingFont, kit.bodyFont].forEach((f) => loadGoogleFont(f));
     let filled = 0;
     update((d) => void (filled = applyBrandKit(d, kit)));
-    notify(`Applied the ${kit.name} brand kit${filled ? ` and filled ${filled} logo spot${filled > 1 ? 's' : ''}` : ''}. Press Undo to go back.`);
+    notify(`Applied the ${kit.name} brand kit${filled ? ` and filled ${filled} logo spot${filled > 1 ? 's' : ''}` : ''}.`, { label: 'Undo', run: onUndo });
   }
 
   async function addGoogle() {

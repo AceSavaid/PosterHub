@@ -121,11 +121,13 @@ test('Layout tab explains that columns move guides only', async ({ page }) => {
   await page.getByRole('tab', { name: 'Layout' }).click();
   await expect(page.getByText('content stays where it is')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Switch layout' })).toBeVisible();
-  // cancelling the confirmation leaves the poster alone
+  // switching applies straight away (no "are you sure?") and the toast's Undo puts everything back
+  await page.getByRole('combobox', { name: 'Layout' }).selectOption('boxed');
   const count = await page.locator('.poster > .el').count();
   await page.getByRole('button', { name: /^Apply to/ }).click();
-  await expect(page.getByRole('dialog', { name: 'Switch to this layout?' })).toBeVisible();
-  await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(2);
+  await page.locator('.toast').getByRole('button', { name: 'Undo' }).click();
   await expect(page.locator('.poster > .el')).toHaveCount(count);
+  await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(0);
 });

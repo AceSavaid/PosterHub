@@ -58,7 +58,6 @@ test('Switch layout moves written text from a clinical poster into another field
   await expect(select.locator('optgroup[label="By research field"] option')).toHaveCount(4);
   await select.selectOption('lab');
   await page.getByRole('button', { name: /^Apply to/ }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
   await expect(page.locator('.toast')).toContainText('Moved your 1 section');
   // The lab layout is in place, and the case summary landed in its first free section.
   await expect(page.locator('.poster .el', { hasText: 'The gap in what is known' }).first()).toBeVisible();

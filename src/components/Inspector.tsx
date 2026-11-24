@@ -57,6 +57,8 @@ interface Props {
   onAlign: (mode: AlignMode) => void;
   onDistribute: (axis: 'x' | 'y') => void;
   onMatchSize: (dim: 'w' | 'h') => void;
+  /** even out the gaps: between the selected boxes, or down the selected box's column */
+  onTidy?: () => void;
   /** insert a citation of this reference at the caret (while typing) */
   onCite: (refId: string) => void;
   onOpenReferences: () => void;
@@ -81,7 +83,7 @@ const ALIGN: { mode: AlignMode; label: string; icon: string }[] = [
   { mode: 'bottom', label: 'Align bottom edges', icon: '⤓' },
 ];
 
-function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: number } & Pick<Props, 'onAlign' | 'onDistribute' | 'onMatchSize'>) {
+function ArrangeSection({ count, onAlign, onDistribute, onMatchSize, onTidy }: { count: number } & Pick<Props, 'onAlign' | 'onDistribute' | 'onMatchSize' | 'onTidy'>) {
   return (
     <section>
       <h4>{count > 1 ? 'Line up' : 'Position on the poster'}</h4>
@@ -93,6 +95,18 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: 
         ))}
       </div>
       {count === 1 && <p className="hint">Lines up with the poster margins.</p>}
+      {onTidy && (
+        <div className="toolbar-row">
+          <button
+            className="btn small-btn"
+            data-testid="tidy-up"
+            title={count > 1 ? 'Make the gaps between these boxes all the same' : 'Make the gaps between the boxes in this column all the same'}
+            onClick={onTidy}
+          >
+            {count > 1 ? 'Tidy up' : 'Tidy up this column'}
+          </button>
+        </div>
+      )}
       {count > 2 && (
         <div className="toolbar-row">
           <button className="btn small-btn" onClick={() => onDistribute('x')}>Space evenly across</button>

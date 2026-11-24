@@ -69,7 +69,13 @@ try {
   // Restart: the poster is found on disk; rename and delete change the files.
   app = await launch();
   await app.until('the saved poster', `return document.body.innerText.includes('Smoke test poster')`);
-  await app.click('Rename', `document.querySelector('.poster-card')`);
+  // Rename and Delete live in each card's ⋯ menu.
+  const cardMenu = async (item) => {
+    await app.run(`document.querySelector('.poster-card [aria-haspopup=menu]').click();`);
+    await app.until('the card menu', `return !!document.querySelector('.context-menu')`);
+    await app.click(item, `document.querySelector('.context-menu')`);
+  };
+  await cardMenu('Rename');
   // Renaming happens in place on the card: type, then press Enter.
   await app.until('the name field', `return !!document.querySelector('.card-rename')`);
   await app.run(typeInto('.card-rename', 'Renamed poster'));
@@ -77,7 +83,7 @@ try {
   for (let i = 0; i < 40 && !files().includes('Renamed-poster.poster.json'); i++) await sleep(250);
   assert.deepEqual(files(), ['Renamed-poster.poster.json']);
 
-  await app.click('Delete', `document.querySelector('.poster-card')`);
+  await cardMenu('Delete…');
   await app.until('the delete confirmation', `return !!document.querySelector('[role=alertdialog]')`);
   await app.click('Delete poster', `document.querySelector('[role=alertdialog]')`);
   for (let i = 0; i < 40 && files().length; i++) await sleep(250);

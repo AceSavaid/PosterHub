@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createPoster, PALETTES } from '../../src/model';
 import type { Poster, PosterElement } from '../../src/types';
-import { applyTextStyle, lookOf, styleForKey, styleNameOf, updateStyleToMatch, defaultLook } from '../../src/lib/textStyles';
+import { styleForKey, styleNameOf } from '../../src/lib/textStyles';
+import { applyTextStyle, lookOf, updateStyleToMatch, defaultLook } from '../../src/lib/textStyleApply';
 import { curlQuote, dashBefore, listFor } from '../../src/lib/autoformat';
 import { plainTextHtml, simplifyPastedHtml } from '../../src/lib/paste';
 import { SPECIAL_CHARS, recentChars, rememberChar, searchChars } from '../../src/lib/specialChars';

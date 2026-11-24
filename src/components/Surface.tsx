@@ -7,7 +7,6 @@ import { TYPE_NAMES } from '../lib/a11y';
 import { isCropped, placeImage } from '../lib/geometry';
 import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
 import { cleanHtml } from '../lib/sanitize';
-import { simplifyPastedHtml } from '../lib/paste';
 import { curlQuote, dashBefore, listFor } from '../lib/autoformat';
 import { loadPrefs } from '../lib/uiPrefs';
 import { PT_TO_PX, layoutEquation, mathSvg, svgDataUrl, typesetLatex } from '../lib/math';
@@ -419,9 +418,24 @@ function TextBody({ el, poster, editing, onCommit, onDone, reserve }: { el: Post
         if (!text && !html) return;
         e.preventDefault();
         e.stopPropagation();
-        const simple = html ? simplifyPastedHtml(html) : '';
-        if (simple) insertHtmlAtCaret(e.currentTarget, simple);
-        else document.execCommand('insertText', false, text);
+        if (!html) {
+          document.execCommand('insertText', false, text);
+          return;
+        }
+        // the clean-up code loads on the first formatted paste; keep the caret where it was meanwhile
+        const host = e.currentTarget;
+        const sel = window.getSelection();
+        const at = sel && sel.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+        import('../lib/paste').then(({ simplifyPastedHtml }) => {
+          const simple = simplifyPastedHtml(html);
+          const now = window.getSelection();
+          if (at && now) {
+            now.removeAllRanges();
+            now.addRange(at);
+          }
+          if (simple) insertHtmlAtCaret(host, simple);
+          else document.execCommand('insertText', false, text);
+        });
       }}
     />
   );

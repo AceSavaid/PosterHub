@@ -422,11 +422,32 @@ function TextBody({ el, poster, editing, onCommit, onDone, reserve }: { el: Post
         e.preventDefault();
         e.stopPropagation();
         const simple = html ? simplifyPastedHtml(html) : '';
-        if (simple) document.execCommand('insertHTML', false, simple);
+        if (simple) insertHtmlAtCaret(e.currentTarget, simple);
         else document.execCommand('insertText', false, text);
       }}
     />
   );
+}
+
+/**
+ * Puts cleaned HTML where the caret is. Done by hand rather than with execCommand('insertHTML'),
+ * which each browser rewrites differently (Firefox, for one, drops the formatting).
+ */
+function insertHtmlAtCaret(host: HTMLElement, html: string) {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !host.contains(sel.anchorNode)) return;
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  const frag = range.createContextualFragment(html);
+  const last = frag.lastChild;
+  range.insertNode(frag);
+  if (last) {
+    range.setStartAfter(last);
+    range.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+  host.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 /** An image showing only its crop region, placed in the box by its fit setting. */

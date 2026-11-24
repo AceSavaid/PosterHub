@@ -185,6 +185,7 @@ export function posterToTemplate(poster: Poster, name: string, opts: MakeTemplat
   delete p.thumbnail;
   delete p.notes;
   delete p.ignoredWords;
+  delete p.dismissedIssues;
   p.references = [];
   p.elements = poster.elements.map((e) => exampleElement(e, keep));
   const clean = name.trim() || poster.name || 'My template';

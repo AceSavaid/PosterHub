@@ -107,16 +107,16 @@ export function insertSection(p: Poster, headingId: string, spare: (id: string) 
   const group = 'sec-' + uid();
   const top = ref.bottom - fromRef + gap;
   const out: PosterElement[] = [];
-  if (card) out.push({ ...structuredClone(card), id: uid(), y: top, h: blockH, group, groupId: undefined, locked: undefined, grew: undefined });
+  if (card) out.push({ ...JSON.parse(JSON.stringify(card)), id: uid(), y: top, h: blockH, group, groupId: undefined, locked: undefined, grew: undefined });
   let y = top + padTop;
   const head = makeElement('heading', p, {
     x: h0.x, y, w: h0.w, h: h0.h, group,
-    style: structuredClone(h0.style), fill: h0.fill, gradient: h0.gradient, padding: h0.padding, radius: h0.radius, borderColor: h0.borderColor, borderWidth: h0.borderWidth,
+    style: h0.style && JSON.parse(JSON.stringify(h0.style)), fill: h0.fill, gradient: h0.gradient, padding: h0.padding, radius: h0.radius, borderColor: h0.borderColor, borderWidth: h0.borderWidth,
   });
   out.push(head);
   y += h0.h + inner;
   const text = makeElement('text', p, { x: bodyX, y, w: bodyW, h: textH, group, role: 'body' });
-  if (body) Object.assign(text, { style: structuredClone(body.style), fill: body.fill, padding: body.padding, radius: body.radius });
+  if (body) Object.assign(text, { style: body.style && JSON.parse(JSON.stringify(body.style)), fill: body.fill, padding: body.padding, radius: body.radius });
   out.push(text);
   y += textH + inner;
   if (figH) {

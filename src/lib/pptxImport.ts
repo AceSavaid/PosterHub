@@ -39,7 +39,7 @@ const num = (el: Element | null | undefined, attr: string, fallback = 0) => {
 };
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 /** A font name made safe to put inside an inline style attribute: letters, digits, spaces, - and . only. */
-const cssFontName = (s: string) => s.replace(/[^\p{L}\p{N} .\-]/gu, '').trim();
+const cssFontName = (s: string) => s.replace(/[^\p{L}\p{N} .-]/gu, '').trim();
 
 function resolvePath(base: string, target: string) {
   if (target.startsWith('/')) return target.slice(1);

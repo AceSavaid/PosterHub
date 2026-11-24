@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { forwardRef, useRef, useState } from 'react';
+import { forwardRef, memo, useRef, useState, type RefObject } from 'react';
 import type { Poster, PosterElement, TableSpec } from '../types';
 import { MM_TO_PX, columnLefts, columnWidth } from '../model';
 import { ElementView, Surface } from './Surface';
@@ -10,6 +10,7 @@ import { gapLabel, spacingFor, type GapMark } from '../lib/spacing';
 import { sectionSlots } from '../lib/sections';
 
 import { resizeRotated, snapAngle, type Handle } from '../lib/geometry';
+import { trackPointer } from '../lib/pointer';
 const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 /** Touch screens get bigger resize and rotate handles. */
 const COARSE = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
@@ -224,17 +225,12 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       onChange(el.id, { x, y, w, h }, key);
     };
     const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
       setGuides([]);
       setGaps([]);
       setBusy(false);
       setTimeout(() => (dragging.current = false), 0);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    trackPointer(move, up);
   }
 
   /** Drag the round handle above the selection to rotate around the centre. */
@@ -253,14 +249,9 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       onChange(el.id, { rotation }, key);
     };
     const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
       setAngle(null);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    trackPointer(move, up);
   }
 
   function startGroupDrag(e: React.PointerEvent, ids: string[]) {
@@ -290,16 +281,11 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       onMoveMany(origs.map((o) => ({ id: o.id, patch: { x: o.x + dx, y: o.y + dy } })), key);
     };
     const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
       setGuides([]);
       setGaps([]);
       setBusy(false);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    trackPointer(move, up);
   }
 
   /** Resizing a whole group scales every member inside the group's box. */
@@ -328,14 +314,7 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       }
       onMoveMany(scaleInto(members, { x, y, w, h }), key);
     };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    trackPointer(move);
   }
 
   /**
@@ -371,6 +350,17 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
   const showSlots = !!onAddSection && !busy && !editingId;
   const rotBelow = !!selected && selected.y * MM_TO_PX < 40 / zoom;
 
+  // Elements read the latest selection and handlers from here when an event fires, so their
+  // props stay the same between edits and only the boxes that changed are drawn again.
+  const live = useRef<Live>(null as unknown as Live);
+  const setHover = (id: string | null, left?: string) => {
+    if (left) {
+      setHoverId((h) => (h === left ? null : h));
+      setLastHover(left);
+    } else setHoverId(id);
+  };
+  live.current = { selectedIds, startDrag, onSelect, onEdit, onCommitText, onCommitTable, onActiveCell, onActivate, onContextMenu, noNativeDrag, open, setHover, lastTap, tapActivatedAt };
+
   return (
     <Surface
       ref={ref}
@@ -378,79 +368,16 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
       zoom={zoom}
       showGrid={showGrid}
       outside={notes}
-      renderElement={(el) => {
-        const isEditing = editingId === el.id;
-        const isText = el.style != null || el.type === 'table';
-        return (
-          <ElementView
-            key={el.id}
-            el={el}
-            poster={poster}
-            editing={isEditing}
-            onCommitText={(html) => onCommitText(el.id, html)}
-            onCommitTable={(t) => onCommitTable(el.id, t)}
-            onActiveCell={onActiveCell}
-            onEditDone={() => onEdit(null)}
-            className={(selectedIds.includes(el.id) ? 'selected ' : '') + (el.locked ? 'locked ' : '') + (isEditing ? 'editing' : '')}
-            wrapperProps={{
-              // Every element is a stop in the Tab order, so the poster can be edited without a mouse.
-              tabIndex: isEditing ? -1 : 0,
-              // A labelled group (not a button) so the label can summarise long text without clashing with it.
-              role: isEditing ? undefined : 'group',
-              'aria-label': isEditing ? undefined : elementLabel(el) + (selectedIds.includes(el.id) ? ', selected' : ''),
-              'aria-roledescription': isEditing ? undefined : 'poster element',
-              onFocus: (e) => {
-                // Keyboard focus selects the element (a mouse click already selected it on pointer down).
-                if (e.target !== e.currentTarget || isEditing || !e.currentTarget.matches(':focus-visible')) return;
-                if (!selectedIds.includes(el.id) || selectedIds.length > 1) onSelect(el.id, false, true);
-              },
-              onKeyDown: (e) => {
-                if (e.target !== e.currentTarget || isEditing) return;
-                if (e.key === 'Enter' || e.key === ' ' || e.key === 'F2') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (isText) onEdit(el.id);
-                  else if (el.type === 'image' || el.type === 'chart') onActivate(el);
-                } else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const r = e.currentTarget.getBoundingClientRect();
-                  onContextMenu(el, r.left + Math.min(r.width / 2, 40), r.top + Math.min(r.height / 2, 40));
-                }
-              },
-              onPointerDown: isEditing ? (e) => e.stopPropagation() : (e) => startDrag(e, el),
-              onDragStart: isEditing ? undefined : noNativeDrag,
-              onPointerEnter: (e) => e.pointerType === 'mouse' && setHoverId(el.id),
-              onPointerLeave: () => {
-                setHoverId((h) => (h === el.id ? null : h));
-                setLastHover(el.id);
-              },
-              onContextMenu: (e) => {
-                if (isEditing) return; // keep the browser's spelling / copy menu while typing
-                e.preventDefault();
-                e.stopPropagation();
-                if (!selectedIds.includes(el.id)) onSelect(el.id, false);
-                onContextMenu(el, e.clientX, e.clientY);
-              },
-              onPointerUp: (e) => {
-                if (isEditing || e.pointerType !== 'touch') return;
-                const prev = lastTap.current;
-                const t = e.timeStamp;
-                if (prev && prev.id === el.id && t - prev.t < 400 && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 24) {
-                  lastTap.current = null;
-                  tapActivatedAt.current = t;
-                  open(el, isText);
-                } else lastTap.current = { id: el.id, t, x: e.clientX, y: e.clientY };
-              },
-              onDoubleClick: (e) => {
-                e.stopPropagation();
-                if (e.timeStamp - tapActivatedAt.current < 600) return;
-                open(el, isText);
-              },
-            }}
-          />
-        );
-      }}
+      renderElement={(el) => (
+        <CanvasElement
+          key={el.id}
+          el={el}
+          poster={poster}
+          editing={editingId === el.id}
+          selected={selectedIds.includes(el.id)}
+          live={live}
+        />
+      )}
     >
       {selected && !editingId && (
         <div
@@ -592,3 +519,113 @@ export const Canvas = forwardRef<HTMLDivElement, Props>(function Canvas(props, r
     </Surface>
   );
 });
+
+interface Live {
+  selectedIds: string[];
+  startDrag: (e: React.PointerEvent, el: PosterElement, handle?: Handle) => void;
+  onSelect: Props['onSelect'];
+  onEdit: Props['onEdit'];
+  onCommitText: Props['onCommitText'];
+  onCommitTable: Props['onCommitTable'];
+  onActiveCell: Props['onActiveCell'];
+  onActivate: Props['onActivate'];
+  onContextMenu: Props['onContextMenu'];
+  noNativeDrag: (e: React.DragEvent) => void;
+  /** double-click / double-tap: steps into a selected group, else edits or opens the element */
+  open: (el: PosterElement, isText: boolean) => void;
+  setHover: (id: string | null, left?: string) => void;
+  lastTap: RefObject<{ id: string; t: number; x: number; y: number } | null>;
+  tapActivatedAt: RefObject<number>;
+}
+
+interface CanvasElementProps {
+  el: PosterElement;
+  poster: Poster;
+  editing: boolean;
+  selected: boolean;
+  live: RefObject<Live>;
+}
+
+/** The parts of the poster an element's look depends on, besides the element itself. */
+function sameLook(a: Poster, b: Poster) {
+  return a.palette === b.palette && a.headingFont === b.headingFont && a.bodyFont === b.bodyFont;
+}
+
+/**
+ * One element on the editing canvas. It is drawn again only when the element, its selection or
+ * editing state, or the poster's colours and fonts change, not on every edit to another element.
+ */
+const CanvasElement = memo(
+  function CanvasElement({ el, poster, editing, selected, live }: CanvasElementProps) {
+    const isText = el.style != null || el.type === 'table';
+    const h = () => live.current!;
+    return (
+      <ElementView
+        el={el}
+        poster={poster}
+        editing={editing}
+        onCommitText={(html) => h().onCommitText(el.id, html)}
+        onCommitTable={(t) => h().onCommitTable(el.id, t)}
+        onActiveCell={(cell) => h().onActiveCell(cell)}
+        onEditDone={() => h().onEdit(null)}
+        className={(selected ? 'selected ' : '') + (el.locked ? 'locked ' : '') + (editing ? 'editing' : '')}
+        wrapperProps={{
+          // Every element is a stop in the Tab order, so the poster can be edited without a mouse.
+          tabIndex: editing ? -1 : 0,
+          // A labelled group (not a button) so the label can summarise long text without clashing with it.
+          role: editing ? undefined : 'group',
+          'aria-label': editing ? undefined : elementLabel(el) + (selected ? ', selected' : ''),
+          'aria-roledescription': editing ? undefined : 'poster element',
+          onFocus: (e) => {
+            // Keyboard focus selects the element (a mouse click already selected it on pointer down).
+            if (e.target !== e.currentTarget || editing || !e.currentTarget.matches(':focus-visible')) return;
+            const ids = h().selectedIds;
+            if (!ids.includes(el.id) || ids.length > 1) h().onSelect(el.id, false, true);
+          },
+          onKeyDown: (e) => {
+            if (e.target !== e.currentTarget || editing) return;
+            if (e.key === 'Enter' || e.key === ' ' || e.key === 'F2') {
+              e.preventDefault();
+              e.stopPropagation();
+              if (isText) h().onEdit(el.id);
+              else if (el.type === 'image' || el.type === 'chart') h().onActivate(el);
+            } else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+              e.preventDefault();
+              e.stopPropagation();
+              const r = e.currentTarget.getBoundingClientRect();
+              h().onContextMenu(el, r.left + Math.min(r.width / 2, 40), r.top + Math.min(r.height / 2, 40));
+            }
+          },
+          onPointerDown: editing ? (e) => e.stopPropagation() : (e) => h().startDrag(e, el),
+          onDragStart: editing ? undefined : (e) => h().noNativeDrag(e),
+          onPointerEnter: (e) => e.pointerType === 'mouse' && h().setHover(el.id),
+          onPointerLeave: () => h().setHover(null, el.id),
+          onContextMenu: (e) => {
+            if (editing) return; // keep the browser's spelling / copy menu while typing
+            e.preventDefault();
+            e.stopPropagation();
+            if (!h().selectedIds.includes(el.id)) h().onSelect(el.id, false);
+            h().onContextMenu(el, e.clientX, e.clientY);
+          },
+          onPointerUp: (e) => {
+            if (editing || e.pointerType !== 'touch') return;
+            const { lastTap, tapActivatedAt } = h();
+            const prev = lastTap.current;
+            const t = e.timeStamp;
+            if (prev && prev.id === el.id && t - prev.t < 400 && Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < 24) {
+              lastTap.current = null;
+              tapActivatedAt.current = t;
+              h().open(el, isText);
+            } else lastTap.current = { id: el.id, t, x: e.clientX, y: e.clientY };
+          },
+          onDoubleClick: (e) => {
+            e.stopPropagation();
+            if (e.timeStamp - h().tapActivatedAt.current < 600) return;
+            h().open(el, isText);
+          },
+        }}
+      />
+    );
+  },
+  (a, b) => a.el === b.el && a.editing === b.editing && a.selected === b.selected && a.live === b.live && sameLook(a.poster, b.poster),
+);

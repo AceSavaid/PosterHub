@@ -15,6 +15,7 @@ import { authorsHtml } from './authors';
 import { htmlToText, sanitizePoster } from './sanitize';
 import { safeFileName } from './posterFile';
 import { syncCitations } from './refs/citations';
+import { captionHtml, relinkCopies, syncCaptions } from './captions';
 
 export interface UserTemplate {
   id: string;
@@ -134,7 +135,8 @@ function exampleElement(src: PosterElement, keep: Set<string>): PosterElement {
       } else if (e.role === 'title') e.html = EXAMPLE_TITLE;
       else if (e.role === 'heading' || e.role === 'summaryHeading' || e.role === 'number' || e.role === 'qrCaption') {
         // structural labels: keep
-      } else if (e.role === 'caption') e.html = 'Figure 1. Describe what the figure shows.';
+      } else if (e.captionOf) e.html = captionHtml('Describe what the figure shows.');
+      else if (e.role === 'caption') e.html = 'Figure 1. Describe what the figure shows.';
       else e.html = exampleText(wordCount(e.html));
       break;
     case 'image':
@@ -189,6 +191,7 @@ export function posterToTemplate(poster: Poster, name: string, opts: MakeTemplat
   const clean = name.trim() || poster.name || 'My template';
   p.name = clean;
   syncCitations(p);
+  syncCaptions(p);
   const now = Date.now();
   return { id: uid(), name: clean, createdAt: now, updatedAt: now, poster: p };
 }
@@ -202,12 +205,15 @@ export function posterFromTemplate(t: UserTemplate, name: string): Poster {
     if (!groups.has(g)) groups.set(g, uid());
     return groups.get(g);
   };
+  const ids = new Map<string, string>();
   p.elements = p.elements.map((e) => {
     const out = { ...e, id: uid() };
+    ids.set(e.id, out.id);
     if (e.group) out.group = remap('s:' + e.group);
     if (e.groupId) out.groupId = remap('g:' + e.groupId);
     return out;
   });
+  relinkCopies(p.elements, ids);
   const now = Date.now();
   return { ...p, id: uid(), name: name.trim() || 'Untitled poster', createdAt: now, updatedAt: now };
 }

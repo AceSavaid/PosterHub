@@ -23,8 +23,8 @@ function serialise(frag: DocumentFragment): string {
 
 export const citeIds = (span: Element) => (span.getAttribute('data-cite') ?? '').split(',').map((s) => s.trim()).filter(Boolean);
 
-/** Text boxes in the order a reader goes through the poster: column by column, top to bottom. */
-export function readingOrder(p: Poster): PosterElement[] {
+/** Sorts elements the way a reader goes through the poster: column by column, top to bottom. */
+export function sortByReadingOrder<T extends PosterElement>(p: Poster, els: T[]): T[] {
   const lefts = columnLefts(p);
   const colW = columnWidth(p);
   const key = (e: PosterElement) => {
@@ -36,11 +36,15 @@ export function readingOrder(p: Poster): PosterElement[] {
     });
     return c;
   };
-  return p.elements
-    .filter((e) => e.style && !e.refList && e.html?.includes('data-cite'))
+  return els
     .map((e) => ({ e, k: key(e) }))
     .sort((a, b) => a.k - b.k || a.e.y - b.e.y || a.e.x - b.e.x)
     .map((x) => x.e);
+}
+
+/** Text boxes with citations, in the order a reader goes through the poster. */
+export function readingOrder(p: Poster): PosterElement[] {
+  return sortByReadingOrder(p, p.elements.filter((e) => e.style && !e.refList && e.html?.includes('data-cite')));
 }
 
 /** Reference ids in the order they are first cited. */

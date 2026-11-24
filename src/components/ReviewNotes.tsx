@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import type { Poster, ReviewNote } from '../types';
 import { MM_TO_PX } from '../model';
 import { MAX_AUTHOR_LENGTH, MAX_NOTE_LENGTH, authorName, notesOf, preview, timeAgo } from '../lib/notes';
+import { trackPointer } from '../lib/pointer';
 
 // Note text comes from whoever sent the poster file. It is only ever shown as
 // React text or a <textarea> value, never as HTML.
@@ -43,14 +44,9 @@ export function NotesLayer({ poster, zoom, showResolved, openId, onOpen, onMove,
       onMove(n.id, x, y, key);
     };
     const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
       if (!moved) onOpen(openId === n.id ? null : n.id);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    trackPointer(move, up);
   }
 
   return (

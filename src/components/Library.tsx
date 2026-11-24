@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { Poster } from '../types';
-import { deletePoster, exportPosterFile, listPosters, openLibraryFolder, pickFile, readText, savePoster, storageInfo } from '../lib/storage';
+import type { PosterSummary } from '../lib/store';
+import { deletePoster, exportPosterFile, listPosterSummaries, loadPoster, openLibraryFolder, pickFile, readText, savePoster, storageInfo } from '../lib/storage';
 import { parsePosterText } from '../lib/posterFile';
 import { backupDue, daysSinceBackup, downloadLibraryBackup, parseBackupText, planRestore, restoreMessage, snoozeUntil } from '../lib/backup';
 import { useUiPrefs } from '../lib/uiPrefs';
@@ -23,11 +24,11 @@ const SettingsDialog = lazyPart(() => import('./SettingsDialog'));
 const CopySizeDialog = lazyPart(() => import('./CopySizeDialog'));
 const SaveTemplateDialog = lazyPart(() => import('./SaveTemplateDialog'));
 
-const fmtSize = (p: Poster) => `${Math.round(p.width)} × ${Math.round(p.height)} mm · ${p.width > p.height ? 'landscape' : 'portrait'}`;
+const fmtSize = (p: PosterSummary) => `${Math.round(p.width)} × ${Math.round(p.height)} mm · ${p.width > p.height ? 'landscape' : 'portrait'}`;
 const fmtDate = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 
 export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: string, start?: 'abstract') => void }) {
-  const [posters, setPosters] = useState<Poster[] | null>(null);
+  const [posters, setPosters] = useState<PosterSummary[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -35,15 +36,30 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
   const [where, setWhere] = useState<{ kind: 'browser' | 'folder'; location: string } | null>(null);
   const [picking, setPicking] = useState<{ deck: PptxDeck; name: string; fileName: string } | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
-  const [deleting, setDeleting] = useState<Poster | null>(null);
+  const [deleting, setDeleting] = useState<PosterSummary | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notice, setNotice] = useState('');
   const [resizing, setResizing] = useState<Poster | null>(null);
   const [templating, setTemplating] = useState<Poster | null>(null);
-  const [cardMenu, setCardMenu] = useState<{ x: number; y: number; poster: Poster } | null>(null);
+  const [cardMenu, setCardMenu] = useState<{ x: number; y: number; poster: PosterSummary } | null>(null);
   const [prefs, changePrefs] = useUiPrefs();
 
-  const refresh = () => listPosters().then(setPosters).catch((e) => setError(String(e)));
+  const refresh = () => listPosterSummaries().then(setPosters).catch((e) => setError(String(e)));
+
+  /** The cards hold only a summary; actions that need the whole poster load it first. */
+  async function withPoster(s: PosterSummary, then: (p: Poster) => void) {
+    try {
+      const p = await loadPoster(s.id);
+      if (p) then(p);
+      else {
+        setError(`“${s.name}” could not be found. It may have been deleted in another window.`);
+        refresh();
+      }
+    } catch (e) {
+      setError(`Could not open “${s.name}”: ` + String(e));
+    }
+  }
+  const open = (s: PosterSummary) => withPoster(s, (p) => onOpen(p));
   useEffect(() => {
     refresh();
     storageInfo().then(setWhere).catch(() => undefined);
@@ -80,7 +96,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
       const text = await readText(f);
       const backup = parseBackupText(text);
       if (backup) {
-        const plan = planRestore(await listPosters(), backup.posters);
+        const plan = planRestore(await listPosterSummaries(), backup.posters);
         for (const p of [...plan.add, ...plan.replace]) await savePoster(p);
         await refresh();
         setNotice(restoreMessage(plan, backup.skipped));
@@ -131,15 +147,17 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
 
   async function finishRename() {
     if (!renaming) return;
-    const p = posters?.find((x) => x.id === renaming.id);
+    const s = posters?.find((x) => x.id === renaming.id);
     const name = renaming.name.trim();
     setRenaming(null);
-    if (!p || !name || name === p.name) return;
+    if (!s || !name || name === s.name) return;
+    const p = await loadPoster(s.id);
+    if (!p) return refresh();
     await savePoster({ ...p, name, updatedAt: Date.now() });
     refresh();
   }
 
-  async function remove(p: Poster) {
+  async function remove(p: PosterSummary) {
     setDeleting(null);
     await deletePoster(p.id);
     refresh();
@@ -233,8 +251,8 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
         <div className="poster-grid">
           {shown.map((p) => (
             <div className="poster-card" key={p.id}>
-              <button className="thumb" onClick={() => onOpen(p)} title="Open" aria-label={`Open ${p.name} preview`}>
-                {p.thumbnail ? <img src={p.thumbnail} alt="" /> : <div className="thumb-ph" style={{ aspectRatio: `${p.width}/${p.height}`, background: p.palette?.background ?? PALETTES[0].background }} />}
+              <button className="thumb" onClick={() => open(p)} title="Open" aria-label={`Open ${p.name} preview`}>
+                {p.thumbnail ? <img src={p.thumbnail} alt="" /> : <div className="thumb-ph" style={{ aspectRatio: `${p.width}/${p.height}`, background: p.background ?? PALETTES[0].background }} />}
               </button>
               <div className="card-body">
                 {renaming?.id === p.id ? (
@@ -257,7 +275,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
                 <div className="muted small">{fmtSize(p)}</div>
                 <div className="muted small">Edited {fmtDate(p.updatedAt)}</div>
                 <div className="card-actions">
-                  <button className="btn small-btn" onClick={() => onOpen(p)}>Open</button>
+                  <button className="btn small-btn" onClick={() => open(p)}>Open</button>
                   <button
                     className="icon-btn"
                     aria-label={`More for ${p.name}`}
@@ -302,9 +320,9 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
           onClose={() => setCardMenu(null)}
           items={posterActionItems({
             onRename: () => setRenaming({ id: cardMenu.poster.id, name: cardMenu.poster.name }),
-            onCopy: () => setResizing(cardMenu.poster),
-            onDownload: () => exportPosterFile(cardMenu.poster),
-            onSaveTemplate: () => setTemplating(cardMenu.poster),
+            onCopy: () => withPoster(cardMenu.poster, setResizing),
+            onDownload: () => withPoster(cardMenu.poster, exportPosterFile),
+            onSaveTemplate: () => withPoster(cardMenu.poster, setTemplating),
             onDelete: () => setDeleting(cardMenu.poster),
           })}
         />

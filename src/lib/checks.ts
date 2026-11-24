@@ -186,6 +186,20 @@ export interface ImageInfo {
   width: number;
 }
 
+/** Splits the check results into what to show and what the person dismissed on this poster. */
+export function splitDismissed(issues: Issue[], dismissed: readonly string[] = []): { shown: Issue[]; hidden: Issue[] } {
+  if (!dismissed.length) return { shown: issues, hidden: [] };
+  const off = new Set(dismissed);
+  return { shown: issues.filter((i) => !off.has(i.id)), hidden: issues.filter((i) => off.has(i.id)) };
+}
+
+/** The dismissed list after hiding (or bringing back) some issues; undefined when nothing is left, so files stay tidy. */
+export function withDismissed(dismissed: readonly string[] = [], ids: readonly string[], hide: boolean): string[] | undefined {
+  const set = new Set(dismissed);
+  for (const id of ids) hide ? set.add(id) : set.delete(id);
+  return set.size ? [...set] : undefined;
+}
+
 export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(), overflowing: Set<string> = new Set()): Issue[] {
   const issues: Issue[] = [];
   const minPt = minReadablePt(p);

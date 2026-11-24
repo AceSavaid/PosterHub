@@ -13,24 +13,13 @@ import type { Palette, PaletteRole, Poster } from '../types';
 import { PALETTE_ROLES, resolveColor } from '../model';
 import type { Issue } from './checks';
 import { seriesData } from './chart';
+import { normalizeHex, parseColor, toHex } from './color';
+
+export { normalizeHex };
 
 export type Lab = [number, number, number];
 
 // ---------------------------------------------------------------- colour maths
-
-function parseHex(c: string): [number, number, number] | null {
-  const m = c.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (!m) return null;
-  const h = m[1].length === 3 ? [...m[1]].map((x) => x + x).join('') : m[1];
-  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
-}
-
-export function normalizeHex(c: string): string | null {
-  const rgb = parseHex(c);
-  return rgb ? toHex(rgb) : null;
-}
-
-const toHex = (rgb: number[]) => '#' + rgb.map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')).join('');
 
 const WHITE = [0.95047, 1, 1.08883]; // D65
 const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
@@ -39,7 +28,7 @@ const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16)
 const fInv = (t: number) => (t ** 3 > 216 / 24389 ? t ** 3 : (116 * t - 16) / (24389 / 27));
 
 export function hexToLab(hex: string): Lab | null {
-  const rgb = parseHex(hex);
+  const rgb = parseColor(hex);
   if (!rgb) return null;
   const [r, g, b] = rgb.map((v) => lin(v / 255));
   const x = (0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / WHITE[0];
@@ -149,11 +138,6 @@ export interface ColorUse {
 
 const INLINE_COLOR = /(?:color\s*[:=]\s*["']?)(#[0-9a-f]{3,6}\b|rgba?\([^)]*\))/gi;
 
-function cssToHex(c: string): string | null {
-  if (c.startsWith('#')) return normalizeHex(c);
-  const m = c.match(/rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i);
-  return m ? toHex([+m[1], +m[2], +m[3]]) : null;
-}
 
 /** Every flat colour the poster prints, with where it is used. Photos are left to the print shop. */
 export function posterColors(p: Poster): ColorUse[] {
@@ -161,7 +145,7 @@ export function posterColors(p: Poster): ColorUse[] {
   const add = (raw: string | undefined, elementId?: string) => {
     if (!raw) return;
     const role = raw.startsWith('@') ? (raw.slice(1) as PaletteRole) : null;
-    const hex = cssToHex(resolveColor(raw, p.palette));
+    const hex = normalizeHex(resolveColor(raw, p.palette));
     if (!hex) return;
     let u = uses.get(hex);
     if (!u) uses.set(hex, (u = { hex, elementIds: [], roles: [] }));
@@ -178,6 +162,10 @@ export function posterColors(p: Poster): ColorUse[] {
     if (e.icon) {
       add(e.icon.color, e.id);
       if (e.icon.color2) add(e.icon.color2, e.id);
+    }
+    if (e.headingIcon) {
+      if (e.headingIcon.color) add(e.headingIcon.color, e.id);
+      if (e.headingIcon.color2) add(e.headingIcon.color2, e.id);
     }
     if (e.type === 'shape') add(e.fill ?? (e.shape === 'line' ? '@primary' : undefined), e.id);
     else add(e.fill, e.id);
@@ -219,10 +207,10 @@ export function dullColorIssues(p: Poster): Issue[] {
 export function replaceColor(p: Poster, from: string, to: string): Poster {
   const target = normalizeHex(from);
   if (!target) return p;
-  const same = (c: string | undefined) => !!c && !c.startsWith('@') && cssToHex(c) === target;
+  const same = (c: string | undefined) => !!c && !c.startsWith('@') && normalizeHex(c) === target;
   const palette: Palette = { ...p.palette };
-  for (const r of PALETTE_ROLES) if (cssToHex(palette[r]) === target) palette[r] = to;
-  const html = (s: string | undefined) => s?.replace(INLINE_COLOR, (m, c: string) => (cssToHex(c) === target ? m.replace(c, to) : m));
+  for (const r of PALETTE_ROLES) if (normalizeHex(palette[r]) === target) palette[r] = to;
+  const html = (s: string | undefined) => s?.replace(INLINE_COLOR, (m, c: string) => (normalizeHex(c) === target ? m.replace(c, to) : m));
   return {
     ...p,
     palette,
@@ -232,6 +220,10 @@ export function replaceColor(p: Poster, from: string, to: string): Poster {
       borderColor: same(e.borderColor) ? to : e.borderColor,
       style: e.style && same(e.style.color) ? { ...e.style, color: to } : e.style,
       icon: e.icon && (same(e.icon.color) || same(e.icon.color2)) ? { ...e.icon, color: same(e.icon.color) ? to : e.icon.color, color2: same(e.icon.color2) ? to : e.icon.color2 } : e.icon,
+      headingIcon:
+        e.headingIcon && (same(e.headingIcon.color) || same(e.headingIcon.color2))
+          ? { ...e.headingIcon, color: same(e.headingIcon.color) ? to : e.headingIcon.color, color2: same(e.headingIcon.color2) ? to : e.headingIcon.color2 }
+          : e.headingIcon,
       html: html(e.html),
     })),
   };

@@ -12,6 +12,7 @@ const Editor = lazy(() => import('./components/Editor'));
 export default function App() {
   const [open, setOpen] = useState<Poster | null>(null);
   const [notice, setNotice] = useState<string | undefined>();
+  const [start, setStart] = useState<'abstract' | undefined>();
 
   useEffect(() => {
     // Deep link: #/poster/<id> reopens a poster after a reload. Put My posters underneath it in
@@ -30,12 +31,13 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
-  async function openPoster(p: Poster, message?: string, push = true) {
+  async function openPoster(p: Poster, message?: string, push = true, startWith?: 'abstract') {
     sanitizePoster(p);
     // Before any waiting, while the click still counts as the user's (see pushPosterEntry).
     if (push) pushPosterEntry(p.id);
     await ensurePosterFonts(p);
     setNotice(message);
+    setStart(startWith);
     setOpen(p);
   }
 
@@ -50,9 +52,9 @@ export default function App() {
 
   return open ? (
     <Suspense fallback={<div className="app-loading" role="status">Opening poster…</div>}>
-      <Editor key={open.id} initial={open} notice={notice} onClose={close} />
+      <Editor key={open.id} initial={open} notice={notice} startWith={start} onClose={close} />
     </Suspense>
   ) : (
-    <Library onOpen={openPoster} />
+    <Library onOpen={(p, message, startWith) => openPoster(p, message, true, startWith)} />
   );
 }

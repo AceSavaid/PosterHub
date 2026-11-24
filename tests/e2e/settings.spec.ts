@@ -6,9 +6,15 @@ async function newPoster(page: Page, template = 'Classic columns', name?: string
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
   await page.getByRole('button', { name: new RegExp('^' + template) }).click();
-  if (name) await page.getByRole('dialog', { name: 'New poster' }).getByLabel('Name', { exact: true }).fill(name);
+  if (name) await page.getByRole('dialog', { name: 'New poster' }).getByLabel('Poster title').fill(name);
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
+}
+
+/** In the editor, Settings sits in the gear's menu with the shortcuts and the tour. */
+async function openEditorSettings(page: Page) {
+  await page.getByRole('button', { name: 'Settings and help' }).click();
+  await page.getByRole('menuitem', { name: 'Settings…' }).click();
 }
 
 const attr = (page: Page, name: string) => page.evaluate((n) => document.documentElement.getAttribute(n), name);
@@ -30,8 +36,6 @@ test('Settings has every option in one place, and they are remembered', async ({
   expect(await attr(page, 'data-ui-size')).toBe('xlarge');
   expect(await zoomOf(page, '.lib-header')).toBe('1.3');
 
-  await dialog.getByLabel('Bleed').selectOption('3');
-  await dialog.getByLabel('Crop marks').check();
   await dialog.getByLabel('Your name on notes').fill('Dr Patel');
   await dialog.getByRole('button', { name: 'Done' }).click();
   await expect(dialog).toBeHidden();
@@ -45,17 +49,20 @@ test('Settings has every option in one place, and they are remembered', async ({
   expect(await zoomOf(page, '.topbar')).toBe('1.3');
   expect(await zoomOf(page, '.panel')).toBe('1.3');
   expect(await zoomOf(page, '.stage')).toBe('1');
+  // print-shop options live next to the PDF button, and are remembered too
   await page.getByRole('button', { name: 'Export ▾' }).click();
-  await expect(page.getByLabel('Bleed')).toHaveValue('3');
-  await expect(page.getByLabel('Crop marks')).toBeChecked();
+  await page.getByLabel('Bleed').selectOption('3');
+  await page.getByLabel('Crop marks').check();
   await page.keyboard.press('Escape');
 
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await openEditorSettings(page);
   await expect(page.getByLabel('Your name on notes')).toHaveValue('Dr Patel');
   // Reset brings the defaults back
   await page.getByRole('button', { name: 'Reset to defaults' }).click();
   expect(await attr(page, 'data-contrast')).toBeNull();
   expect(await attr(page, 'data-ui-size')).toBeNull();
+  await page.getByRole('button', { name: 'Done' }).click();
+  await page.getByRole('button', { name: 'Export ▾' }).click();
   await expect(page.getByLabel('Bleed')).toHaveValue('0');
 });
 
@@ -110,12 +117,9 @@ test('? opens a searchable list of shortcuts, labelled for this computer', async
   await page.keyboard.press('Escape');
   await expect(sheet).toBeHidden();
 
-  // also reachable from the View menu and the empty Properties panel
-  await page.getByRole('button', { name: 'View ▾' }).click();
-  await page.getByRole('button', { name: /Keyboard shortcuts/ }).click();
-  await expect(sheet).toBeVisible();
-  await page.getByRole('button', { name: 'Close' }).click();
-  await page.getByRole('button', { name: /All shortcuts/ }).click();
+  // also reachable from the gear's Settings and help menu
+  await page.getByRole('button', { name: 'Settings and help' }).click();
+  await page.getByRole('menuitem', { name: /Keyboard shortcuts/ }).click();
   await expect(sheet).toBeVisible();
   await page.keyboard.press('Escape');
 
@@ -140,7 +144,7 @@ test('Properties shows a tip for the selected element, which can be hidden', asy
   await expect(tip).toContainText('two lines');
   await tip.getByRole('button', { name: 'Hide tips' }).click();
   await expect(tip).toHaveCount(0);
-  await page.getByRole('button', { name: 'Settings' }).click();
+  await openEditorSettings(page);
   await expect(page.getByLabel('Show a tip for the selected element')).not.toBeChecked();
 });
 
@@ -199,7 +203,7 @@ test('backs up every poster in one file and restores it without losing newer wor
   await expect(banner).toHaveCount(0);
 
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Back up all posters' }).click();
+  await page.getByRole('button', { name: 'Download all posters' }).click();
   const file = await download;
   expect(file.suggestedFilename()).toMatch(/^PosterHub-backup-\d{4}-\d\d-\d\d\.posterhub-backup\.json$/);
   const saved = await file.path();
@@ -209,7 +213,8 @@ test('backs up every poster in one file and restores it without losing newer wor
 
   // delete one, then restore from the backup
   const card = page.locator('.poster-card', { hasText: 'Second poster' });
-  await card.getByRole('button', { name: 'Delete' }).click();
+  await card.getByRole('button', { name: 'More for Second poster' }).click();
+  await page.getByRole('menuitem', { name: 'Delete…' }).click();
   await page.getByRole('button', { name: 'Delete poster' }).click();
   await expect(page.locator('.poster-card')).toHaveCount(1);
 

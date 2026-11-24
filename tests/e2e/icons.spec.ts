@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 async function blankPoster(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  await page.getByLabel('Name').fill('Icon poster');
+  await page.getByLabel('Poster title').fill('Icon poster');
   await page.getByLabel('Size').selectOption('A3');
   await page.getByRole('button', { name: /^Blank/ }).click();
   await page.getByRole('button', { name: 'Create poster' }).click();
@@ -74,12 +74,14 @@ test('icons follow palette changes and can be recoloured and swapped', async ({ 
   await inspector.getByRole('button', { name: 'Secondary (follows palette)' }).first().click();
   expect(await fills(page)).toContain('#2e75b6');
 
-  // A new palette recolours the icon.
+  // A new palette recolours the icon (palettes are in the poster settings: back from the icon's properties).
+  await inspector.getByRole('button', { name: 'Poster settings' }).click();
   await page.getByRole('tab', { name: 'Design' }).click();
   await page.getByRole('button', { name: /Forest/ }).first().click();
   expect(await fills(page)).toEqual(expect.arrayContaining(['#4f8a5b', '#e0b44a']));
 
   // Swap the picture but keep the colours.
+  await icons(page).first().click();
   await inspector.getByRole('button', { name: 'Change icon…' }).click();
   await inspector.getByRole('searchbox', { name: 'Search for a different icon' }).fill('atom');
   await inspector.getByRole('button', { name: 'Use icon: Atom', exact: true }).click();

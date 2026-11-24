@@ -79,7 +79,7 @@ test('dialogs take focus, keep Tab inside, close on Escape and hand focus back',
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'New poster' });
   await expect(dialog).toHaveAttribute('aria-modal', 'true');
-  await expect(page.getByLabel('Name')).toBeFocused();
+  await expect(page.getByLabel('Poster title')).toBeFocused();
   for (let i = 0; i < 40; i++) {
     await page.keyboard.press('Tab');
     expect(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))).toBe(true);
@@ -188,12 +188,15 @@ test('selected options are announced, not just coloured', async ({ page }) => {
   const props = page.getByRole('complementary', { name: 'Properties' });
   expect(await props.locator('.swatch[aria-pressed="true"]').count()).toBeGreaterThan(0);
 
-  const tabs = page.getByRole('tablist', { name: 'Tools' });
-  await expect(tabs.getByRole('tab', { name: 'Insert' })).toHaveAttribute('aria-selected', 'true');
-  await tabs.getByRole('tab', { name: 'Insert' }).focus();
-  await page.keyboard.press('ArrowRight');
+  // with nothing selected, Properties holds the whole poster's settings, in keyboard-friendly tabs
+  await page.keyboard.press('Escape');
+  const tabs = page.getByRole('tablist', { name: 'Poster settings' });
   await expect(tabs.getByRole('tab', { name: 'Layout' })).toHaveAttribute('aria-selected', 'true');
-  await expect(tabs.getByRole('tab', { name: 'Layout' })).toBeFocused();
+  await tabs.getByRole('tab', { name: 'Layout' }).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(tabs.getByRole('tab', { name: 'Design' })).toHaveAttribute('aria-selected', 'true');
+  await expect(tabs.getByRole('tab', { name: 'Design' })).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
   await expect(page.getByRole('group', { name: 'Number of columns' }).getByRole('button', { name: '3' })).toHaveAttribute('aria-pressed', 'true');
 });
 

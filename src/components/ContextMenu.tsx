@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { keys } from '../lib/keys';
+import { usePopover } from '../lib/usePopover';
 
 export interface MenuItem {
   label: string;
@@ -48,22 +49,7 @@ export default function ContextMenu({ x, y, items, onClose }: { x: number; y: nu
     return () => window.removeEventListener('keydown', nav, true);
   }, []);
 
-  useEffect(() => {
-    const close = (e: Event) => {
-      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-      if (e instanceof KeyboardEvent) e.stopPropagation(); // Escape closes the menu only, not the selection
-      if (e.type === 'pointerdown' && ref.current?.contains(e.target as Node)) return;
-      onClose();
-    };
-    window.addEventListener('pointerdown', close, true);
-    window.addEventListener('keydown', close, true);
-    window.addEventListener('blur', close);
-    return () => {
-      window.removeEventListener('pointerdown', close, true);
-      window.removeEventListener('keydown', close, true);
-      window.removeEventListener('blur', close);
-    };
-  }, [onClose]);
+  usePopover(true, ref, onClose, { closeOnBlur: true });
 
   return (
     <div className="context-menu" role="menu" aria-label="Actions" ref={ref} style={{ left: pos.x, top: pos.y }} onContextMenu={(e) => e.preventDefault()}>

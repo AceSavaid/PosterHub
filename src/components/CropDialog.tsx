@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDialog } from '../lib/useDialog';
 import type { CropRect, PosterElement } from '../types';
 import { FULL_CROP, clampCrop, type Handle } from '../lib/geometry';
 import { trackPointer } from '../lib/pointer';
@@ -39,11 +40,7 @@ export default function CropDialog({ el, onApply, onCancel }: Props) {
     img.src = el.src!;
   }, [el.src]);
 
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => e.key === 'Escape' && onCancel();
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [onCancel]);
+  const dialog = useDialog(onCancel);
 
   const k = natural ? Math.min(MAX_W / natural.w, MAX_H / natural.h, 1.5) : 1;
   const dispW = natural ? natural.w * k : MAX_W;
@@ -116,7 +113,7 @@ export default function CropDialog({ el, onApply, onCancel }: Props) {
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
-      <div className="modal wide crop-dialog" role="dialog" aria-label="Crop image">
+      <div {...dialog} className="modal wide crop-dialog" aria-label="Crop image">
         <h2>Crop image</h2>
         <div className="seg crop-shapes">
           {SHAPES.map((s) => (

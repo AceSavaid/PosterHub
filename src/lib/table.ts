@@ -5,6 +5,7 @@
 import Papa from 'papaparse';
 import type { Palette, TableSpec, TableStyleId } from '../types';
 import { resolveColor } from '../model';
+import { parseColor } from './color';
 
 /** Keeps pasted tables to a size the editor stays fast with. */
 export const MAX_ROWS = 200;
@@ -228,17 +229,10 @@ export interface CellLook {
   left: Border | null;
 }
 
-function hexRgb(c: string): [number, number, number] | null {
-  const m = c.trim().match(/^#([0-9a-f]{6}|[0-9a-f]{3})/i);
-  if (!m) return null;
-  const h = m[1].length === 3 ? [...m[1]].map((x) => x + x).join('') : m[1];
-  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
-}
-
 /** Mixes two hex colours; t = 0 gives a, 1 gives b. */
 export function mix(a: string, b: string, t: number): string {
-  const x = hexRgb(a);
-  const y = hexRgb(b);
+  const x = parseColor(a);
+  const y = parseColor(b);
   if (!x || !y) return a;
   return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
 }
@@ -246,7 +240,7 @@ export function mix(a: string, b: string, t: number): string {
 /** Readable text on a filled header: white or the text colour, whichever contrasts more. */
 function onFill(fill: string, text: string): string {
   const lum = (c: string) => {
-    const rgb = hexRgb(c);
+    const rgb = parseColor(c);
     if (!rgb) return 1;
     const [r, g, b] = rgb.map((v) => {
       const s = v / 255;

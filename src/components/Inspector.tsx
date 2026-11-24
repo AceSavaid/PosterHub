@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { EquationSpec, IconSpec, Poster, PosterElement, TableSpec, TableStyleId, TextStyle } from '../types';
 import { TABLE_STYLES, cellLook, normalizeTable } from '../lib/table';
 import { useDataFile } from './DataFilePicker';
@@ -8,27 +8,26 @@ import { useMathReady } from '../lib/useMath';
 import { useIconsReady } from '../lib/useIcons';
 import { ICON_SOURCES, hasSecondTone, iconArt, iconInfo } from '../lib/icons/library';
 import { IconPicker } from './IconPicker';
+import { canHaveHeadingIcon } from '../lib/headingIcon';
 import { QR_MAX_LENGTH, normaliseLink, qrDataUrl } from '../lib/qr';
 import { FontSelect } from './FontSelect';
 import { ColorInput } from './ColorInput';
 import type { AlignMode } from '../lib/arrange';
 import { SHAPE_CHOICES } from '../lib/shapes';
 import { isCropped, normAngle } from '../lib/geometry';
-import { resizeSelection, styleSelection } from '../lib/richtext';
-import { PALETTE_ROLES } from '../model';
 import { CITATION_STYLES, DEFAULT_STYLE, shortLabel } from '../lib/refs/format';
 import { TYPE_NAMES } from '../lib/a11y';
 import { keys } from '../lib/keys';
-import { SHORTCUTS } from '../lib/shortcuts';
 import { elementTip } from '../lib/tips';
 import { useUiPrefs } from '../lib/uiPrefs';
 
-/** The few shortcuts shown in the empty Properties panel; the rest are on the ? sheet. */
-const QUICK = new Set(['Undo', 'Redo', 'Copy, cut and paste elements, text or images', 'Duplicate', 'Move between elements on the poster', 'Edit the selected text, table, equation, image or graph', 'Nudge 1 mm', 'Stop editing, or clear the selection']);
 
 interface Props {
   /** opens the full keyboard shortcut list */
-  onShowShortcuts?: () => void;
+  /** page, layout, colours and fonts for the whole poster, shown when nothing is selected */
+  posterSettings?: ReactNode;
+  /** deselects everything, which brings back the poster settings */
+  onClearSelection?: () => void;
   poster: Poster;
   el: PosterElement | null;
   editing: boolean;
@@ -104,6 +103,15 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize }: { count: 
 }
 
 
+/** Deselects, so the panel goes back to the whole poster's settings. */
+function PosterLink({ onClick }: { onClick: () => void }) {
+  return (
+    <button className="link insp-poster-link" onClick={onClick} title={keys('Poster size, layout, colours and fonts (or press Esc)')}>
+      Poster settings
+    </button>
+  );
+}
+
 function ElementTip({ el }: { el: PosterElement }) {
   const [prefs, change] = useUiPrefs();
   const tip = elementTip(el);
@@ -126,6 +134,7 @@ export default function Inspector(props: Props) {
         <div className="panel-body">
           <div className="insp-head">
             <h3>{props.grouped ? `Group of ${multi}` : `${multi} elements selected`}</h3>
+            {props.onClearSelection && <PosterLink onClick={props.onClearSelection} />}
             <div className="icon-row">
               <button className="icon-btn" title={keys('Duplicate (Ctrl/⌘ D)')} onClick={onDuplicate}>⧉</button>
               <button className="icon-btn danger" title="Delete" onClick={onDelete}>🗑</button>
@@ -154,31 +163,8 @@ export default function Inspector(props: Props) {
   if (!el) {
     return (
       <aside className="panel right" aria-label="Properties">
-        <div className="panel-body">
-          <h3>Nothing selected</h3>
-          <p className="hint">Click an element on the poster to change its text, colours, size and position. Double-click text to type.</p>
-          <h3>Shortcuts</h3>
-          <ul className="shortcuts">
-            {SHORTCUTS.flatMap((g) => g.items)
-              .filter((x) => QUICK.has(x.what))
-              .map((x) => (
-                <li key={x.what}>
-                  {x.combos.map((c, i) => (
-                    <span key={c}>
-                      {i > 0 && ' '}
-                      <kbd>{keys(c)}</kbd>
-                    </span>
-                  ))}{' '}
-                  {x.what.charAt(0).toLowerCase() + x.what.slice(1)}
-                </li>
-              ))}
-          </ul>
-          {props.onShowShortcuts && (
-            <button className="btn small-btn" onClick={props.onShowShortcuts}>
-              All shortcuts <kbd>?</kbd>
-            </button>
-          )}
-        </div>
+        <h2 className="panel-title insp-poster-title">Poster</h2>
+        {props.posterSettings}
       </aside>
     );
   }
@@ -191,11 +177,55 @@ export default function Inspector(props: Props) {
   const fmt = (cmd: 'bold' | 'italic' | 'underline', key: 'bold' | 'italic' | 'underline') =>
     editing ? document.execCommand(cmd) : setStyle({ [key]: !st![key] } as Partial<TextStyle>);
 
+  const backgroundSection = (
+        <section>
+          <h4>{el.type === 'shape' ? (el.shape === 'line' ? 'Line colour' : 'Fill') : 'Background'}</h4>
+          <ColorInput value={el.fill} palette={poster.palette} allowNone={el.type !== 'shape' || (el.shape !== 'line' && !!el.borderWidth)} onChange={(c) => onChange({ fill: c, gradient: undefined })} />
+          {el.gradient && (
+            <p className="muted small">
+              Gradient from the template.{' '}
+              <button className="btn small-btn" onClick={() => onChange({ gradient: undefined })}>
+                Use a solid colour
+              </button>
+            </p>
+          )}
+          {el.shape !== 'line' && (
+            <>
+              <div className="row2">
+                <label>
+                  Border (pt)
+                  <input type="number" min={0} step={0.5} value={el.borderWidth ?? 0} onChange={(e) => onChange({ borderWidth: Math.max(0, +e.target.value || 0) }, 'bw')} />
+                </label>
+                {(el.type !== 'shape' || el.shape === 'rect' || !el.shape) && (
+                  <label>
+                    Corner radius (mm)
+                    <input type="number" min={0} value={n(el.radius ?? 0)} onChange={(e) => onChange({ radius: Math.max(0, +e.target.value || 0) }, 'rad')} />
+                  </label>
+                )}
+              </div>
+              {!!el.borderWidth && (
+                <>
+                  <div className="field-label">Border colour</div>
+                  <ColorInput value={el.borderColor ?? '@primary'} palette={poster.palette} onChange={(c) => onChange({ borderColor: c })} />
+                </>
+              )}
+              {el.type !== 'shape' && (
+                <label>
+                  Inner padding (mm)
+                  <input type="number" min={0} value={n(el.padding ?? 0)} onChange={(e) => onChange({ padding: Math.max(0, +e.target.value || 0) }, 'pad')} />
+                </label>
+              )}
+            </>
+          )}
+        </section>
+  );
+
   return (
     <aside className="panel right" aria-label="Properties">
       <div className="panel-body">
         <div className="insp-head">
           <h3>{el.refList ? 'Reference list' : TYPE_NAMES[el.type]}</h3>
+          {props.onClearSelection && <PosterLink onClick={props.onClearSelection} />}
           <div className="icon-row">
             <button className="icon-btn" title={keys('Duplicate (Ctrl/⌘ D)')} onClick={onDuplicate}>⧉</button>
             <button className="icon-btn" title={el.locked ? 'Unlock' : 'Lock position'} aria-label="Lock position" aria-pressed={!!el.locked} onClick={() => onChange({ locked: !el.locked })}>
@@ -267,29 +297,7 @@ export default function Inspector(props: Props) {
             </div>
             <div className="field-label">Text colour</div>
             <ColorInput value={st.color} palette={poster.palette} onChange={(c) => setStyle({ color: c ?? '@text' })} />
-            {editing && (
-              <div className="sel-format">
-                <div className="field-label">Selected words</div>
-                <div className="toolbar-row">
-                  <button className="fmt" title="Make selected words larger" aria-label="A+ larger" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1.15)}>A+</button>
-                  <button className="fmt" title="Make selected words smaller" aria-label="A− smaller" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1 / 1.15)}>A−</button>
-                  <span className="sep" />
-                  {PALETTE_ROLES.filter((r) => r !== 'background' && r !== 'surface').map((r) => (
-                    <button
-                      key={r}
-                      className="swatch"
-                      style={{ background: poster.palette[r] }}
-                      title={'Colour selected words: ' + r}
-                      aria-label={'Colour selected words ' + r}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => styleSelection({ color: poster.palette[r] })}
-                    />
-                  ))}
-                  <button className="swatch" style={{ background: '#ffffff' }} title="White" aria-label="Colour selected words white" onMouseDown={(e) => e.preventDefault()} onClick={() => styleSelection({ color: '#ffffff' })} />
-                </div>
-                <p className="hint">Select words while typing, then use B / I / U, size or colour to change only those words.</p>
-              </div>
-            )}
+            {editing && <p className="hint">Select words to make only those bold, bigger or a different colour with the bar above the text.</p>}
           </section>
         )}
 
@@ -399,6 +407,8 @@ export default function Inspector(props: Props) {
 
         {el.type === 'icon' && el.icon && <IconSection key={el.id} poster={poster} el={el} onChange={onChange} />}
 
+        {st && canHaveHeadingIcon(el) && <HeadingIconSection key={el.id} poster={poster} el={el} onChange={onChange} />}
+
         {el.type === 'equation' && el.equation && <EquationSection key={el.id} poster={poster} el={el} onChange={onChange} onEdit={onEditEquation} />}
 
         {el.type === 'shape' && el.shape !== 'line' && (
@@ -439,48 +449,10 @@ export default function Inspector(props: Props) {
           </section>
         )}
 
-        <section>
-          <h4>{el.type === 'shape' ? (el.shape === 'line' ? 'Line colour' : 'Fill') : 'Background'}</h4>
-          <ColorInput value={el.fill} palette={poster.palette} allowNone={el.type !== 'shape' || (el.shape !== 'line' && !!el.borderWidth)} onChange={(c) => onChange({ fill: c, gradient: undefined })} />
-          {el.gradient && (
-            <p className="muted small">
-              Gradient from the template.{' '}
-              <button className="btn small-btn" onClick={() => onChange({ gradient: undefined })}>
-                Use a solid colour
-              </button>
-            </p>
-          )}
-          {el.shape !== 'line' && (
-            <>
-              <div className="row2">
-                <label>
-                  Border (pt)
-                  <input type="number" min={0} step={0.5} value={el.borderWidth ?? 0} onChange={(e) => onChange({ borderWidth: Math.max(0, +e.target.value || 0) }, 'bw')} />
-                </label>
-                {(el.type !== 'shape' || el.shape === 'rect' || !el.shape) && (
-                  <label>
-                    Corner radius (mm)
-                    <input type="number" min={0} value={n(el.radius ?? 0)} onChange={(e) => onChange({ radius: Math.max(0, +e.target.value || 0) }, 'rad')} />
-                  </label>
-                )}
-              </div>
-              {!!el.borderWidth && (
-                <>
-                  <div className="field-label">Border colour</div>
-                  <ColorInput value={el.borderColor ?? '@primary'} palette={poster.palette} onChange={(c) => onChange({ borderColor: c })} />
-                </>
-              )}
-              {el.type !== 'shape' && (
-                <label>
-                  Inner padding (mm)
-                  <input type="number" min={0} value={n(el.padding ?? 0)} onChange={(e) => onChange({ padding: Math.max(0, +e.target.value || 0) }, 'pad')} />
-                </label>
-              )}
-            </>
-          )}
-        </section>
-
-        <ArrangeSection count={1} {...props} />
+        {el.type === 'shape' && backgroundSection}
+        <MoreProps label={el.type === 'shape' ? 'Position and size' : 'Background, border, position and size'}>
+          {el.type !== 'shape' && backgroundSection}
+          <ArrangeSection count={1} {...props} />
 
         <section>
           <h4>Position and size (mm)</h4>
@@ -514,8 +486,39 @@ export default function Inspector(props: Props) {
             <button className="btn small-btn" onClick={() => onLayer('back')}>Send to back</button>
           </div>
         </section>
+        </MoreProps>
       </div>
     </aside>
+  );
+}
+
+const MORE_KEY = 'posterhub.moreProps';
+/** The less-used settings fold away so the panel starts with what people change most; it stays open once opened. */
+function MoreProps({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(MORE_KEY) === 'open';
+    } catch {
+      return false;
+    }
+  });
+  return (
+    <details
+      className="more-props"
+      open={open}
+      onToggle={(e) => {
+        const o = (e.currentTarget as HTMLDetailsElement).open;
+        setOpen(o);
+        try {
+          localStorage.setItem(MORE_KEY, o ? 'open' : 'closed');
+        } catch {
+          /* private mode: it just won't be remembered */
+        }
+      }}
+    >
+      <summary>{label}</summary>
+      {open && children}
+    </details>
   );
 }
 
@@ -721,6 +724,95 @@ function IconSection({ poster, el, onChange }: { poster: Poster; el: PosterEleme
         <textarea rows={2} value={el.alt ?? ''} placeholder={info ? info.label : 'What does it show?'} onChange={(e) => onChange({ alt: e.target.value || undefined }, 'alt')} />
       </label>
       {source && <p className="hint">From {source.name} ({source.licence}). Free to use without credit.</p>}
+    </section>
+  );
+}
+
+/** An icon at the right-hand end of a heading, sized from the heading's text. */
+function HeadingIconSection({ poster, el, onChange }: { poster: Poster; el: PosterElement; onChange: Props['onChange'] }) {
+  const ic = el.headingIcon;
+  const ready = useIconsReady();
+  const info = iconInfo(ic?.id);
+  const art = ready && ic ? iconArt(ic.id) : undefined;
+  const [picking, setPicking] = useState(false);
+  const matchText = !!ic && ic.color == null;
+  return (
+    <section className="heading-icon-section">
+      <h4>Icon at the end{info ? ': ' + info.label : ''}</h4>
+      {!ic ? (
+        <>
+          <p className="hint">Add an icon to the right-hand end of this heading. It is sized and lined up to match the text automatically.</p>
+          <button className="btn" aria-expanded={picking} onClick={() => setPicking(!picking)}>
+            {picking ? 'Cancel' : 'Add icon to heading…'}
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="field-label" id={el.id + '-icon-place'}>Place the icon</div>
+          <div className="toolbar-row" role="group" aria-labelledby={el.id + '-icon-place'}>
+            <button className={'btn small-btn' + (ic.place !== 'after' ? ' on' : '')} aria-pressed={ic.place !== 'after'} onClick={() => onChange((x) => void delete x.headingIcon!.place)}>
+              At the right edge
+            </button>
+            <button className={'btn small-btn' + (ic.place === 'after' ? ' on' : '')} aria-pressed={ic.place === 'after'} onClick={() => onChange((x) => void (x.headingIcon!.place = 'after'))}>
+              Right after the words
+            </button>
+          </div>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={matchText}
+              onChange={(e) => onChange((x) => {
+                if (e.target.checked) delete x.headingIcon!.color;
+                else x.headingIcon!.color = x.style?.color ?? '@primary';
+              })}
+            />
+            Same colour as the heading text
+          </label>
+          {!matchText && (
+            <>
+              <div className="field-label">Icon colour</div>
+              <ColorInput value={ic.color} palette={poster.palette} onChange={(c) => onChange((x) => void (x.headingIcon!.color = c ?? '@primary'))} />
+            </>
+          )}
+          {hasSecondTone(art) && (
+            <>
+              <div className="field-label">Shading colour</div>
+              <ColorInput
+                value={ic.color2}
+                palette={poster.palette}
+                allowNone
+                onChange={(c) => onChange((x) => {
+                  if (c && c !== 'transparent') x.headingIcon!.color2 = c;
+                  else delete x.headingIcon!.color2;
+                })}
+              />
+            </>
+          )}
+          <div className="toolbar-row">
+            <button className="btn small-btn" aria-expanded={picking} onClick={() => setPicking(!picking)}>
+              {picking ? 'Done changing icon' : 'Change icon…'}
+            </button>
+            <button className="btn small-btn" onClick={() => {
+                setPicking(false);
+                onChange((x) => void delete x.headingIcon);
+              }}>Remove icon</button>
+          </div>
+          <p className="hint">The icon grows and shrinks with the heading’s text size.</p>
+        </>
+      )}
+      {picking && (
+        <IconPicker
+          label="Search icons for this heading"
+          action={ic ? 'Use icon' : 'Add to heading'}
+          selectedId={ic?.id}
+          onPick={(i) => {
+            onChange((x) => {
+              x.headingIcon = { ...(x.headingIcon ?? {}), id: i.id };
+            });
+            if (!ic) setPicking(false);
+          }}
+        />
+      )}
     </section>
   );
 }

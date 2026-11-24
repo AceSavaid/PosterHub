@@ -18,6 +18,8 @@ interface OldSection {
   captions: string[];
   /** Text or figures the person changed, or a renamed heading. */
   edited: boolean;
+  /** the icon at the end of the old heading, carried over to the new one */
+  headingIcon?: PosterElement['headingIcon'];
 }
 
 interface Extracted {
@@ -104,7 +106,8 @@ export function extractContent(elements: PosterElement[]): Extracted {
   for (const h of [...headings].sort((a, b) => a.x - b.x || a.y - b.y)) {
     const name = sectionKey(h.html ?? '');
     const renamed = !isStarterText(h.html);
-    const sec: OldSection = { name, headingHtml: h.html ?? '', renamed, bodies: [], figures: [], captions: [], edited: renamed };
+    const sec: OldSection = { name, headingHtml: h.html ?? '', renamed, bodies: [], figures: [], captions: [], edited: renamed || !!h.headingIcon };
+    if (h.headingIcon) sec.headingIcon = { ...h.headingIcon };
     byHeading.set(h, sec);
   }
   const headingOf = headingOwner(headings);
@@ -226,6 +229,7 @@ export function applyLayout(poster: Poster, template: TemplateId): { elements: P
       report.sections++;
       // Keep the person's own heading, and the old name when content lands in a differently named spot.
       if (slot.heading && (sec.renamed || slot.key !== sec.name)) slot.heading.html = sec.headingHtml;
+      if (slot.heading && sec.headingIcon) slot.heading.headingIcon = sec.headingIcon;
       if (slot.body && sec.bodies.length) slot.body.html = sec.bodies.join('<br>');
       if (slot.caption && sec.captions.length) slot.caption.html = sec.captions.join('<br>');
       else if (!slot.body && slot.caption && sec.bodies.length) slot.caption.html = sec.bodies.join('<br>');

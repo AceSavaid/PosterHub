@@ -85,6 +85,8 @@ test('Cancel (or Esc) keeps the old picture', async ({ page }) => {
   await replaceWithSquare(page);
   const oldSrc = (await page.locator('.poster .el-image img').getAttribute('src'))!;
   const dialog = page.getByRole('dialog', { name: 'How should the new image fit?' });
+  // the picture is read before the question opens; Esc pressed earlier goes nowhere
+  await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
   expect((await size(page)).ratio).toBeCloseTo(2, 1);

@@ -13,10 +13,13 @@ const FIXTURES = path.join(import.meta.dirname, '..', 'fixtures');
 async function newPoster(page: Page, opts: { name?: string; landscape?: boolean; size?: string; columns?: number; template?: string } = {}) {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  if (opts.name) await page.getByLabel('Name').fill(opts.name);
+  if (opts.name) await page.getByLabel('Poster title').fill(opts.name);
   if (opts.landscape) await page.getByRole('button', { name: 'Landscape' }).click();
   if (opts.size) await page.getByLabel('Size').selectOption(opts.size);
-  if (opts.columns) await page.getByLabel('Columns').selectOption(String(opts.columns));
+  if (opts.columns) {
+    await page.getByText('More options').click();
+    await page.getByLabel('Columns').selectOption(String(opts.columns));
+  }
   if (opts.template) await page.getByRole('button', { name: new RegExp(opts.template) }).click();
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
@@ -79,14 +82,18 @@ test.describe('library', () => {
   test('duplicates and deletes posters', async ({ page }) => {
     await newPoster(page, { name: 'Original' });
     await backToLibrary(page);
-    await page.locator('.poster-card', { hasText: 'Original' }).getByRole('button', { name: 'Duplicate' }).click();
+    await page.getByRole('button', { name: 'More for Original', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Make a copy…' }).click();
+    await page.getByRole('dialog', { name: 'Make a copy' }).getByRole('button', { name: 'Make copy' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
-    await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'More for Original (copy)' }).click();
+    await page.getByRole('menuitem', { name: 'Delete…' }).click();
     // an in-app "are you sure?" box, where Cancel keeps the poster
     const confirm = page.getByRole('alertdialog', { name: 'Delete “Original (copy)”?' });
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
-    await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'More for Original (copy)' }).click();
+    await page.getByRole('menuitem', { name: 'Delete…' }).click();
     await confirm.getByRole('button', { name: 'Delete poster' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toHaveCount(0);
   });
@@ -105,6 +112,7 @@ test.describe('templates', () => {
     await page.getByRole('button', { name: 'Landscape' }).click();
     const landscape = (await thumb.boundingBox())!;
     expect(landscape.width).toBeGreaterThan(landscape.height);
+    await page.getByText('More options').click();
     await page.getByRole('button', { name: 'Crimson' }).click();
     await expect(thumb.locator('rect[fill="#8b1e2d"]').first()).toBeAttached();
     await page.locator('[data-template="sidebar"]').click();
@@ -184,8 +192,10 @@ test.describe('templates', () => {
         await page.goto('/');
         await page.getByRole('button', { name: '+ New poster' }).first().click();
         if (landscape) await page.getByRole('button', { name: 'Landscape' }).click();
+        await page.getByText('More options').click();
         await page.getByLabel('Columns').selectOption(String(columns));
-        if (['clinical', 'lab', 'computing', 'humanities'].includes(id)) await page.getByText('By research field').click();
+        // the gallery opens on the last layout used, so the research-field group may already be open
+        if (['clinical', 'lab', 'computing', 'humanities'].includes(id) && (await page.locator('details.field-layouts[open]').count()) === 0) await page.getByText('By research field').click();
         await page.locator(`[data-template="${id}"]`).click();
         await page.getByRole('button', { name: 'Create poster' }).click();
         await expect(page.locator('.poster .el-title')).toBeVisible();
@@ -203,7 +213,6 @@ test.describe('templates', () => {
     await page.getByRole('combobox', { name: 'Layout' }).selectOption('boxed');
     await expect(page.getByText('Logos either side of the title')).toBeVisible();
     await page.getByRole('button', { name: /^Apply to/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
     await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(2);
   });
 });
@@ -230,10 +239,10 @@ test.describe('switching layouts', () => {
     const methodsBody = page.locator('.poster .el-text .el-body').nth(bodyIndex);
     await typeInto(methodsBody, 'Forty-two adults slept in the lab.');
 
+    await page.locator('.stage').click({ position: { x: 5, y: 5 } }); // nothing selected: Properties shows the poster settings
     await page.getByRole('tab', { name: 'Layout' }).click();
     await page.getByRole('combobox', { name: 'Layout' }).selectOption('sidebar');
     await page.getByRole('button', { name: /^Apply to/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
     await expect(page.locator('.toast')).toContainText('Moved your 1 section');
 
     await expect(page.locator('.poster .el-title .el-body')).toHaveText('Sleep and memory');
@@ -254,18 +263,16 @@ test.describe('switching layouts', () => {
 });
 
 test.describe('editing', () => {
-  test('applies a layout after asking first', async ({ page }) => {
+  test('applies a layout straight away, and Undo puts it back', async ({ page }) => {
     await newPoster(page);
     const before = await elements(page).count();
     expect(before).toBeGreaterThan(0);
-    await page.locator('.panel.left .tabs').getByRole('tab', { name: 'Layout' }).click();
-    await page.locator('.panel.left label', { hasText: /^Layout/ }).locator('select').selectOption({ label: 'Blank' });
+    await page.locator('.panel.right .tabs').getByRole('tab', { name: 'Layout' }).click();
+    await page.locator('.panel.right label', { hasText: /^Layout/ }).locator('select').selectOption({ label: 'Blank' });
     await page.getByRole('button', { name: /^Apply to/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
-    await expect(elements(page)).toHaveCount(before);
-    await page.getByRole('button', { name: /^Apply to/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Apply layout' }).click();
     await expect(elements(page)).toHaveCount(0);
+    await page.locator('.toast').getByRole('button', { name: 'Undo' }).click();
+    await expect(elements(page)).toHaveCount(before);
   });
 
   test('types into text, with undo and redo', async ({ page }) => {
@@ -502,7 +509,7 @@ test.describe('export, import and sharing', () => {
     const pdf = await download(page, /^PDF/);
     expect(pdf.name).toBe('Export-test.pdf');
     expect(pdf.data.subarray(0, 4).toString()).toBe('%PDF');
-    expect(await pdfText(pdf.data)).toContain('Your Poster Title Goes Here');
+    expect(await pdfText(pdf.data)).toContain('Export test');
 
     const png = await download(page, /^PNG image/);
     expect(png.name).toBe('Export-test.png');
@@ -512,7 +519,7 @@ test.describe('export, import and sharing', () => {
     expect(pptx.name).toBe('Export-test.pptx');
     const zip = await JSZip.loadAsync(pptx.data);
     const slide = await zip.file('ppt/slides/slide1.xml')!.async('string');
-    expect(slide).toContain('Your Poster Title Goes Here');
+    expect(slide).toContain('Export test');
     expect(Object.keys(zip.files).some((f) => f.startsWith('ppt/charts/chart'))).toBe(true);
     const pres = await zip.file('ppt/presentation.xml')!.async('string');
     expect(pres).toMatch(/sldSz cx="10692\d{3}" cy="15120\d{3}"/); // A3 in EMU
@@ -550,7 +557,7 @@ test.describe('export, import and sharing', () => {
 
     const pdf = await download(page, /^PDF/);
     const text = await pdfText(pdf.data);
-    for (const s of ['Your Poster Title Goes Here', 'Introduction', 'reaction time', 'αβγ', 'First finding', 'Control', 'Drug', 'Score'])
+    for (const s of ['Vector', 'Introduction', 'reaction time', 'αβγ', 'First finding', 'Control', 'Drug', 'Score'])
       expect(text).toContain(s);
     const info = await inspectPdf(pdf.data);
     expect(info.images).toHaveLength(0); // no rasterised poster or chart
@@ -645,7 +652,8 @@ test.describe('export, import and sharing', () => {
     await allowClipboard(context, browserName);
     await recordClipboard(page);
     await newPoster(page, { size: 'A4' });
-    await page.getByRole('button', { name: 'Copy image' }).click();
+    await page.getByRole('button', { name: 'Export ▾' }).click();
+    await page.getByRole('button', { name: /^Copy as image/ }).click();
     await expect(page.locator('.toast')).toContainText('copied');
     expect((await copiedPng(page)).subarray(1, 4).toString()).toBe('PNG');
   });

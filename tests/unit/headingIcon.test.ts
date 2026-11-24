@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import PptxGenJS from 'pptxgenjs';
 import JSZip from 'jszip';
 import { loadIcons } from '../../src/lib/icons/library';
-import { HEADING_ICON_EM, HEADING_ICON_GAP_EM, canHaveHeadingIcon, headingIconLayout, headingIconSpec } from '../../src/lib/headingIcon';
+import { HEADING_ICON_EM, HEADING_ICON_GAP_EM, canHaveHeadingIcon, headingIconLayout, headingIconSpec, headingIconSpot, placedHeadingIcon } from '../../src/lib/headingIcon';
 import { buildVectorPdf } from '../../src/lib/pdf/vectorPdf';
 import { headingIconImage } from '../../src/lib/exporters';
 import { sanitizeElement } from '../../src/lib/sanitize';
@@ -93,11 +93,63 @@ describe('where a heading icon goes', () => {
   });
 });
 
+/** A stand-in page where the editor drew the heading's icon at (left, top) px inside the box. */
+const pageWithIcon = (left: number, top: number, place = 'after') =>
+  ({
+    querySelector: (sel: string) =>
+      sel.endsWith('.el-heading-icon') ? { dataset: { place }, style: { left: left + 'px', top: top + 'px' } } : null,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 210 * MM_TO_PX }),
+  }) as unknown as HTMLElement;
+
+describe('placing the icon right after the words', () => {
+  it('is remembered as a choice, and the right edge stays the default', () => {
+    const p = a4();
+    expect(headingIconLayout(heading(p))!.place).toBe('end');
+    expect(headingIconLayout(heading(p, { headingIcon: { id: 'health/dna', place: 'after' } }))!.place).toBe('after');
+  });
+
+  it('uses the spot the editor measured after the last word, inside the padding', () => {
+    const p = a4();
+    const h = heading(p, { padding: 2, headingIcon: { id: 'health/dna', place: 'after' } });
+    const pad = 2 * MM_TO_PX;
+    expect(placedHeadingIcon(pageWithIcon(pad + 120, pad + 4), h)).toEqual({ x: 120, y: 4 });
+    const spot = headingIconSpot(h, pageWithIcon(pad + 120, pad + 4))!;
+    expect([spot.x, spot.y]).toEqual([120, 4]);
+    expect(spot.size).toBeCloseTo(headingIconLayout(h)!.size, 5);
+  });
+
+  it('falls back to the right edge when the words have not been laid out', () => {
+    const p = a4();
+    const h = heading(p, { headingIcon: { id: 'health/dna', place: 'after' } });
+    const edge = headingIconLayout(h)!;
+    expect(headingIconSpot(h, null)!.x).toBe(edge.x);
+    expect(headingIconSpot(h, pageWithIcon(120, 4, 'end'))!.x).toBe(edge.x); // the editor couldn't measure it
+    // A right-edge icon never reads the page.
+    expect(headingIconSpot(heading(p), pageWithIcon(120, 4))!.x).toBe(headingIconLayout(heading(p))!.x);
+  });
+
+  it('puts the PowerPoint picture and the PDF icon in the measured spot', async () => {
+    const p = a4();
+    const h = heading(p, { headingIcon: { id: 'health/dna', place: 'after' } });
+    p.elements = [h];
+    const page = pageWithIcon(150, 6);
+    const img = headingIconImage(h, p, page)!;
+    expect(img.x).toBeCloseTo((20 * MM_TO_PX + 150) / 96, 3);
+    expect(headingIconImage(h, p, null)!.x).toBeGreaterThan(img.x); // right edge is further along
+
+    const { bytes, warnings } = await buildVectorPdf(page, p);
+    expect(warnings).toEqual([]);
+    expect((await pageContent(bytes)).match(/ c$/gm)?.length ?? 0).toBeGreaterThan(5);
+  });
+});
+
 describe('heading icons in files', () => {
   it('are cleaned when a poster file is opened', () => {
     const p = a4();
-    const ok = sanitizeElement(heading(p, { headingIcon: { id: 'phosphor/flask', color: 'url(https://evil)', color2: '#123456' } }));
-    expect(ok.headingIcon).toEqual({ id: 'phosphor/flask', color2: '#123456' });
+    const ok = sanitizeElement(heading(p, { headingIcon: { id: 'phosphor/flask', color: 'url(https://evil)', color2: '#123456', place: 'after' } }));
+    expect(ok.headingIcon).toEqual({ id: 'phosphor/flask', color2: '#123456', place: 'after' });
+    const oddPlace = sanitizeElement(heading(p, { headingIcon: { id: 'phosphor/flask', place: 'sideways' as never } }));
+    expect(oddPlace.headingIcon).toEqual({ id: 'phosphor/flask' });
     const bad = sanitizeElement(heading(p, { headingIcon: { id: '../../x<script>' } }));
     expect(bad.headingIcon).toBeUndefined();
     const junk = sanitizeElement(heading(p, { headingIcon: 'health/dna' as never }));

@@ -212,19 +212,79 @@ export function EquationBody({ el, poster, widthPx, heightPx }: { el: PosterElem
   );
 }
 
-/** The icon at the end of a heading, right-aligned on its first line (see lib/headingIcon). */
+/** The icon at the end of a heading: against the right-hand edge, or right after the last word (see lib/headingIcon). */
 function HeadingIcon({ el, poster }: { el: PosterElement; poster: Poster }) {
   const ready = useIconsReady();
+  const ref = useRef<HTMLSpanElement>(null);
+  const [spot, setSpot] = useState<{ x: number; y: number } | null>(null);
   const at = headingIconLayout(el);
   const spec = headingIconSpec(el);
+  const after = at?.place === 'after';
+
+  // "After the words" follows the laid-out text, so measure it after every change,
+  // while typing, and again once web fonts have loaded.
+  useLayoutEffect(() => {
+    const span = ref.current;
+    const box = span?.parentElement;
+    const body = box?.querySelector<HTMLElement>('.el-body');
+    if (!after || !at || !box || !body) {
+      if (spot) setSpot(null);
+      return;
+    }
+    let live = true;
+    const measure = () => {
+      if (!live) return;
+      const s = afterTheWords(el, box, body, at);
+      setSpot((prev) => (prev && s && Math.abs(prev.x - s.x) < 0.5 && Math.abs(prev.y - s.y) < 0.5 ? prev : s));
+    };
+    measure();
+    body.addEventListener('input', measure);
+    document.fonts?.ready.then(measure, () => {});
+    return () => {
+      live = false;
+      body.removeEventListener('input', measure);
+    };
+  });
+
   const art = ready && el.headingIcon ? iconArt(el.headingIcon.id) : undefined;
-  if (!at || !spec || !art || at.size <= 0) return null;
+  if (!at || !spec || at.size <= 0) return null;
   const pad = px(el.padding ?? 0);
+  const where = after && spot ? spot : at;
   return (
-    <span className="el-heading-icon" data-icon={el.headingIcon!.id} style={{ left: pad + at.x, top: pad + at.y, width: at.size, height: at.size }}>
-      <IconSvg art={art} colors={iconColors(spec, poster.palette)} />
+    <span
+      ref={ref}
+      className="el-heading-icon"
+      data-icon={el.headingIcon!.id}
+      data-place={after && spot ? 'after' : 'end'}
+      style={{ left: pad + where.x, top: pad + where.y, width: at.size, height: at.size }}
+    >
+      {art && <IconSvg art={art} colors={iconColors(spec, poster.palette)} />}
     </span>
   );
+}
+
+/** Just after the last word of the heading, centred on that word's line, in px inside the border and padding. */
+function afterTheWords(el: PosterElement, box: HTMLElement, body: HTMLElement, at: { size: number; gap: number }) {
+  if (el.rotation) return null; // turned boxes can't be measured on screen; the icon goes to the edge instead
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  let last: Text | null = null;
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) if (n.textContent?.trim()) last = n as Text;
+  if (!last) return null;
+  const range = document.createRange();
+  const text = last.textContent!;
+  const end = text.trimEnd().length;
+  range.setStart(last, Math.max(0, end - 1));
+  range.setEnd(last, end);
+  const rects = range.getClientRects();
+  const r = rects[rects.length - 1];
+  if (!r) return null;
+  const b = box.getBoundingClientRect();
+  const k = box.offsetWidth ? b.width / box.offsetWidth : 1;
+  const inset = px(el.padding ?? 0) + ((el.borderWidth ?? 0) * 96) / 72;
+  const contentW = box.offsetWidth - 2 * inset;
+  const right = (r.right - b.left) / k - inset;
+  const mid = ((r.top + r.bottom) / 2 - b.top) / k - inset;
+  return { x: Math.max(0, Math.min(right + at.gap, contentW - at.size)), y: mid - at.size / 2 };
 }
 
 function TextBody({ el, poster, editing, onCommit, onDone, reserve }: { el: PosterElement; poster: Poster; editing: boolean; onCommit?: (html: string) => void; onDone?: () => void; reserve?: { reserve: number; reserveLeft: number } | null }) {

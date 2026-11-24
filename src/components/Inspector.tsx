@@ -748,6 +748,15 @@ function HeadingIconSection({ poster, el, onChange }: { poster: Poster; el: Post
         </>
       ) : (
         <>
+          <div className="field-label" id={el.id + '-icon-place'}>Place the icon</div>
+          <div className="toolbar-row" role="group" aria-labelledby={el.id + '-icon-place'}>
+            <button className={'btn small-btn' + (ic.place !== 'after' ? ' on' : '')} aria-pressed={ic.place !== 'after'} onClick={() => onChange((x) => void delete x.headingIcon!.place)}>
+              At the right edge
+            </button>
+            <button className={'btn small-btn' + (ic.place === 'after' ? ' on' : '')} aria-pressed={ic.place === 'after'} onClick={() => onChange((x) => void (x.headingIcon!.place = 'after'))}>
+              Right after the words
+            </button>
+          </div>
           <label className="check">
             <input
               type="checkbox"

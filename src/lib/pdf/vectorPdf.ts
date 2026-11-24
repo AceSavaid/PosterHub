@@ -20,7 +20,7 @@ import { multiply, rotate, translate } from './matrix';
 import { isCropped, placeImage, rad } from '../geometry';
 import { iconArt, iconColors, loadIcons } from '../icons/library';
 import { drawIcon } from './iconDraw';
-import { headingIconLayout, headingIconSpec } from '../headingIcon';
+import { headingIconSpot, headingIconSpec } from '../headingIcon';
 
 Chart.register(...registerables);
 
@@ -242,7 +242,7 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
       else warnings.push('An icon was not found in the icon library and was left out.');
     } else if (isTextType(e)) {
       drawText(painter, fonts, textByEl.get(e.id) ?? []);
-      const end = headingIconLayout(e);
+      const end = headingIconSpot(e, node);
       const spec = headingIconSpec(e);
       if (end && spec && end.size > 0) {
         const art = iconArt(e.headingIcon!.id);

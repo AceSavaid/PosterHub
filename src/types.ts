@@ -127,6 +127,8 @@ export interface HeadingIconSpec {
   color?: ColorValue;
   /** colour of the light shading on two-tone icons; unset = a pale tint of the main colour */
   color2?: ColorValue;
+  /** 'after' = right after the last word; unset = against the right-hand edge */
+  place?: 'after';
 }
 
 export interface PosterElement {

@@ -8,7 +8,7 @@ async function classicPoster(page: Page) {
   await expect(page.locator('.poster')).toBeVisible();
 }
 
-const methods = (page: Page) => page.locator('.poster > .el-heading', { hasText: /^Methods$/ });
+const methods = (page: Page) => page.locator('.poster > .el-heading', { hasText: /^Methods/ });
 const endIcon = (page: Page) => methods(page).locator('.el-heading-icon');
 
 test('adds an icon to the end of a heading, sized and lined up with the text', async ({ page }) => {
@@ -103,4 +103,52 @@ test('a centred heading stays centred with an icon at its end', async ({ page })
   const pads = await methods(page).locator('.el-body').evaluate((b) => [getComputedStyle(b).paddingLeft, getComputedStyle(b).paddingRight]);
   expect(parseFloat(pads[0])).toBeGreaterThan(0);
   expect(pads[0]).toBe(pads[1]);
+});
+
+test('can place the icon right after the words instead, and it follows the text', async ({ page }) => {
+  await classicPoster(page);
+  await methods(page).click();
+  const inspector = page.locator('.panel.right');
+  await inspector.getByRole('button', { name: 'Add icon to heading…' }).click();
+  await inspector.getByRole('searchbox', { name: 'Search icons for this heading' }).fill('microscope');
+  await inspector.getByRole('button', { name: 'Add to heading: Microscope', exact: true }).click();
+  const edge = inspector.getByRole('button', { name: 'At the right edge' });
+  const afterWords = inspector.getByRole('button', { name: 'Right after the words' });
+  await expect(edge).toHaveAttribute('aria-pressed', 'true');
+  await afterWords.click();
+  await expect(afterWords).toHaveAttribute('aria-pressed', 'true');
+  await expect(endIcon(page)).toHaveAttribute('data-place', 'after');
+
+  const geo = () =>
+    methods(page).evaluate((node) => {
+      const box = node as HTMLElement;
+      const body = box.querySelector<HTMLElement>('.el-body')!;
+      const range = document.createRange();
+      range.selectNodeContents(body);
+      const rects = Array.from(range.getClientRects());
+      const last = rects[rects.length - 1];
+      const i = box.querySelector<HTMLElement>('.el-heading-icon')!.getBoundingClientRect();
+      const font = parseFloat(getComputedStyle(body).fontSize) * (box.getBoundingClientRect().width / box.offsetWidth);
+      return { gap: i.left - last.right, mid: i.top + i.height / 2, lineMid: (last.top + last.bottom) / 2, font, lines: new Set(rects.map((r) => Math.round(r.top))).size };
+    });
+  let g = await geo();
+  expect(g.gap).toBeGreaterThan(0);
+  expect(g.gap).toBeLessThan(g.font * 0.6); // a small space after the last letter
+  expect(Math.abs(g.mid - g.lineMid)).toBeLessThan(2);
+
+  // Retyping the heading moves the icon along with the last word.
+  const before = await endIcon(page).boundingBox();
+  await methods(page).dblclick();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Methods and materials used here');
+  await page.keyboard.press('Escape');
+  await expect.poll(async () => (await endIcon(page).boundingBox())!.y).toBeGreaterThan(before!.y + 1); // wrapped onto line two
+  g = await geo();
+  expect(g.lines).toBeGreaterThan(1);
+  expect(Math.abs(g.mid - g.lineMid)).toBeLessThan(2); // still on the last line
+  expect(g.gap).toBeGreaterThan(0);
+
+  // Back to the right edge.
+  await edge.click();
+  await expect(endIcon(page)).toHaveAttribute('data-place', 'end');
 });

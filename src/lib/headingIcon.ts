@@ -23,6 +23,10 @@ export interface HeadingIconLayout {
   reserve: number;
   /** extra padding for the left side of the text, px */
   reserveLeft: number;
+  /** 'end' = against the right-hand edge; 'after' = right after the last word (needs the laid-out text) */
+  place: 'end' | 'after';
+  /** gap between the last word and the icon when placed after the words, px */
+  gap: number;
 }
 
 /** The space inside a box's border and padding, px. */
@@ -43,14 +47,44 @@ export function headingIconLayout(el: PosterElement): HeadingIconLayout | null {
   const line = font * (st.lineHeight || 1);
   // As tall as the letters, never taller than a line, and never more than a third of a narrow box.
   const size = Math.max(0, Math.min(font * HEADING_ICON_EM, Math.max(line, font), box.w / 3, box.h || Infinity));
-  const reserve = size > 0 ? size + font * HEADING_ICON_GAP_EM : 0;
+  const gap = font * HEADING_ICON_GAP_EM;
+  const reserve = size > 0 ? size + gap : 0;
   return {
+    place: el.headingIcon.place === 'after' ? 'after' : 'end',
+    gap,
     x: box.w - size,
     y: (Math.min(line, box.h || line) - size) / 2,
     size,
     reserve,
     reserveLeft: st.align === 'center' ? reserve : 0,
   };
+}
+
+/**
+ * Where the editor drew an "after the words" icon, read back from the page (the same
+ * place the PDF and PowerPoint exports should use), measured from the inside of the
+ * box's border and padding. Null when the heading isn't on the page.
+ */
+export function placedHeadingIcon(root: ParentNode | null | undefined, el: PosterElement): { x: number; y: number } | null {
+  if (!root || typeof CSS === 'undefined') return null;
+  const span = root.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(el.id)}"] .el-heading-icon`);
+  if (!span || span.dataset.place !== 'after') return null;
+  const left = parseFloat(span.style.left);
+  const top = parseFloat(span.style.top);
+  if (!Number.isFinite(left) || !Number.isFinite(top)) return null;
+  const pad = (el.padding ?? 0) * MM_TO_PX;
+  return { x: left - pad, y: top - pad };
+}
+
+/**
+ * The icon's spot for exports: after the words when the editor has laid them out,
+ * otherwise against the right-hand edge.
+ */
+export function headingIconSpot(el: PosterElement, root?: ParentNode | null): HeadingIconLayout | null {
+  const at = headingIconLayout(el);
+  if (!at || at.place !== 'after') return at;
+  const placed = placedHeadingIcon(root, el);
+  return placed ? { ...at, ...placed } : at;
 }
 
 /** The icon's colours: its own, or the heading's text colour. */
@@ -70,5 +104,6 @@ export function cleanHeadingIcon(raw: unknown, safeColor: (c: unknown) => string
   if (c) out.color = c;
   const c2 = safeColor(r.color2);
   if (c2) out.color2 = c2;
+  if (r.place === 'after') out.place = 'after';
   return out;
 }

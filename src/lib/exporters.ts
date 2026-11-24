@@ -9,7 +9,7 @@ import { CELL_PAD, cellLook, columnAlign, columnWeights, normalizeTable, type Bo
 import { PT_TO_PX, layoutEquation, loadMath, mathSvg, typesetLatex } from './math';
 import { isCropped } from './geometry';
 import { iconArt, iconColors, iconInfo, iconSvg, layoutIcon, loadIcons } from './icons/library';
-import { contentBox, headingIconLayout, headingIconSpec } from './headingIcon';
+import { contentBox, headingIconLayout, headingIconSpec, headingIconSpot } from './headingIcon';
 
 const MAX_SIDE = 16000;
 const MAX_AREA = 120_000_000;
@@ -414,8 +414,12 @@ export function iconImage(e: PosterElement, p: Poster): { data: string; x: numbe
 }
 
 /** The icon at the end of a heading as an SVG picture (inches), placed as in the editor. */
-export function headingIconImage(e: PosterElement, p: Poster): { data: string; x: number; y: number; w: number; h: number } | null {
-  const end = headingIconLayout(e);
+export function headingIconImage(
+  e: PosterElement,
+  p: Poster,
+  root: ParentNode | null = typeof document !== 'undefined' ? document : null,
+): { data: string; x: number; y: number; w: number; h: number } | null {
+  const end = headingIconSpot(e, root);
   const spec = headingIconSpec(e);
   const art = e.headingIcon && iconArt(e.headingIcon.id);
   if (!end || !spec || !art || end.size <= 0) return null;

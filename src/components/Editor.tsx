@@ -30,6 +30,8 @@ import type { FillPlan } from '../lib/abstractImport';
 import { PLACEHOLDER_TEXT } from '../lib/checks';
 import type { AuthorList } from '../types';
 import ConfirmDialog from './ConfirmDialog';
+import ReplaceImageDialog from './ReplaceImageDialog';
+import { applyReplacement, needsFitChoice } from '../lib/replaceImage';
 import { saveAsTemplate } from '../lib/userTemplates';
 import { useUiPrefs } from '../lib/uiPrefs';
 import { sanitizeElement } from '../lib/sanitize';
@@ -122,6 +124,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [abstractOpen, setAbstractOpen] = useState(false);
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string; file?: File } | null>(null);
   const [cropFor, setCropFor] = useState<string | null>(null);
+  /** A picture waiting for the user to say how it fits the box it replaces. */
+  const [replaceAsk, setReplaceAsk] = useState<{ id: string; src: string; ratio: number; boxRatio: number } | null>(null);
   const [eqDialog, setEqDialog] = useState<{ id?: string; spec: EquationSpec } | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   /** open authors dialog; `id` is the text box it fills (none = add a new one) */
@@ -436,11 +440,11 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   async function insertImageFile(file: Blob, at?: { x: number; y: number }, replaceId?: string) {
     const { src, ratio } = await imageFileToDataUrl(file);
     if (replaceId) {
-      updateElement(replaceId, (e) => {
-        e.src = src;
-        delete e.qr;
-        if (!e.src || e.fit !== 'cover') e.h = e.w / ratio;
-      });
+      const old = posterRef.current.elements.find((e) => e.id === replaceId);
+      if (!old) return;
+      // A different-shaped picture replacing another: ask whether it keeps the old box size.
+      if (needsFitChoice(old, ratio)) return setReplaceAsk({ id: replaceId, src, ratio, boxRatio: old.w / old.h });
+      updateElement(replaceId, (e) => applyReplacement(e, src, ratio, e.fit === 'cover' ? 'cover' : 'natural'));
       return;
     }
     const base = makeElement('image', posterRef.current);
@@ -1676,6 +1680,19 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
               if (resizeBox && ratio > 0) e.h = Math.round((e.w / ratio) * 10) / 10;
             });
             setCropFor(null);
+          }}
+        />
+      )}
+      {replaceAsk && (
+        <ReplaceImageDialog
+          src={replaceAsk.src}
+          ratio={replaceAsk.ratio}
+          boxRatio={replaceAsk.boxRatio}
+          onCancel={() => setReplaceAsk(null)}
+          onPick={(fit) => {
+            const { id, src, ratio } = replaceAsk;
+            setReplaceAsk(null);
+            updateElement(id, (e) => applyReplacement(e, src, ratio, fit));
           }}
         />
       )}

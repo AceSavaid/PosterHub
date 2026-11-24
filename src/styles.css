@@ -835,3 +835,15 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .copy-mode .copy-rearrange { margin: 0 0 4px 26px; gap: 10px 14px; }
 .copy-mode .copy-rearrange .hint { margin: 0; }
 .copy-size .field { margin-top: 4px; }
+
+/* Replacing a picture with one of another shape: three choices with a preview each */
+.replace-image { max-width: 600px; }
+.replace-image h2 { margin-bottom: 6px; }
+.replace-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 16px 0 8px; }
+.replace-option { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: inherit; font: inherit; text-align: center; cursor: pointer; }
+.replace-option:hover, .replace-option:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
+.replace-option strong { font-size: 13.5px; }
+.replace-option .hint { margin: 0; font-size: 12px; }
+.replace-preview { display: flex; align-items: center; justify-content: center; width: 104px; height: 104px; }
+.replace-preview img { display: block; outline: 2px dashed var(--accent); outline-offset: 1px; background: repeating-conic-gradient(var(--line) 0 25%, transparent 0 50%) 0 0 / 10px 10px; }
+@media (max-width: 560px) { .replace-options { grid-template-columns: 1fr; } }

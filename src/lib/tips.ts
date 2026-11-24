@@ -3,6 +3,7 @@ import type { PosterElement } from '../types';
 
 export function elementTip(el: PosterElement): string {
   if (el.refList) return 'Press Enter to add references or change the citation style. To cite one, select a text box and pick it under Cite.';
+  if (el.captionOf) return 'Double-click to type. The “Figure 1:” label numbers itself, and the caption moves with its figure.';
   if (el.authors) return 'Use “Edit authors and affiliations…” below to change names or institutions; the numbers are kept in order for you.';
   switch (el.type) {
     case 'title':
@@ -14,7 +15,7 @@ export function elementTip(el: PosterElement): string {
       return 'Double-click to type. Ctrl/⌘ B, I and U format selected words. Aim for 24 pt or more for body text.';
     case 'image':
       if (el.qr) return 'Scan it with a phone to check the link works before printing.';
-      return el.src ? 'Use Crop to trim the picture and add alt text below so screen readers can describe it.' : 'Press Enter to choose a picture, or drag one from your computer onto this box.';
+      return el.src ? 'Add a numbered caption below, use Crop to trim the picture, and add alt text so screen readers can describe it.' : 'Press Enter to choose a picture, or drag one from your computer onto this box.';
     case 'chart':
       return 'Press Enter to change the data or graph type. Large axis labels are easier to read from a distance.';
     case 'table':

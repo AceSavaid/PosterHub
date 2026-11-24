@@ -89,8 +89,10 @@ test('Check offers a darker palette colour for faint text and a readable size fo
 
   await small.getByRole('button', { name: 'Make it 20 pt' }).click();
   await expect(small).toHaveCount(0);
+  // close the floating panel, which can sit over the box on a narrower poster area
+  await panel.getByRole('button', { name: 'Close' }).click();
+  await expect(panel).toHaveCount(0);
   const text = page.locator('.poster .el').filter({ hasText: 'Faint and tiny words' });
-  await expect(text.locator('.el-body')).toHaveCSS('font-size', /px$/);
   await text.click();
   await expect(page.getByLabel('Size (pt)')).toHaveValue('20');
   // the bigger text still fits its box

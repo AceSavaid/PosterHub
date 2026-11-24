@@ -211,6 +211,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .row4 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; }
 .toolbar-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .fmt { min-width: 30px; height: 30px; border: 1px solid var(--line); background: var(--bg); border-radius: 5px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.fmt.wide { padding: 0 10px; }
 .fmt.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .color-input .role-swatches { display: flex; gap: 5px; flex-wrap: wrap; }
 .swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--bg); box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; position: relative; overflow: hidden; }

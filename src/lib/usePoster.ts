@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import type { Poster, PosterElement } from '../types';
 import { syncCitations } from './refs/citations';
+import { syncCaptions } from './captions';
 
 const HISTORY_LIMIT = 100;
 
@@ -22,6 +23,8 @@ export function usePosterHistory(initial: Poster) {
     const prev = current.current;
     const draft = structuredClone(prev);
     fn(draft);
+    // captions stay attached to their figures and numbered in reading order
+    syncCaptions(draft, prev);
     // citation numbers and the reference list follow every change (text, order, layout)
     syncCitations(draft);
     draft.updatedAt = Date.now();

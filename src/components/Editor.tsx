@@ -4,6 +4,7 @@ import { MM_TO_PX, makeElement, tableHeightMm, uid } from '../model';
 import { cellsFromClipboard, deleteColumn, deleteRow, insertColumn, insertRow, normalizeTable, tableFromHtml, tableToCsv, tableToTsv } from '../lib/table';
 import { usePosterHistory } from '../lib/usePoster';
 import { align, distribute, emptyFigureSlot, findFreeSpot, intersects, matchSize } from '../lib/arrange';
+import { addCaption, canCaption, relinkCopies, removeCaption, setCaptionPos, setCaptionText, withCaptions, type CaptionPos } from '../lib/captions';
 import { canGroup, canUngroup, dropLonelyGroups, expandToGroups, group, groupMembers, regroupCopies, ungroup, wholeGroup } from '../lib/groups';
 import { deletePoster, exportPosterFile, fileToDataUrl, isDesktop, pickFile, savePoster } from '../lib/storage';
 import { ensurePosterFonts } from '../lib/fonts';
@@ -72,6 +73,7 @@ function plainTextOf(el: PosterElement) {
   return div.innerText || div.textContent || '';
 }
 
+export type CaptionAction = { kind: 'add'; pos: CaptionPos } | { kind: 'pos'; pos: CaptionPos } | { kind: 'remove' } | { kind: 'text'; text: string } | { kind: 'select'; id: string };
 export type TableAction = 'rowAbove' | 'rowBelow' | 'colLeft' | 'colRight' | 'deleteRow' | 'deleteCol';
 
 /** Loads an image. Waits for `load` rather than relying on `decode()` alone, which WebKit (Safari) can reject for images that aren't on the page. */
@@ -328,8 +330,10 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       });
       setSelectedId(ph.id);
       revealSoon(ph.id);
-      if (!selectedSlot) notify(`Put the ${el.type === 'chart' ? 'graph' : 'picture'} in an empty figure box. Drag it anywhere, or press Ctrl/⌘ Z to undo.`);
-      return el;
+      const what = el.type === 'chart' ? 'graph' : 'picture';
+      if (!selectedSlot) notify(`Put the ${what} in an empty figure box. Drag it anywhere, or press Ctrl/⌘ Z to undo.`, offerCaption({ ...el, id: ph.id }));
+      else if (offerCaption({ ...el, id: ph.id })) notify(`Added the ${what}.`, offerCaption({ ...el, id: ph.id }));
+      return { ...el, id: ph.id };
     }
     if (center) {
       const c = viewCenter();
@@ -341,7 +345,46 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     update((d) => void d.elements.push(el));
     setSelectedId(el.id);
     revealSoon(el.id);
+    if (media && !el.placeholder && canCaption(el)) notify(`Added the ${el.type === 'chart' ? 'graph' : 'picture'}.`, offerCaption(el));
     return el;
+  }
+
+  /** The "Add caption" button offered after a picture or graph goes onto the poster (none if it already has one). */
+  function offerCaption(fig: PosterElement) {
+    const figId = fig.id;
+    if (!canCaption(fig) || posterRef.current.elements.some((e) => e.captionOf === figId)) return undefined;
+    return { label: 'Add caption', run: () => captionAction(figId, { kind: 'add', pos: 'below' }) };
+  }
+
+  /** Numbered captions: add, move above/below, retype or remove a figure's caption. */
+  function captionAction(figId: string, a: CaptionAction) {
+    switch (a.kind) {
+      case 'add': {
+        let capId: string | undefined;
+        update((d) => void (capId = addCaption(d, figId, a.pos)));
+        if (capId) requestAnimationFrame(() => fitCaption(capId!));
+        setSelectedId(figId);
+        setTimeout(() => document.getElementById('caption-text')?.focus(), 60);
+        break;
+      }
+      case 'pos':
+        update((d) => setCaptionPos(d, figId, a.pos));
+        break;
+      case 'remove':
+        update((d) => removeCaption(d, figId));
+        break;
+      case 'text': {
+        update((d) => setCaptionText(d, figId, a.text), 'caption-' + figId);
+        // grow the caption box when the words no longer fit
+        const capId = posterRef.current.elements.find((e) => e.captionOf === figId)?.id;
+        if (capId) requestAnimationFrame(() => fitCaption(capId));
+        break;
+      }
+      case 'select':
+        setSelectedId(a.id);
+        revealSoon(a.id);
+        break;
+    }
   }
 
   function insert(type: ElementType, extra?: Partial<PosterElement>) {
@@ -564,7 +607,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
 
   function removeSelected() {
     if (!selectedIds.length) return;
-    const ids = new Set(selectedIds);
+    // a figure's caption goes with it
+    const ids = new Set(withCaptions(selectedIds, posterRef.current.elements));
     update((d) => {
       d.elements = d.elements.filter((e) => !ids.has(e.id));
       dropLonelyGroups(d.elements);
@@ -588,7 +632,18 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   function duplicate(src?: PosterElement, offset = 8) {
     const sources = src ? [src] : posterRef.current.elements.filter((e) => selectedIds.includes(e.id));
     if (!sources.length) return;
-    const copies = regroupCopies(sources.map((el) => ({ ...structuredClone(el), id: uid(), x: el.x + offset, y: el.y + offset, locked: false })));
+    // copying a figure copies its caption too
+    const all = posterRef.current.elements;
+    const extra = all.filter((e) => withCaptions(sources.map((s) => s.id), all).includes(e.id) && !sources.some((s) => s.id === e.id));
+    const idMap = new Map<string, string>();
+    const copies = regroupCopies(
+      [...sources, ...extra].map((el) => {
+        const id = uid();
+        idMap.set(el.id, id);
+        return { ...structuredClone(el), id, x: el.x + offset, y: el.y + offset, locked: false };
+      }),
+    );
+    relinkCopies(copies, idMap);
     update((d) => void d.elements.push(...copies));
     setSelectedIds(copies.map((c) => c.id));
   }
@@ -611,6 +666,19 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     const n = selectedId ? textNode(selectedId) : null;
     setOverflow(!!n && n.scrollHeight > n.clientHeight + 1);
   });
+
+  /** Makes a caption box exactly as tall as its words. */
+  function fitCaption(id: string) {
+    const n = textNode(id);
+    const el = posterRef.current.elements.find((e) => e.id === id);
+    if (!n || !el) return;
+    const extra = el.h * MM_TO_PX - n.clientHeight; // padding + border
+    const range = document.createRange();
+    range.selectNodeContents(n);
+    const textH = range.getBoundingClientRect().height / zoom;
+    const h = Math.round(((Math.max(textH, 1) + extra) / MM_TO_PX + 0.5) * 10) / 10;
+    if (Math.abs(h - el.h) > 0.3) updateElement(id, { h }, 'caption-' + el.captionOf);
+  }
 
   function growToFit(id = selectedId, key?: string) {
     const n = id && textNode(id);
@@ -1028,6 +1096,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     }
     if (!many && el.style && el.html?.includes('<table')) items.push({ label: 'Convert to editable table', onClick: () => convertToTable(el) });
     if (!many && el.type === 'equation') items.push({ label: 'Edit equation…', shortcut: 'Enter', onClick: () => openEquation(el) });
+    if (!many && canCaption(el) && !posterRef.current.elements.some((e) => e.captionOf === el.id)) items.push({ label: 'Add caption', onClick: () => captionAction(el.id, { kind: 'add', pos: 'below' }) });
     if (items.length) items.push('-');
     if (!many) items.push({ label: 'Copy', shortcut: 'Ctrl/⌘ C', onClick: () => copyElement(el) });
     if (!many && internalClipboard) items.push({ label: 'Paste', shortcut: 'Ctrl/⌘ V', onClick: () => duplicate(internalClipboard!) });
@@ -1492,6 +1561,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             onConvertTable={() => selected && convertToTable(selected)}
             onFillTable={(cells) => selected && fillTable(selected, cells)}
             onEditEquation={() => selected && openEquation(selected)}
+            onCaption={(id, a) => captionAction(id, a)}
           />
         ) : (
           <button className="panel-reveal props" title="Show properties panel" aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>

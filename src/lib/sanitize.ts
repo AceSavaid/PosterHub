@@ -12,8 +12,8 @@ const TAGS = [
   'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th', 'colgroup', 'col', 'caption',
 ];
 // class / data-cite / contenteditable: citation markers (<span class="cite" data-cite="…" contenteditable="false">)
-// and reference-list entries (<div class="ref-entry">).
-const ATTRS = ['style', 'colspan', 'rowspan', 'align', 'color', 'face', 'size', 'dir', 'class', 'data-cite', 'contenteditable'];
+// reference-list entries (<div class="ref-entry">) and figure caption labels (<b class="fig-label" data-fig="">).
+const ATTRS = ['style', 'colspan', 'rowspan', 'align', 'color', 'face', 'size', 'dir', 'class', 'data-cite', 'data-fig', 'contenteditable'];
 
 // Inline styles may not load anything (e.g. background:url(https://…)): drop such declarations.
 DOMPurify.addHook('uponSanitizeAttribute', (_node, data) => {
@@ -70,6 +70,9 @@ export function sanitizeElement(el: PosterElement): PosterElement {
       if (c2) el.icon.color2 = c2;
     } else delete el.icon;
   }
+  if (el.captionOf != null && typeof el.captionOf !== 'string') delete el.captionOf;
+  if (el.captionPos != null && el.captionPos !== 'above' && el.captionPos !== 'below') delete el.captionPos;
+  if (el.captionRoom != null && !(typeof el.captionRoom === 'number' && el.captionRoom >= 0 && el.captionRoom < 10000)) delete el.captionRoom;
   if (el.src != null) {
     const s = safeImageUrl(el.src);
     if (s) el.src = s;

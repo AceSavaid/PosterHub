@@ -163,6 +163,10 @@ export function posterColors(p: Poster): ColorUse[] {
       add(e.icon.color, e.id);
       if (e.icon.color2) add(e.icon.color2, e.id);
     }
+    if (e.headingIcon) {
+      if (e.headingIcon.color) add(e.headingIcon.color, e.id);
+      if (e.headingIcon.color2) add(e.headingIcon.color2, e.id);
+    }
     if (e.type === 'shape') add(e.fill ?? (e.shape === 'line' ? '@primary' : undefined), e.id);
     else add(e.fill, e.id);
     if (e.borderWidth) add(e.borderColor ?? '@primary', e.id);
@@ -216,6 +220,10 @@ export function replaceColor(p: Poster, from: string, to: string): Poster {
       borderColor: same(e.borderColor) ? to : e.borderColor,
       style: e.style && same(e.style.color) ? { ...e.style, color: to } : e.style,
       icon: e.icon && (same(e.icon.color) || same(e.icon.color2)) ? { ...e.icon, color: same(e.icon.color) ? to : e.icon.color, color2: same(e.icon.color2) ? to : e.icon.color2 } : e.icon,
+      headingIcon:
+        e.headingIcon && (same(e.headingIcon.color) || same(e.headingIcon.color2))
+          ? { ...e.headingIcon, color: same(e.headingIcon.color) ? to : e.headingIcon.color, color2: same(e.headingIcon.color2) ? to : e.headingIcon.color2 }
+          : e.headingIcon,
       html: html(e.html),
     })),
   };

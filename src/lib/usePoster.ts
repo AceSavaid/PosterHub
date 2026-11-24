@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { produce, setAutoFreeze } from 'immer';
 import type { Poster, PosterElement } from '../types';
 import { syncCitations } from './refs/citations';
+import { syncCaptions } from './captions';
 
 // Undo steps share every part of the poster an edit didn't touch, so nothing may change a poster
 // in place outside `update`. Development builds (and the FREEZE_POSTER test build) freeze each
@@ -31,6 +32,8 @@ export function usePosterHistory(initial: Poster) {
     const now = Date.now();
     const draft = produce(prev, (d) => {
       fn(d);
+      // captions stay attached to their figures and numbered in reading order
+      syncCaptions(d, prev);
       // citation numbers and the reference list follow every change (text, order, layout)
       syncCitations(d);
       d.updatedAt = now;

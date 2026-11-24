@@ -10,6 +10,7 @@ import { PT_TO_PX, layoutEquation, loadMath, mathSvg, typesetLatex } from './mat
 import { isCropped } from './geometry';
 import { iconArt, iconColors, iconInfo, iconSvg, layoutIcon, loadIcons } from './icons/library';
 import { normalizeHex } from './color';
+import { contentBox, headingIconLayout, headingIconSpec, headingIconSpot } from './headingIcon';
 
 const MAX_SIDE = 16000;
 const MAX_AREA = 120_000_000;
@@ -238,7 +239,7 @@ export async function buildPptx(p: Poster, chartImages: Map<string, string> = ne
   const pos = (e: PosterElement) => ({ x: e.x * MM_TO_IN * k, y: e.y * MM_TO_IN * k, w: e.w * MM_TO_IN * k, h: e.h * MM_TO_IN * k, rotate: e.rotation ? ((e.rotation % 360) + 360) % 360 : undefined });
   slide.background = p.backgroundImage ? { data: p.backgroundImage } : { color: col('@background') };
   if (p.elements.some((e) => e.type === 'equation')) await loadMath();
-  if (p.elements.some((e) => e.type === 'icon')) await loadIcons();
+  if (p.elements.some((e) => e.type === 'icon' || e.headingIcon)) await loadIcons();
 
   for (const e of p.elements) {
     const box = pos(e);
@@ -302,6 +303,8 @@ export async function buildPptx(p: Poster, chartImages: Map<string, string> = ne
         const st = e.style!;
         if (e.html?.includes('<table') && addNativeTable(slide, e, box, p, k)) break;
         const pad = (e.padding ?? 0) * MM_TO_IN * 72 * k;
+        const end = headingIconLayout(e);
+        const pxToPt = (72 / 96) * k;
         slide.addText(htmlToRuns(e.html ?? '') as never, {
           ...box,
           fontFace: resolveFont(st.fontFamily, p),
@@ -313,7 +316,8 @@ export async function buildPptx(p: Poster, chartImages: Map<string, string> = ne
           align: st.align,
           valign: 'top',
           lineSpacingMultiple: st.lineHeight,
-          margin: [pad, pad, pad, pad],
+          // PptxGenJS margins run left, right, bottom, top (points); the end icon keeps its room free.
+          margin: [pad + (end?.reserveLeft ?? 0) * pxToPt, pad + (end?.reserve ?? 0) * pxToPt, pad, pad],
           fill,
           line,
           rectRadius: e.radius ? Math.min(0.5, e.radius / Math.min(e.w, e.h)) : undefined,
@@ -321,6 +325,8 @@ export async function buildPptx(p: Poster, chartImages: Map<string, string> = ne
           fit: 'none',
           paraSpaceAfter: 0,
         } as never);
+        const img = headingIconImage(e, p);
+        if (img) slide.addImage({ data: img.data, x: img.x * k, y: img.y * k, w: img.w * k, h: img.h * k, altText: '' } as never);
       }
     }
   }
@@ -405,6 +411,24 @@ export function iconImage(e: PosterElement, p: Poster): { data: string; x: numbe
   const data = 'data:image/svg+xml;base64,' + btoa(svg);
   const toIn = 1 / 96;
   return { data, x: at.x * toIn, y: at.y * toIn, w: at.w * toIn, h: at.h * toIn };
+}
+
+/** The icon at the end of a heading as an SVG picture (inches), placed as in the editor. */
+export function headingIconImage(
+  e: PosterElement,
+  p: Poster,
+  root: ParentNode | null = typeof document !== 'undefined' ? document : null,
+): { data: string; x: number; y: number; w: number; h: number } | null {
+  const end = headingIconSpot(e, root);
+  const spec = headingIconSpec(e);
+  const art = e.headingIcon && iconArt(e.headingIcon.id);
+  if (!end || !spec || !art || end.size <= 0) return null;
+  const { inset } = contentBox(e);
+  const at = layoutIcon(art, { x: e.x * MM_TO_PX + inset + end.x, y: e.y * MM_TO_PX + inset + end.y, w: end.size, h: end.size });
+  const px = Math.min(300 / 96, 4000 / Math.max(at.w, at.h));
+  const svg = iconSvg(art, iconColors(spec, p.palette), at.w * px, at.h * px);
+  const toIn = 1 / 96;
+  return { data: 'data:image/svg+xml;base64,' + btoa(svg), x: at.x * toIn, y: at.y * toIn, w: at.w * toIn, h: at.h * toIn };
 }
 
 /** Exports a text element holding an HTML table (e.g. imported from PowerPoint) as a real PowerPoint table. */

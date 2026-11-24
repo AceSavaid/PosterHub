@@ -40,7 +40,6 @@ import type { AuthorList } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import ReplaceImageDialog from './ReplaceImageDialog';
 import { applyReplacement, needsFitChoice } from '../lib/replaceImage';
-import { saveAsTemplate } from '../lib/userTemplates';
 import { useUiPrefs } from '../lib/uiPrefs';
 import { sanitizeElement } from '../lib/sanitize';
 import { insertCitationAtCaret } from '../lib/refs/caret';
@@ -1094,6 +1093,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
   async function saveTemplate(name: string, keepPictures: string[]) {
     setTemplateDialog(false);
     try {
+      const { saveAsTemplate } = await import('../lib/userTemplates');
       const t = await saveAsTemplate(posterRef.current, name, { keepPictures });
       notify(`Saved “${t.name}” to My templates. Pick it under New poster → My templates.`);
     } catch (e) {

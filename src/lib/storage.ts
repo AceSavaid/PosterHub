@@ -12,6 +12,8 @@ export const savePoster = async (p: Poster) => (await getStore()).save(p);
 export const loadPoster = async (id: string) => (await getStore()).load(id);
 export const deletePoster = async (id: string) => (await getStore()).delete(id);
 export const listPosters = async () => (await getStore()).list();
+/** Card details for My posters, without each poster's content (much quicker with many pictures). */
+export const listPosterSummaries = async () => (await getStore()).summaries();
 
 /** Where posters are saved, for showing to the user. */
 export async function storageInfo(): Promise<{ kind: 'browser' | 'folder'; location: string }> {

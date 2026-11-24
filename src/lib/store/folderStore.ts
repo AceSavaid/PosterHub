@@ -2,7 +2,7 @@
 // (used by the desktop app). The files are ordinary PosterHub project files,
 // so they can be backed up, synced, emailed, or opened in the web version.
 import type { Poster } from '../../types';
-import type { PosterStore } from './types';
+import { summarize, type PosterStore } from './types';
 import { FILE_EXT, parsePosterText, posterToText, safeFileName } from '../posterFile';
 
 /** The few file operations the folder store needs, relative to the library folder. */
@@ -91,6 +91,11 @@ export class FolderStore implements PosterStore {
 
   list() {
     return this.run(async () => (await this.scan()).sort((a, b) => b.updatedAt - a.updatedAt));
+  }
+
+  /** The folder has to be read in full anyway, so the cards come from the full posters. */
+  async summaries() {
+    return (await this.list()).map(summarize);
   }
 
   load(id: string) {

@@ -8,8 +8,13 @@ import type { Plugin } from 'vite';
 export const BUDGETS = {
   /** Everything the browser downloads before My posters appears. Was 1,024 kB before lazy loading (340 kB after). */
   initialKb: 360,
-  /** What opening a poster adds on top of that, without charts, equations or dialogs (276 kB when added). */
-  editorKb: 300,
+  /**
+   * What opening a poster adds on top of that, without charts, equations or dialogs (276 kB when added).
+   * Raised from 300 to 320 kB for immer (9 kB), which lets undo share pictures between steps instead of
+   * copying the whole poster on every edit: dragging with large pictures went from ~30 ms to ~2 ms a move.
+   * The editor is prefetched while My posters is open, so this doesn't slow first load.
+   */
+  editorKb: 320,
 };
 
 /** Just the parts of a Rollup/Rolldown output chunk this check reads. */

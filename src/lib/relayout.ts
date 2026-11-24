@@ -8,6 +8,9 @@
 
 import type { Poster, PosterElement } from '../types';
 import { buildTemplate, isStarterText, type TemplateId } from '../templates';
+import { headingOwner, sectionHeadings } from './sectionOwner';
+
+export { headingOwner, sectionHeadings };
 
 interface OldSection {
   name: string; // normalised, for matching
@@ -71,29 +74,6 @@ export function sectionKey(html: string): string {
 
 const hasContent = (e: PosterElement) =>
   e.type === 'chart' ? !!e.chart : e.type === 'image' ? !!e.src : e.type === 'shape' ? false : !isStarterText(e.html);
-
-const overlapX = (a: PosterElement, b: PosterElement) => Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
-
-/** Section headings on a poster (not the numbers in numbered layouts). */
-export function sectionHeadings(elements: PosterElement[]): PosterElement[] {
-  return elements.filter((e) => e.type === 'heading' && (e.role ?? 'heading') === 'heading' && !/^\s*\d+\s*$/.test(strip(e.html ?? '')));
-}
-
-/** Finds the section heading an element belongs to: its group, else the closest heading above it in the same column. */
-export function headingOwner(headings: PosterElement[]): (e: PosterElement) => PosterElement | undefined {
-  const groupHeading = new Map<string, PosterElement>();
-  for (const h of headings) if (h.group) groupHeading.set(h.group, h);
-  return (e) => {
-    if (e.group && groupHeading.has(e.group)) return groupHeading.get(e.group);
-    if (e.group) return undefined;
-    let best: PosterElement | undefined;
-    for (const h of headings) {
-      if (h.y > e.y + 0.5 || overlapX(h, e) < Math.min(h.w, e.w) * 0.5) continue;
-      if (!best || h.y > best.y) best = h;
-    }
-    return best;
-  };
-}
 
 /** Reads what is on the poster now: by role for layouts made by the app, by position for anything else. */
 export function extractContent(elements: PosterElement[]): Extracted {

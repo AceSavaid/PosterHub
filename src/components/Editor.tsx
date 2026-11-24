@@ -27,6 +27,7 @@ import ExportMenu, { type ExportKind } from './ExportMenu';
 import ReviewSwitch, { type SidePanel } from './ReviewSwitch';
 import { useLatest } from '../lib/useLatest';
 import { reflowColumn } from '../lib/reflow';
+import { gapLabel } from '../lib/spacing';
 import { nameAfterTitleEdit, titleText } from '../lib/startText';
 import { fillProgress, nextToFill } from '../lib/fillProgress';
 import TextToolbar from './TextToolbar';
@@ -40,7 +41,6 @@ import type { AuthorList } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import ReplaceImageDialog from './ReplaceImageDialog';
 import { applyReplacement, needsFitChoice } from '../lib/replaceImage';
-import { saveAsTemplate } from '../lib/userTemplates';
 import { useUiPrefs } from '../lib/uiPrefs';
 import { sanitizeElement } from '../lib/sanitize';
 import { insertCitationAtCaret } from '../lib/refs/caret';
@@ -601,6 +601,40 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
     });
   }
 
+  /** Evens out the gaps between the selected boxes, or down the selected box's column. */
+  async function tidy() {
+    const { columnOf, tidyUp } = await import('../lib/tidy');
+    const p = posterRef.current;
+    const sel = p.elements.filter((e) => selectedIds.includes(e.id));
+    if (!sel.length) return;
+    const ids = sel.length === 1 || wholeGroup(selectedIds, p.elements) ? columnOf(p, sel[0]).map((e) => e.id) : selectedIds;
+    let gap: number | null = tidyUp(structuredClone(p.elements.filter((e) => ids.includes(e.id))), p.gutter * 0.75);
+    if (gap != null)
+      update((d) => {
+        gap = tidyUp(d.elements.filter((e) => ids.includes(e.id)), d.gutter * 0.75);
+      });
+    notify(gap == null ? 'Nothing to tidy: select two or more boxes, or a box in a column.' : `Tidied up: the gaps are now all ${gapLabel(gap)}.`);
+  }
+
+  /** The "+" under a section: a new heading, text and figure slot, with the boxes below moved down. */
+  async function addSectionAfter(headingId: string) {
+    const { insertSection } = await import('../lib/addSection');
+    // Try it on a copy first, so a full column doesn't leave an empty undo step.
+    if (!insertSection(structuredClone(posterRef.current), headingId, spareMm)) {
+      notify('There is no room for another section in this column. Make some space, or add it in another column.');
+      return;
+    }
+    let added: { ids: string[]; figure: boolean } | null = null;
+    update((d) => {
+      added = insertSection(d, headingId, spareMm);
+    });
+    const r = added as { ids: string[]; figure: boolean } | null;
+    if (!r) return;
+    setSelectedIds([r.ids[0]]);
+    startEditing(r.ids[0]);
+    notify(r.figure ? 'Added a section: type its heading. It has a text box and a figure slot.' : 'Added a section: type its heading. There was only room for a text box.');
+  }
+
   /** Text that doesn't fit its box: measured from the rendered poster. */
   function textNode(id: string) {
     return posterNode.current?.querySelector<HTMLElement>(`[data-id="${id}"] :is(.el-body, .el-table-wrap)`) ?? null;
@@ -1046,6 +1080,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
   async function saveTemplate(name: string, keepPictures: string[]) {
     setTemplateDialog(false);
     try {
+      const { saveAsTemplate } = await import('../lib/userTemplates');
       const t = await saveAsTemplate(posterRef.current, name, { keepPictures });
       notify(`Saved “${t.name}” to My templates. Pick it under New poster → My templates.`);
     } catch (e) {
@@ -1440,6 +1475,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
               onCommitTable={(id, t) => commitTable(id, t)}
               onActiveCell={setActiveCell}
               onContextMenu={(el, x, y) => setMenu({ x, y, el })}
+              onAddSection={(id) => void addSectionAfter(id)}
               notes={
                 prefs.showNotes && (poster.notes?.length ?? 0) > 0 ? (
                   <NotesLayer
@@ -1490,6 +1526,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             onAlign={(mode) => arrange((els, d) => align(els, mode, pageBox(d)))}
             onDistribute={(axis) => arrange((els) => distribute(els, axis))}
             onMatchSize={(dim) => arrange((els) => matchSize(els, dim))}
+            onTidy={() => void tidy()}
             editing={!!editingId && editingId === selectedId}
             onChange={(patch, key) => selected && updateElement(selected.id, patch, key)}
             onDelete={removeSelected}

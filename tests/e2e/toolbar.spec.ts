@@ -56,6 +56,29 @@ test('the poster name has room in the desktop top bar', async ({ page }) => {
   expect(bar.height).toBeLessThan(60);
 });
 
+test('settings open only from the gear, not from Help or View', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await newPoster(page);
+  const skip = page.getByRole('button', { name: 'Skip tour' });
+  if (await skip.isVisible()) await skip.click();
+
+  // Help holds help only: shortcuts and the tour.
+  await page.getByRole('button', { name: 'Help' }).click();
+  await expect(page.getByRole('menuitem', { name: /Keyboard shortcuts/ })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Take the tour' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: /Settings/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  // The View menu no longer links to settings either.
+  await page.getByRole('button', { name: /^View/ }).click();
+  await expect(page.getByRole('button', { name: 'All settings…' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  // The gear is the one way in.
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await expect(page.getByRole('dialog', { name: /Settings/ })).toBeVisible();
+});
+
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 

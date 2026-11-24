@@ -1193,7 +1193,6 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           footer={(close) => (
             <>
               <button className="btn small-btn" onClick={() => { close(); setShortcutsOpen(true); }}>Keyboard shortcuts <kbd>?</kbd></button>
-              <button className="btn small-btn" onClick={() => { close(); setSettingsOpen(true); }}>All settings…</button>
             </>
           )}
         >
@@ -1215,7 +1214,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         <button
           className="icon-btn phone-hide"
           aria-label="Help"
-          title="Help: keyboard shortcuts, tour and settings"
+          title="Help: keyboard shortcuts and tour"
           aria-haspopup="menu"
           aria-expanded={!!helpMenu}
           onClick={(e) => {
@@ -1528,7 +1527,6 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
                 setTouring(true);
               },
             },
-            { label: 'Settings…', onClick: () => setSettingsOpen(true) },
           ]}
         />
       )}

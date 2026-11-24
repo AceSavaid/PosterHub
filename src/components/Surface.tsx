@@ -4,6 +4,7 @@ import { MM_TO_PX, columnLefts, columnWidth, fontStack, resolveColor, resolveFon
 import ChartView from './ChartView';
 import TableView from './TableView';
 import { TYPE_NAMES } from '../lib/a11y';
+import { isCommandSearchKey } from '../lib/keys';
 import { isCropped, placeImage } from '../lib/geometry';
 import { ARROW_ROTATION, POLYGONS, isPolygon } from '../lib/shapes';
 import { cleanHtml } from '../lib/sanitize';
@@ -406,7 +407,8 @@ function TextBody({ el, poster, editing, onCommit, onDone, reserve }: { el: Post
           // Hand focus back to the element itself so keyboard users can carry on from here.
           if (box?.classList.contains('el')) box.focus();
         }
-        e.stopPropagation();
+        // keys typed here are text, except Alt+/ which opens "Search the menus" from anywhere
+        if (!isCommandSearchKey(e)) e.stopPropagation();
       }}
       onPaste={(e) => {
         // Like Docs: Ctrl/⌘ V keeps bold, italic, lists and line breaks in the poster's own font;

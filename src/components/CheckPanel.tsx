@@ -36,7 +36,7 @@ interface Props {
   onWordLimit: (limit: number | undefined) => void;
   /** set or clear the conference's rules; `key` merges typing into one undo step */
   onConference?: (rules: ConferenceRules | undefined, key?: string) => void;
-  /** Applies an issue's one-click fix (e.g. swap a colour for a printable one). */
+  /** Applies an issue's one-click fix (swap a colour for a printable one, a readable text colour or size). */
   onFix?: (issue: Issue) => void;
   /** Saves a description (alt text) typed straight into the Check list. */
   onAlt?: (elementId: string, alt: string) => void;
@@ -120,6 +120,18 @@ function Problems({ issues: all, dismissed = [], onDismiss, onRestore, onPick, o
               <button className="issue-fix" onClick={() => onFix(i)}>
                 <span className="swatch" style={{ background: i.fix.from }} aria-hidden />→<span className="swatch" style={{ background: i.fix.to }} aria-hidden />
                 {i.fix.label}
+              </button>
+            )}
+            {i.textColor && onFix && (
+              <button className="issue-fix" onClick={() => onFix(i)}>
+                <span className="swatch" style={{ background: i.textColor.from }} aria-hidden />→<span className="swatch" style={{ background: i.textColor.hex }} aria-hidden />
+                {i.textColor.label}
+              </button>
+            )}
+            {i.textSize && onFix && (
+              <button className="issue-fix" onClick={() => onFix(i)}>
+                <span className="fix-pt" aria-hidden>A↑</span>
+                {i.textSize.label}
               </button>
             )}
             {i.needsAlt && i.elementId && onAlt && <AltBox key={i.elementId} elementId={i.elementId} what={i.title} onSave={onAlt} />}

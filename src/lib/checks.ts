@@ -1,8 +1,8 @@
 // "Check poster": common problems that are easy to miss on screen but
 // obvious once printed. Pure functions so they can be unit tested; image
 // pixel sizes are passed in because reading them needs the browser.
-import type { Poster, PosterElement } from '../types';
-import { resolveColor, typeScale } from '../model';
+import type { PaletteRole, Poster, PosterElement } from '../types';
+import { PALETTE_ROLES, SIZE_PRESETS, resolveColor, typeScale } from '../model';
 import { boundsOf, intersects } from './arrange';
 import { outerBounds } from './geometry';
 import { wordCount } from './textTools';
@@ -33,6 +33,10 @@ export interface Issue {
   preview?: VisionMode;
   /** The element has no description for screen readers; the Check panel offers a box to type one. */
   needsAlt?: boolean;
+  /** A one-click fix for this element's text colour: a palette colour (or black/white) that reads well on its background. */
+  textColor?: { label: string; color: string; hex: string; from: string };
+  /** A one-click fix for this element's text size, in pt. */
+  textSize?: { label: string; pt: number };
 }
 
 export const PLACEHOLDER_TEXT = ['Your Poster Title Goes Here', 'Replace this text with your own', 'Type or paste your text here', 'Section Heading', 'Author One, Author Two', 'Describe what the figure shows', 'State your main result in one clear sentence', 'Author, A. (2025). Title of work'];
@@ -85,6 +89,39 @@ function label(el: PosterElement) {
 /** Smallest comfortable text for this poster: about 20 pt on A0 (body text ideally 24 pt+), scaled for smaller posters viewed closer. */
 export function minReadablePt(p: Poster) {
   return Math.max(9, Math.round(20 * typeScale(p)));
+}
+
+/** "an A0 poster", "a 36 × 48 in poster" or "a poster this size", for sentences. */
+export function sizeName(p: Pick<Poster, 'width' | 'height' | 'sizePreset'>) {
+  const preset = SIZE_PRESETS.find((s) => s.id === p.sizePreset && Math.abs(Math.min(s.w, s.h) - Math.min(p.width, p.height)) < 1);
+  if (!preset) return 'a poster this size';
+  const name = /^A\d$/.test(preset.id) ? preset.id : preset.label;
+  return `${/^(A\d|8|11|18)/.test(name) ? 'an' : 'a'} ${name} poster`;
+}
+
+/**
+ * A text colour that reads well on `bg`: a palette colour if one is clear enough (headings
+ * try the palette's Primary and Secondary first, other text tries Text, then Background, first), else black or white.
+ * `current` is the element's own colour value, which is never offered back.
+ */
+export function readableTextColor(p: Poster, el: PosterElement, bg: string, need: number): { color: string; hex: string; name: string; ratio: number } | null {
+  const headingish = el.type === 'title' || el.type === 'heading' || el.type === 'subtitle';
+  // plain colours before brand colours for body text; the accent is decoration, so it comes last
+  const order: PaletteRole[] = headingish ? ['primary', 'secondary', 'text', 'background', 'surface', 'accent'] : ['text', 'background', 'surface', 'primary', 'secondary', 'accent'];
+  const current = el.style?.color;
+  const currentHex = resolveColor(current, p.palette).toLowerCase();
+  for (const role of order) {
+    if (!PALETTE_ROLES.includes(role) || current === '@' + role) continue;
+    const hex = p.palette[role];
+    if (!hex || hex.toLowerCase() === currentHex) continue;
+    const ratio = contrastRatio(hex, bg);
+    if (ratio != null && ratio >= need) return { color: '@' + role, hex, name: `the palette’s ${role[0].toUpperCase() + role.slice(1)} colour`, ratio };
+  }
+  const black = contrastRatio('#000000', bg) ?? 0;
+  const white = contrastRatio('#ffffff', bg) ?? 0;
+  const [hex, ratio, name] = black >= white ? ['#000000', black, 'black'] : ['#ffffff', white, 'white'];
+  if (ratio < need || hex === currentHex) return null;
+  return { color: hex, hex, name, ratio };
 }
 
 /** The colours a graph uses to tell its series (or pie slices) apart, with their names. */
@@ -240,10 +277,14 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
       // reference lists are read up close, so they may be smaller than body text
       const min = el.refList ? minPt * 0.6 : minPt;
       if (text && el.style.fontSize < min && el.type !== 'title') {
+        const pt = Math.ceil(min);
         issues.push({
           id: 'small-' + el.id, elementId: el.id, severity: el.style.fontSize < min * 0.7 ? 'problem' : 'warning',
-          title: `${name} may be too small to read`,
-          detail: `It is ${el.style.fontSize} pt. On a poster this size, aim for at least ${minPt} pt so it can be read from a step or two away.`,
+          title: `${name} is too small to read from 2 m`,
+          detail: el.refList
+            ? `It is ${el.style.fontSize} pt. A reference list is read up close, but on ${sizeName(p)} it still needs at least ${pt} pt.`
+            : `It is ${el.style.fontSize} pt. People read posters from about 2 m away; on ${sizeName(p)} that needs at least ${pt} pt.`,
+          textSize: { label: `Make it ${pt} pt`, pt },
         });
       }
       // ---- contrast
@@ -251,11 +292,14 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
       const bg = backgroundBehind(p, el);
       const ratio = bg ? contrastRatio(fg, bg) : null;
       const need = el.type === 'title' || el.type === 'heading' || el.style.fontSize >= minPt * 1.5 ? 3 : 4.5;
-      if (text && ratio != null && ratio < need) {
+      if (text && bg && ratio != null && ratio < need) {
+        const better = readableTextColor(p, el, bg, need);
+        const darker = better && (luminance(better.hex) ?? 0) < (luminance(fg) ?? 0);
         issues.push({
           id: 'contrast-' + el.id, elementId: el.id, severity: ratio < 2 ? 'problem' : 'warning',
-          title: `${name} is hard to read against its background`,
-          detail: `The contrast is ${ratio.toFixed(1)}:1; aim for at least ${need}:1. Choose a darker or lighter text colour.`,
+          title: `${name} is too faint on its background`,
+          detail: `The contrast is ${ratio.toFixed(1)}:1; aim for at least ${need}:1.${better ? ` ${darker ? 'Darker' : 'Lighter'} text, such as ${better.name}, reads at ${better.ratio.toFixed(1)}:1.` : ' Choose a darker or lighter text colour, or change the background.'}`,
+          textColor: better ? { label: `Use ${better.name}`, color: better.color, hex: better.hex, from: fg } : undefined,
         });
       }
       if (overflowing.has(el.id)) {
@@ -287,8 +331,9 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
       if (filled && t.fontSize < minPt * 0.85) {
         issues.push({
           id: 'small-' + el.id, elementId: el.id, severity: t.fontSize < minPt * 0.6 ? 'problem' : 'warning',
-          title: 'Table text may be too small to read',
-          detail: `It is ${t.fontSize} pt. On a poster this size, aim for at least ${Math.round(minPt * 0.85)} pt (Text size in the side panel), or move detail to a handout.`,
+          title: 'Table text is too small to read from 2 m',
+          detail: `It is ${t.fontSize} pt. On ${sizeName(p)}, aim for at least ${Math.round(minPt * 0.85)} pt, or move detail to a handout.`,
+          textSize: { label: `Make it ${Math.round(minPt * 0.85)} pt`, pt: Math.round(minPt * 0.85) },
         });
       }
       if (overflowing.has(el.id)) {
@@ -296,10 +341,11 @@ export function checkPoster(p: Poster, images: Map<string, ImageInfo> = new Map(
       }
     }
     if (el.type === 'equation' && el.equation && el.equation.fontSize < minPt) {
-      issues.push({ id: 'eqfont-' + el.id, elementId: el.id, severity: 'warning', title: 'An equation may be too small to read', detail: `It is ${el.equation.fontSize} pt; aim for at least ${minPt} pt (Size in the side panel).` });
+      issues.push({ id: 'eqfont-' + el.id, elementId: el.id, severity: 'warning', title: 'An equation is too small to read from 2 m', detail: `It is ${el.equation.fontSize} pt; on ${sizeName(p)} aim for at least ${minPt} pt.`, textSize: { label: `Make it ${minPt} pt`, pt: minPt } });
     }
     if (el.type === 'chart' && el.chart && el.chart.fontSize < minPt * 0.75) {
-      issues.push({ id: 'chartfont-' + el.id, elementId: el.id, severity: 'warning', title: 'Graph labels may be too small', detail: `They are ${el.chart.fontSize} pt; try at least ${Math.round(minPt * 0.75)} pt (Label size in the side panel).` });
+      const pt = Math.round(minPt * 0.75);
+      issues.push({ id: 'chartfont-' + el.id, elementId: el.id, severity: 'warning', title: 'Graph labels are too small to read from 2 m', detail: `They are ${el.chart.fontSize} pt; on ${sizeName(p)} try at least ${pt} pt.`, textSize: { label: `Make them ${pt} pt`, pt } });
     }
     if (el.type === 'chart' && el.chart) {
       const cvd = chartColorIssue(el, p);

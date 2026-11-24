@@ -218,6 +218,6 @@ test.describe('tables', () => {
     await paste(page, { 'text/plain': 'Group\tScore\nA\t1' });
     await page.getByLabel('Text size (pt)').fill('8');
     await page.getByRole('button', { name: /^Check/ }).click();
-    await expect(page.locator('.check-panel, [role="dialog"]').filter({ hasText: 'Table text may be too small' }).first()).toBeVisible();
+    await expect(page.locator('.check-panel, [role="dialog"]').filter({ hasText: 'Table text is too small' }).first()).toBeVisible();
   });
 });

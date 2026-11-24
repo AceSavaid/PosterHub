@@ -45,6 +45,7 @@ function filledPoster(): Poster {
   p.references = [{ id: 'r1', kind: 'article', authors: [{ family: 'Walker', given: 'M' }], title: 'Sleep and memory', year: '2017' }];
   p.notes = [{ id: 'n1', x: 10, y: 10, text: 'Shorten this', author: 'Supervisor', createdAt: 1, resolved: false }];
   p.ignoredWords = ['spindle'];
+  p.dismissedIssues = ['ph-x'];
   p.thumbnail = PNG;
   return p;
 }
@@ -124,11 +125,12 @@ describe('turning a poster into a template', () => {
     expect(q.elements.find((e) => e.type === 'equation')!.equation!.latex).not.toContain('frac');
   });
 
-  it('drops references, review notes, ignored words and the thumbnail', () => {
+  it('drops references, review notes, ignored words, dismissed checks and the thumbnail', () => {
     const q = posterToTemplate(filledPoster(), 'T').poster;
     expect(q.references).toEqual([]);
     expect(q.notes).toBeUndefined();
     expect(q.ignoredWords).toBeUndefined();
+    expect(q.dismissedIssues).toBeUndefined();
     expect(q.thumbnail).toBeUndefined();
     expect(allText(q)).not.toContain('Walker');
   });

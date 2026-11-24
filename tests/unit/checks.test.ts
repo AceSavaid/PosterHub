@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { backgroundBehind, checkPoster, contrastRatio, minReadablePt } from '../../src/lib/checks';
+import { backgroundBehind, checkPoster, contrastRatio, minReadablePt, splitDismissed, withDismissed } from '../../src/lib/checks';
 import { PALETTES, createPoster, makeElement, sizeFor } from '../../src/model';
 import type { Poster } from '../../src/types';
 
@@ -80,4 +80,28 @@ describe('poster check', () => {
     expect(minReadablePt(p)).toBe(20);
     expect(minReadablePt({ ...p, ...sizeFor('A4', 'portrait') })).toBeLessThan(10);
   });
+});
+
+describe('dismissed check items', () => {
+  const issues = [
+    { id: 'ph-a', severity: 'warning', title: 'A', detail: '' },
+    { id: 'small-b', severity: 'problem', title: 'B', detail: '' },
+    { id: 'empty', severity: 'tip', title: 'C', detail: '' },
+  ] as const;
+
+  it('hides dismissed items and lists them separately', () => {
+    const { shown, hidden } = splitDismissed([...issues], ['small-b', 'gone-z']);
+    expect(shown.map((i) => i.id)).toEqual(['ph-a', 'empty']);
+    expect(hidden.map((i) => i.id)).toEqual(['small-b']);
+    expect(splitDismissed([...issues]).shown).toHaveLength(3);
+    expect(splitDismissed([...issues], undefined).hidden).toEqual([]);
+  });
+
+  it('adds and removes ids without duplicates, and clears to undefined', () => {
+    expect(withDismissed(undefined, ['a'], true)).toEqual(['a']);
+    expect(withDismissed(['a'], ['a', 'b'], true)).toEqual(['a', 'b']);
+    expect(withDismissed(['a', 'b'], ['a'], false)).toEqual(['b']);
+    expect(withDismissed(['a'], ['a'], false)).toBeUndefined();
+  });
+
 });

@@ -91,6 +91,9 @@ export default function SettingsDialog({ onClose, storageKind = 'browser', onBac
           <label className="check">
             <input type="checkbox" checked={prefs.showTips} onChange={(e) => change({ showTips: e.target.checked })} /> Show a tip for the selected element
           </label>
+          <label className="check">
+            <input type="checkbox" checked={prefs.autoFormat} onChange={(e) => change({ autoFormat: e.target.checked })} /> Format as I type: “- ” or “1. ” starts a list, curly quotes, 10–20 dashes
+          </label>
         </div>
         <p className="hint">{keys('Side panels are under View ▾ in the editor; Ctrl/⌘ \\ hides or shows both. Press ? in the editor for every shortcut.')}</p>
 

@@ -36,6 +36,8 @@ export interface UiPrefs {
   backupReminder: boolean;
   /** a one-line tip about the selected element at the top of the Properties panel */
   showTips: boolean;
+  /** lists from "- " / "1. ", curly quotes and en dashes while typing */
+  autoFormat: boolean;
   /** when the last "all posters" backup was downloaded (ms, 0 = never) */
   lastBackupAt: number;
   /** "Remind me later" hides the reminder until this time (ms) */
@@ -71,7 +73,7 @@ function sanitizeNewPoster(v: unknown): NewPosterPrefs | null {
   return { template, palette, orientation, preset, width, height, columns, headingFont, bodyFont };
 }
 
-export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false, pngDpi: 200, showNotes: true, brandKit: '', contrast: 'system', uiSize: 'normal', backupReminder: true, showTips: true, lastBackupAt: 0, backupSnoozedUntil: 0, newPoster: null };
+export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false, pngDpi: 200, showNotes: true, brandKit: '', contrast: 'system', uiSize: 'normal', backupReminder: true, showTips: true, autoFormat: true, lastBackupAt: 0, backupSnoozedUntil: 0, newPoster: null };
 export const PREFS_KEY = 'posterhub.ui';
 export const PNG_DPI_CHOICES = [
   { dpi: 100, label: 'Draft (100 dpi)' },
@@ -98,6 +100,7 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     uiSize: r.uiSize === 'large' || r.uiSize === 'xlarge' || r.uiSize === 'normal' ? r.uiSize : DEFAULT_PREFS.uiSize,
     backupReminder: bool(r.backupReminder, DEFAULT_PREFS.backupReminder),
     showTips: bool(r.showTips, DEFAULT_PREFS.showTips),
+    autoFormat: bool(r.autoFormat, DEFAULT_PREFS.autoFormat),
     lastBackupAt: time(r.lastBackupAt),
     backupSnoozedUntil: time(r.backupSnoozedUntil),
     newPoster: sanitizeNewPoster(r.newPoster),

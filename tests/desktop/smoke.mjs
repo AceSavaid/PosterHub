@@ -69,9 +69,9 @@ try {
   // Restart: the poster is found on disk; rename and delete change the files.
   app = await launch();
   await app.until('the saved poster', `return document.body.innerText.includes('Smoke test poster')`);
-  // Card actions are in its ⋯ menu.
+  // Rename and Delete live in each card's ⋯ menu.
   const cardMenu = async (item) => {
-    await app.click('⋯', `document.querySelector('.poster-card')`);
+    await app.run(`document.querySelector('.poster-card [aria-haspopup=menu]').click();`);
     await app.until('the card menu', `return !!document.querySelector('.context-menu')`);
     await app.click(item, `document.querySelector('.context-menu')`);
   };

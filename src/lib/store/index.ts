@@ -4,7 +4,7 @@ import type { PosterStore } from './types';
 import { browserStore } from './browserStore';
 import { FolderStore } from './folderStore';
 
-export type { PosterStore } from './types';
+export type { PosterStore, PosterSummary } from './types';
 
 /** True when running inside the PosterHub desktop app (Tauri). */
 export function isDesktop() {

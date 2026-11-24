@@ -136,7 +136,7 @@ test('a poster opens offline even when its font was never saved', async ({ page,
   await expect(page.locator('.poster .el-title')).toBeVisible();
 });
 
-test('offers a reload when a new version has downloaded', async ({ page, context }) => {
+test('offers a reload when a new version has downloaded', async ({ page }) => {
   await installApp(page);
   // Pretend a new release went live: the next check finds a changed sw.js on the server.
   const original = fs.readFileSync(SW_PATH, 'utf8');

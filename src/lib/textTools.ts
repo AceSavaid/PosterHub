@@ -48,7 +48,11 @@ function tokenize(html: string): Token[] {
   return out;
 }
 
-/** The readable text of some HTML, with a line break wherever the markup starts a new line. */
+/**
+ * The readable text of some HTML, with a line break wherever the markup starts a new line. Works on
+ * the poster's own (already cleaned) HTML without a DOM. For HTML from outside the app, use
+ * `htmlToText` in sanitize.ts, which parses it in an inert document.
+ */
 export function htmlToText(html = ''): string {
   return tokenize(html)
     .map((t) => ('tag' in t ? (BLOCK_TAG.test(t.tag) ? '\n' : '') : t.text))

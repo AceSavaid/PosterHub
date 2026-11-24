@@ -26,6 +26,8 @@ export interface UiPrefs {
   pdfBleedMm: number;
   /** Add crop marks to PDFs. */
   pdfCropMarks: boolean;
+  /** PNG export resolution (and the PDF's fallback image), remembered between visits */
+  pngDpi: number;
   /** draw review-note pins on the poster while editing */
   showNotes: boolean;
   /** id of the brand kit new posters start with ('' = none) */
@@ -40,8 +42,14 @@ export interface UiPrefs {
   backupSnoozedUntil: number;
 }
 
-export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false, showNotes: true, brandKit: '', contrast: 'system', uiSize: 'normal', backupReminder: true, showTips: true, lastBackupAt: 0, backupSnoozedUntil: 0 };
+export const DEFAULT_PREFS: UiPrefs = { theme: 'system', swapPanels: false, showTools: true, showProperties: true, pdfBleedMm: 0, pdfCropMarks: false, pngDpi: 200, showNotes: true, brandKit: '', contrast: 'system', uiSize: 'normal', backupReminder: true, showTips: true, lastBackupAt: 0, backupSnoozedUntil: 0 };
 export const PREFS_KEY = 'posterhub.ui';
+export const PNG_DPI_CHOICES = [
+  { dpi: 100, label: 'Draft (100 dpi)' },
+  { dpi: 150, label: 'Good (150 dpi)' },
+  { dpi: 200, label: 'High (200 dpi)' },
+  { dpi: 300, label: 'Print (300 dpi)' },
+];
 
 /** Fills in defaults and drops anything malformed (old versions, hand-edited storage). */
 export function sanitizePrefs(raw: unknown): UiPrefs {
@@ -55,6 +63,7 @@ export function sanitizePrefs(raw: unknown): UiPrefs {
     showProperties: bool(r.showProperties, DEFAULT_PREFS.showProperties),
     pdfBleedMm: sanitizePrintOptions({ bleedMm: r.pdfBleedMm as number }).bleedMm,
     pdfCropMarks: bool(r.pdfCropMarks, DEFAULT_PREFS.pdfCropMarks),
+    pngDpi: PNG_DPI_CHOICES.some((c) => c.dpi === r.pngDpi) ? (r.pngDpi as number) : DEFAULT_PREFS.pngDpi,
     showNotes: bool(r.showNotes, DEFAULT_PREFS.showNotes),
     contrast: r.contrast === 'normal' || r.contrast === 'high' || r.contrast === 'system' ? r.contrast : DEFAULT_PREFS.contrast,
     uiSize: r.uiSize === 'large' || r.uiSize === 'xlarge' || r.uiSize === 'normal' ? r.uiSize : DEFAULT_PREFS.uiSize,

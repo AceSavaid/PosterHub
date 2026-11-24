@@ -61,7 +61,7 @@ test('dismissing a problem takes it off the Check badge and the Export menu', as
   await expect(qr).toHaveCount(1);
   await expect(page.locator('.check-btn:not(.notes-btn) .badge')).toBeVisible();
   await page.getByRole('button', { name: 'Export ▾' }).click();
-  await expect(page.locator('#export-menu')).toContainText('problem(s) found');
+  await expect(page.locator('#export-menu')).toContainText('to fix before printing');
   await page.keyboard.press('Escape');
   await page.mouse.move(5, 300);
 
@@ -69,7 +69,7 @@ test('dismissing a problem takes it off the Check badge and the Export menu', as
   await expect(qr).toHaveCount(0);
   await expect(page.locator('.issue.problem')).toHaveCount(0);
   await page.getByRole('button', { name: 'Export ▾' }).click();
-  await expect(page.locator('#export-menu')).not.toContainText('problem(s) found');
+  await expect(page.locator('#export-menu')).not.toContainText('to fix before printing');
   await page.keyboard.press('Escape');
   await page.mouse.move(5, 300);
 

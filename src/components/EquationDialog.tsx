@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useDialog } from '../lib/useDialog';
 import type { EquationSpec, Poster } from '../types';
 import { resolveColor } from '../model';
 import { SNIPPETS, insertSnippet, mathSvg, svgDataUrl, typesetLatex } from '../lib/math';
@@ -29,6 +30,7 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
   const [latex, setLatex] = useState(initial.latex);
   const [fontSize, setFontSize] = useState(initial.fontSize);
   const { request: cancel, prompt: discardPrompt } = useDiscardGuard(latex !== initial.latex || fontSize !== initial.fontSize, onCancel);
+  const dialog = useDialog(cancel, 'eq-title');
   const area = useRef<HTMLTextAreaElement>(null);
   /** Where to put the caret once a snippet insert has rendered. */
   const caret = useRef<number | null>(null);
@@ -76,7 +78,7 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && cancel()}>
-      <div className="modal wide equation-dialog" role="dialog" aria-modal="true" aria-labelledby="eq-title">
+      <div {...dialog} className="modal wide equation-dialog">
         <h2 id="eq-title">{isNew ? 'Insert equation' : 'Edit equation'}</h2>
         <label className="eq-field">
           LaTeX
@@ -93,9 +95,6 @@ export default function EquationDialog({ poster, initial, isNew, onSave, onCance
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                 e.preventDefault();
                 save();
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                cancel();
               }
             }}
           />

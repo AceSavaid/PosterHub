@@ -13,7 +13,8 @@ import { useUiPrefs } from '../lib/uiPrefs';
 import { loadGoogleFont } from '../lib/fonts';
 
 interface Props {
-  onCreate: (p: Poster) => void;
+  /** `fromAbstract`: open the "Fill from abstract or Word" step as soon as the poster opens */
+  onCreate: (p: Poster, opts?: { fromAbstract?: boolean }) => void;
   onCancel: () => void;
 }
 
@@ -60,6 +61,7 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
 
   const fonts = [...new Set([...(kit ? [kit.headingFont, kit.bodyFont, ...(kit.googleFonts ?? [])] : []), ...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS])];
   const dialog = useDialog<HTMLDivElement>(onCancel, 'new-poster-title');
+  const [fromAbstract, setFromAbstract] = useState(false);
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
@@ -71,9 +73,9 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
             // A saved template keeps its own look; the kit only fills logo spots it left empty.
             const p = posterFromTemplate(mine, name || 'Untitled poster');
             if (kit) fillLogoSpots(p, kit);
-            return onCreate(p);
+            return onCreate(p, { fromAbstract });
           }
-          onCreate(buildNewPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }, kit));
+          onCreate(buildNewPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }, kit), { fromAbstract });
         }}
       >
         <h2 id="new-poster-title">New poster</h2>
@@ -163,6 +165,9 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
         </div>
         {!mine && <p className="hint">Sizes available: {SIZE_PRESETS.length} presets or any custom size. You can change everything here later.</p>}
         <div className="modal-actions sticky-actions">
+          <label className="check from-abstract" title="Paste your abstract or open a Word file next, and its title, authors and sections fill the poster">
+            <input type="checkbox" checked={fromAbstract} onChange={(e) => setFromAbstract(e.target.checked)} /> Fill it from my abstract or Word file
+          </label>
           <button type="button" className="btn" onClick={onCancel}>Cancel</button>
           <button type="submit" className="btn primary">Create poster</button>
         </div>

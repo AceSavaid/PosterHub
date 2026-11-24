@@ -16,10 +16,14 @@ test('copies a poster at another size from the editor and from My posters', asyn
 
   // From the editor: A1 landscape, rearranged into more columns.
   await page.getByRole('button', { name: 'Poster options' }).click();
-  await page.getByRole('menuitem', { name: 'Copy at another size…' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Copy at another size' });
+  await page.getByRole('menuitem', { name: 'Make a copy…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Make a copy' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole('button', { name: /Landscape/ })).toHaveAttribute('aria-pressed', 'true');
+  // starts at the poster's own size: an exact copy until another size is picked
+  await expect(dialog.getByRole('button', { name: /Portrait/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(dialog.getByText('Same size and shape: an exact copy.')).toBeVisible();
+  await expect(dialog.getByLabel('Name of the copy')).toHaveValue('Sleep study (copy)');
+  await dialog.getByRole('button', { name: /Landscape/ }).click();
   await dialog.getByLabel('Size').selectOption('A1');
   await expect(dialog.getByRole('radio', { name: /Rearrange into a layout/ })).toBeChecked();
   await expect(dialog.getByLabel('Columns')).toHaveValue('4');
@@ -37,7 +41,8 @@ test('copies a poster at another size from the editor and from My posters', asyn
 
   // From My posters: an A4 handout of the original, which opens straight away.
   const original = page.locator('.poster-card').filter({ hasText: '841 × 1189 mm · portrait' });
-  await original.getByRole('button', { name: 'Copy Sleep study at another size' }).click();
+  await original.getByRole('button', { name: 'More for Sleep study', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Make a copy…' }).click();
   await dialog.getByRole('button', { name: /Portrait/ }).click();
   await dialog.getByLabel('Size').selectOption('A4');
   await expect(dialog.getByRole('radio')).toHaveCount(0); // same shape: just scaled
@@ -49,4 +54,29 @@ test('copies a poster at another size from the editor and from My posters', asyn
   await expect(page.locator('.poster [data-overflow="true"]')).toHaveCount(0);
   const box = (await page.locator('.poster').boundingBox())!;
   expect(box.height / box.width).toBeCloseTo(297 / 210, 1);
+});
+
+test('Make a copy at the same size is an exact copy, from the editor and from My posters', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '+ New poster' }).first().click();
+  await page.getByLabel('Name').fill('Lab meeting');
+  await page.getByRole('button', { name: 'Create poster' }).click();
+  await expect(page.locator('.poster')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Poster options' }).click();
+  await page.getByRole('menuitem', { name: 'Make a copy…' }).click();
+  await page.getByRole('dialog', { name: 'Make a copy' }).getByRole('button', { name: 'Make copy' }).click();
+  await expect(page.locator('.toast')).toContainText('Lab meeting (copy)');
+  await expect(page.getByLabel('Poster name')).toHaveValue('Lab meeting');
+
+  await page.getByRole('button', { name: /My posters/ }).click();
+  await page.getByRole('button', { name: 'More for Lab meeting (copy)' }).click();
+  await page.getByRole('menuitem', { name: 'Make a copy…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Make a copy' });
+  await dialog.getByLabel('Name of the copy').fill('Lab meeting v2');
+  await dialog.getByRole('button', { name: 'Make copy' }).click();
+  // an exact copy stays in My posters rather than opening
+  await expect(page.locator('.poster-card', { hasText: 'Lab meeting v2' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My posters' })).toBeVisible();
+  await expect(page.locator('.poster-card')).toHaveCount(3);
 });

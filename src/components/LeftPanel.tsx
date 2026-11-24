@@ -15,7 +15,7 @@ import { IconPicker } from './IconPicker';
 import { ICON_SOURCES } from '../lib/icons/library';
 import { keys } from '../lib/keys';
 
-type Tab = 'insert' | 'layout' | 'design';
+type Tab = 'layout' | 'design';
 
 interface Props {
   poster: Poster;
@@ -34,20 +34,36 @@ interface Props {
   onUndo: () => void;
 }
 
-const TABS: Tab[] = ['insert', 'layout', 'design'];
-
-export default function LeftPanel({ poster, update, onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, onFillFromAbstract, notify, onUndo }: Props) {
-  const [tab, setTab] = useState<Tab>('insert');
+/** The left panel: everything you can add to the poster. Poster-wide settings live in the Properties panel. */
+export default function LeftPanel(props: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors' | 'onInsertReferences' | 'onInsertTable' | 'onInsertEquation'>) {
   return (
     <aside className="panel left" aria-label="Tools" data-tour="tools">
-      <div className="tabs" role="tablist" aria-label="Tools">
+      <div className="panel-body">
+        <h2 className="panel-title">Insert</h2>
+        <InsertTab {...props} />
+      </div>
+    </aside>
+  );
+}
+
+const TABS: Tab[] = ['layout', 'design'];
+
+/**
+ * Page size, columns, layout, colours and fonts for the whole poster. Shown in the Properties
+ * panel whenever nothing on the poster is selected.
+ */
+export function PosterSettings({ poster, update, notify, onUndo, onFillFromAbstract }: Pick<Props, 'poster' | 'update' | 'notify' | 'onUndo' | 'onFillFromAbstract'>) {
+  const [tab, setTab] = useState<Tab>('layout');
+  return (
+    <>
+      <div className="tabs" role="tablist" aria-label="Poster settings">
         {TABS.map((t, i) => (
           <button
             key={t}
             id={'tab-' + t}
             role="tab"
             aria-selected={tab === t}
-            aria-controls="tools-panel"
+            aria-controls="poster-settings-panel"
             tabIndex={tab === t ? 0 : -1}
             className={tab === t ? 'active' : ''}
             onClick={() => setTab(t)}
@@ -65,17 +81,16 @@ export default function LeftPanel({ poster, update, onInsert, onInsertImage, onI
           </button>
         ))}
       </div>
-      <div className="panel-body" id="tools-panel" role="tabpanel" aria-labelledby={'tab-' + tab}>
-        <h2 className="sr-only">{tab[0].toUpperCase() + tab.slice(1)}</h2>
-        {tab === 'insert' && <InsertTab onInsert={onInsert} onInsertImage={onInsertImage} onInsertChart={onInsertChart} onInsertQr={onInsertQr} onInsertAuthors={onInsertAuthors} onInsertReferences={onInsertReferences} onInsertTable={onInsertTable} onInsertEquation={onInsertEquation} onFillFromAbstract={onFillFromAbstract} />}
-        {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} onUndo={onUndo} />}
+      <div className="panel-body" id="poster-settings-panel" role="tabpanel" aria-labelledby={'tab-' + tab}>
+        <p className="hint">Settings for the whole poster. Click an element on the poster to change just that element.</p>
+        {tab === 'layout' && <LayoutTab poster={poster} update={update} notify={notify} onUndo={onUndo} onFillFromAbstract={onFillFromAbstract} />}
         {tab === 'design' && <DesignTab poster={poster} update={update} notify={notify} onUndo={onUndo} />}
       </div>
-    </aside>
+    </>
   );
 }
 
-function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation, onFillFromAbstract }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors' | 'onInsertReferences' | 'onInsertTable' | 'onInsertEquation' | 'onFillFromAbstract'>) {
+function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInsertAuthors, onInsertReferences, onInsertTable, onInsertEquation }: Pick<Props, 'onInsert' | 'onInsertImage' | 'onInsertChart' | 'onInsertQr' | 'onInsertAuthors' | 'onInsertReferences' | 'onInsertTable' | 'onInsertEquation'>) {
   return (
     <>
       <h3>Text</h3>
@@ -100,9 +115,6 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
         </button>
         <button className="insert-btn" onClick={onInsertEquation}>
           <span aria-hidden className="ib-icon t-eq">∑</span>Equation (LaTeX)…
-        </button>
-        <button className="insert-btn" onClick={onFillFromAbstract}>
-          <span aria-hidden className="ib-icon">📄</span>Fill from abstract or Word…
         </button>
       </div>
       <h3>Media and data</h3>
@@ -141,7 +153,7 @@ function InsertTab({ onInsert, onInsertImage, onInsertChart, onInsertQr, onInser
   );
 }
 
-function LayoutTab({ poster, update, notify, onUndo }: Pick<Props, 'poster' | 'update' | 'notify' | 'onUndo'>) {
+function LayoutTab({ poster, update, notify, onUndo, onFillFromAbstract }: Pick<Props, 'poster' | 'update' | 'notify' | 'onUndo' | 'onFillFromAbstract'>) {
   const [scaleContent, setScaleContent] = useState(true);
   const [template, setTemplate] = useState<TemplateId>('classic');
 
@@ -218,6 +230,11 @@ function LayoutTab({ poster, update, notify, onUndo }: Pick<Props, 'poster' | 'u
           Apply to {poster.columns} column{poster.columns > 1 ? 's' : ''}
         </button>
       </div>
+      <h3>Fill from your abstract</h3>
+      <p className="hint">Paste an abstract or open a Word file, and its title, authors and sections go into this poster’s matching boxes.</p>
+      <button className="btn" onClick={onFillFromAbstract}>
+        Fill from abstract or Word…
+      </button>
     </>
   );
 }

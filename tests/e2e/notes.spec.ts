@@ -40,9 +40,17 @@ async function download(page: Page, label: RegExp) {
 const notesPanel = (page: Page) => page.getByRole('dialog', { name: 'Review notes' });
 const pins = (page: Page) => page.locator('.note-pin');
 
+/** Notes share the review panel with Check and Find: open it from Check, then switch to Notes. */
+async function openNotes(page: Page) {
+  if (await notesPanel(page).isVisible()) return;
+  if (!(await page.locator('.review-switch').isVisible())) await page.getByRole('button', { name: /^Check/ }).click();
+  await page.locator('.review-switch').getByRole('button', { name: /^Notes/ }).click();
+  await expect(notesPanel(page)).toBeVisible();
+}
+
 /** Opens the Notes panel, signs in a name and adds a note with this text. */
 async function addNote(page: Page, text: string, name = 'Dr. Lee') {
-  if (!(await notesPanel(page).isVisible())) await page.getByRole('button', { name: /^Notes/ }).click();
+  await openNotes(page);
   await notesPanel(page).getByLabel(/Your name/).fill(name);
   await notesPanel(page).getByRole('button', { name: '+ Add note' }).click();
   const box = page.getByLabel('Note text');
@@ -75,7 +83,7 @@ test('adds, edits, resolves, reopens and deletes notes; all of it can be undone'
   const title = await page.locator('.poster .el-title').boundingBox();
   const pin = await pins(page).first().boundingBox();
   expect(pin!.x).toBeGreaterThan(title!.x + title!.width / 2);
-  await expect(page.locator('.notes-btn .badge')).toHaveText('1');
+  await expect(page.locator('.check-btn .note-badge')).toHaveText('1');
   await expect(notesPanel(page)).toContainText('Dr. Lee');
   await expect(notesPanel(page).locator('.note-text')).toHaveText('Shorter title?\nMaybe drop "novel".');
 
@@ -91,13 +99,13 @@ test('adds, edits, resolves, reopens and deletes notes; all of it can be undone'
   // resolve hides the pin (unless resolved notes are shown) and clears the badge
   await page.getByRole('button', { name: '✓ Resolve' }).click();
   await expect(pins(page)).toHaveCount(0);
-  await expect(page.locator('.notes-btn .badge')).toHaveCount(0);
+  await expect(page.locator('.check-btn .note-badge')).toHaveCount(0);
   await expect(notesPanel(page)).toContainText('All 1 note(s) are resolved');
   await notesPanel(page).getByLabel(/Show resolved/).check();
   await expect(pins(page)).toHaveCount(1);
   await expect(pins(page).first()).toHaveClass(/resolved/);
   await notesPanel(page).getByRole('button', { name: 'Reopen' }).click();
-  await expect(page.locator('.notes-btn .badge')).toHaveText('1');
+  await expect(page.locator('.check-btn .note-badge')).toHaveText('1');
 
   // a second note from the right-click menu
   // (left part of the box: the selected title's rotate handle sits over the middle)
@@ -105,7 +113,7 @@ test('adds, edits, resolves, reopens and deletes notes; all of it can be undone'
   await page.getByRole('menuitem', { name: 'Add note' }).click();
   await page.getByLabel('Note text').fill('Add ORCID iDs');
   await expect(pins(page)).toHaveCount(2);
-  await expect(page.locator('.notes-btn .badge')).toHaveText('2');
+  await expect(page.locator('.check-btn .note-badge')).toHaveText('2');
 
   // delete, then undo brings it back
   await notesPanel(page).getByRole('button', { name: 'Delete note 2' }).click();
@@ -138,10 +146,10 @@ test('notes can be dragged, and hidden or shown on the poster', async ({ page })
   await page.goto('/'); // My posters, not the poster's own link (which reopens it by itself)
   await page.getByRole('button', { name: 'Open Notes test preview' }).click();
   await expect(page.locator('.poster')).toBeVisible();
-  await expect(page.locator('.notes-btn .badge')).toHaveText('1');
+  await expect(page.locator('.check-btn .note-badge')).toHaveText('1');
   await expect(pins(page)).toHaveCount(0);
   // picking the note from the list shows notes again
-  await page.getByRole('button', { name: /^Notes/ }).click();
+  await openNotes(page);
   await notesPanel(page).getByRole('button', { name: 'Open note 1' }).click();
   await expect(pins(page)).toHaveCount(1);
   await expect(page.getByLabel('Note text')).toHaveValue('Move me');
@@ -152,7 +160,8 @@ test('Check lists open notes and clicking one opens it', async ({ page }) => {
   await newPoster(page);
   await addNote(page, 'Is n=12 enough?');
   await page.getByLabel('Note text').press('Escape');
-  await page.getByRole('button', { name: /^Check/ }).click();
+  // Notes and Check share the review panel: switch over to Poster check
+  await page.locator('.review-switch').getByRole('button', { name: 'Poster check' }).click();
   const check = page.getByRole('dialog', { name: 'Poster check' });
   const item = check.getByRole('button', { name: /Open note from Dr\. Lee: “Is n=12 enough\?”/ });
   await expect(item).toBeVisible();
@@ -168,7 +177,7 @@ test('notes never appear in PDF, PowerPoint, PNG or copied images, but travel in
   await newPoster(page, 'Shared draft');
   const secret = 'SUPERVISOR-ONLY-COMMENT';
   // put the note in an empty part of the poster and leave its card open while exporting
-  await page.getByRole('button', { name: /^Notes/ }).click();
+  await openNotes(page);
   await notesPanel(page).getByLabel(/Your name/).fill('Prof. Ada');
   await notesPanel(page).getByRole('button', { name: '+ Add note' }).click();
   await page.getByLabel('Note text').fill(secret);
@@ -195,7 +204,8 @@ test('notes never appear in PDF, PowerPoint, PNG or copied images, but travel in
   expect(png.data.subarray(1, 4).toString()).toBe('PNG');
   expect(await yellowPixels(page, png.data)).toBe(0);
 
-  await page.getByRole('button', { name: 'Copy image' }).click();
+  await page.getByRole('button', { name: 'Export ▾' }).click();
+  await page.getByRole('button', { name: /^Copy as image/ }).click();
   await expect(page.locator('.toast')).toContainText('copied');
   expect(await yellowPixels(page, await copiedPng(page))).toBe(0);
 
@@ -222,9 +232,9 @@ test('notes in a shared file are shown as plain text, never run as code', async 
   await page.getByRole('button', { name: 'Open project file' }).click();
   await (await chooser).setFiles(file);
   await expect(page.getByLabel('Poster name')).toHaveValue('From a co-author');
-  await expect(page.locator('.notes-btn .badge')).toHaveText('1');
+  await expect(page.locator('.check-btn .note-badge')).toHaveText('1');
 
-  await page.getByRole('button', { name: /^Notes/ }).click();
+  await openNotes(page);
   await expect(notesPanel(page).locator('.note-text')).toHaveText(evil);
   await pins(page).first().click();
   await expect(page.getByLabel('Note text')).toHaveValue(evil);

@@ -10,18 +10,22 @@ import { ensurePosterFonts } from '../lib/fonts';
 import { copyImageToClipboard, effectiveDpi, exportPdf, exportPng, exportPptx, makeThumbnail } from '../lib/exporters';
 import { Canvas } from './Canvas';
 import { reducedMotion } from '../lib/a11y';
-import LeftPanel from './LeftPanel';
+import LeftPanel, { PosterSettings } from './LeftPanel';
 import Inspector from './Inspector';
 import { equationBoxSize, typesetLatex } from '../lib/math';
 import { chartCanvases } from './ChartView';
 import { Logo } from './Library';
 import CheckPanel, { type CheckTab } from './CheckPanel';
 import FindPanel from './FindPanel';
+import { posterActionItems } from './posterActions';
 import ContextMenu, { type MenuItem } from './ContextMenu';
-import { checkPoster, exportWarningFor, splitDismissed, withDismissed, type ImageInfo, type Issue } from '../lib/checks';
-import { replaceAllInPoster } from '../lib/textTools';
+import { checkPoster, splitDismissed, withDismissed, type ImageInfo, type Issue } from '../lib/checks';
+import { htmlToText, replaceAllInPoster } from '../lib/textTools';
 import { ignoreKey } from '../lib/spelling';
-import AppearanceMenu from './AppearanceMenu';
+import ViewMenu from './ViewMenu';
+import ExportMenu, { type ExportKind } from './ExportMenu';
+import ReviewSwitch, { type SidePanel } from './ReviewSwitch';
+import { useLatest } from '../lib/useLatest';
 import SettingsDialog from './SettingsDialog';
 import GearIcon from './GearIcon';
 import { keys } from '../lib/keys';
@@ -38,7 +42,6 @@ import { sanitizeElement } from '../lib/sanitize';
 import { insertCitationAtCaret } from '../lib/refs/caret';
 import { refreshMarkersIn } from '../lib/refs/citations';
 import { replaceColor } from '../lib/printColor';
-import { BLEED_CHOICES } from '../lib/print';
 import { NotesLayer, NotesPanel } from './ReviewNotes';
 import { cleanText, createNote, loadReviewerName, MAX_NOTE_LENGTH, notePositionFor, openNotes, saveReviewerName } from '../lib/notes';
 import { VisionBanner, VisionFilters, VisionSelect, visionFilter } from './VisionFilters';
@@ -69,10 +72,11 @@ let internalClipboard: PosterElement | null = null;
 function plainTextOf(el: PosterElement) {
   if (el.type === 'table') return tableToTsv(normalizeTable(el.table));
   if (el.equation) return el.equation.latex;
-  const div = document.createElement('div');
-  div.innerHTML = el.html ?? '';
-  return div.innerText || div.textContent || '';
+  return htmlToText(el.html).trim();
 }
+
+/** The printable area inside the margins, which "align to the page" lines things up with. */
+const pageBox = (d: Poster) => ({ x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin });
 
 export type TableAction = 'rowAbove' | 'rowBelow' | 'colLeft' | 'colRight' | 'deleteRow' | 'deleteCol';
 
@@ -99,18 +103,17 @@ async function imageFileToDataUrl(file: Blob, maxSide = 4000): Promise<{ src: st
   return { src: c.toDataURL(file.type === 'image/png' ? 'image/png' : 'image/jpeg', 0.92), ratio };
 }
 
-/** the floating panels that share the top-right corner of the poster area */
-type SidePanel = 'check' | 'find' | 'notes';
-
 interface Props {
   initial: Poster;
   /** A message to show when the poster opens, e.g. notes from a PowerPoint import. */
   notice?: string;
+  /** 'abstract': open "Fill from abstract or Word" straight away (picked in the New poster dialog) */
+  startWith?: 'abstract';
   /** Called once the poster is saved. `viaBack`: the browser's Back button was used. */
   onClose: (viaBack?: boolean) => void;
 }
 
-export default function Editor({ initial, notice: initialNotice, onClose }: Props) {
+export default function Editor({ initial, notice: initialNotice, startWith, onClose }: Props) {
   const { poster, update, updateElement, undo, redo, canUndo, canRedo, ref: posterRef } = usePosterHistory(initial);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   /** the primary (last clicked) selection */
@@ -124,18 +127,16 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const [snap, setSnap] = useState(true);
   const [viewing, setViewing] = useState(false);
   const [refsOpen, setRefsOpen] = useState(false);
-  const [abstractOpen, setAbstractOpen] = useState(false);
+  const [abstractOpen, setAbstractOpen] = useState(startWith === 'abstract');
   const [chartDialog, setChartDialog] = useState<{ id?: string; spec?: ChartSpec; text?: string; file?: File } | null>(null);
   const [cropFor, setCropFor] = useState<string | null>(null);
   /** A picture waiting for the user to say how it fits the box it replaces. */
   const [replaceAsk, setReplaceAsk] = useState<{ id: string; src: string; ratio: number; boxRatio: number } | null>(null);
   const [eqDialog, setEqDialog] = useState<{ id?: string; spec: EquationSpec } | null>(null);
-  const [exportOpen, setExportOpen] = useState(false);
   /** open authors dialog; `id` is the text box it fills (none = add a new one) */
   const [authorsDialog, setAuthorsDialog] = useState<{ id?: string; initial?: AuthorList; replacing?: boolean } | null>(null);
   // Check, Find and Notes float in the same corner, so only one of them is open at a time.
   const [sidePanel, setSidePanel] = useState<SidePanel | null>(null);
-  const toggleSidePanel = (p: SidePanel) => setSidePanel((cur) => (cur === p ? null : p));
   const checkOpen = sidePanel === 'check';
   const findOpen = sidePanel === 'find';
   const notesOpen = sidePanel === 'notes';
@@ -147,7 +148,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   /** the phone toolbar's More menu, holding the buttons that don't fit on one row */
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   useEffect(() => {
-    if (hasSeenTour()) return;
+    if (hasSeenTour() || startWith === 'abstract') return; // the tour can wait for the next poster
     // Wait for the poster to zoom to fit so the first card points at the right place.
     const t = setTimeout(() => {
       markTourSeen();
@@ -155,39 +156,11 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     }, 500);
     return () => clearTimeout(t);
   }, []);
-  const exportBtn = useRef<HTMLButtonElement>(null);
-  const exportMenu = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!exportOpen) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      e.stopPropagation();
-      setExportOpen(false);
-      exportBtn.current?.focus();
-    };
-    const onDown = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (!exportMenu.current?.contains(t) && !exportBtn.current?.contains(t)) setExportOpen(false);
-    };
-    const onFocus = (e: FocusEvent) => {
-      const t = e.target as Node;
-      if (!exportMenu.current?.contains(t) && !exportBtn.current?.contains(t)) setExportOpen(false);
-    };
-    window.addEventListener('keydown', onKey, true);
-    document.addEventListener('pointerdown', onDown);
-    document.addEventListener('focusin', onFocus);
-    return () => {
-      window.removeEventListener('keydown', onKey, true);
-      document.removeEventListener('pointerdown', onDown);
-      document.removeEventListener('focusin', onFocus);
-    };
-  }, [exportOpen]);
   const [posterMenu, setPosterMenu] = useState<{ x: number; y: number } | null>(null);
   const [templateDialog, setTemplateDialog] = useState(false);
   const [copySizeOpen, setCopySizeOpen] = useState(false);
   const [menu, setMenu] = useState<{ x: number; y: number; el: PosterElement } | null>(null);
   const [allIssues, setIssues] = useState<Issue[]>([]);
-  const [dpi, setDpi] = useState(200);
   const [toast, setToast] = useState<{ msg: string; action?: { label: string; run: () => void } } | null>(null);
   const [activeCell, setActiveCell] = useState<{ r: number; c: number } | null>(null);
   const [banner, setBanner] = useState(initialNotice);
@@ -197,6 +170,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   const scroller = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<number>(undefined);
   const [prefs, setPrefs] = useUiPrefs();
+  const dpi = prefs.pngDpi;
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
   const [showResolved, setShowResolved] = useState(false);
   const [reviewer, setReviewer] = useState(loadReviewerName);
@@ -277,13 +251,14 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   }
 
   // The browser's Back button returns to My posters (after saving), like the "My posters" button.
+  const closeLatest = useLatest(close);
   useEffect(() => {
     const onPop = () => {
-      if (!location.hash.startsWith('#/poster/')) close(true);
+      if (!location.hash.startsWith('#/poster/')) closeLatest.current(true);
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  });
+  }, [closeLatest]);
 
   // ---- element helpers
   function viewCenter() {
@@ -694,7 +669,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   }
 
   // ---- keyboard, clipboard, drag & drop
-  useEffect(() => {
+  // The handlers are rebuilt each render (they read current state) but subscribed once.
+  const shortcuts = useLatest((() => {
     const isTyping = (t: EventTarget | null) => t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
     const onKey = (e: KeyboardEvent) => {
       if (viewing || chartDialog || authorsDialog || confirmDelete || eqDialog || settingsOpen || shortcutsOpen) return;
@@ -851,6 +827,12 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         addElement(el);
       }
     };
+    return { onKey, onCopy, onPaste };
+  })());
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => shortcuts.current.onKey(e);
+    const onCopy = (e: ClipboardEvent) => shortcuts.current.onCopy(e);
+    const onPaste = (e: ClipboardEvent) => shortcuts.current.onPaste(e);
     window.addEventListener('keydown', onKey);
     document.addEventListener('copy', onCopy);
     document.addEventListener('cut', onCopy);
@@ -861,7 +843,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       document.removeEventListener('cut', onCopy);
       document.removeEventListener('paste', onPaste);
     };
-  });
+  }, [shortcuts]);
 
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
@@ -930,8 +912,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   }
 
   // ---- export
-  async function runExport(kind: 'pdf' | 'png' | 'pptx' | 'project') {
-    setExportOpen(false);
+  async function runExport(kind: ExportKind) {
     setSelectedId(null);
     setEditingId(null);
     setOpenNoteId(null);
@@ -993,13 +974,6 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
     return () => clearTimeout(t);
   }, [poster]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function duplicatePoster() {
-    const p = posterRef.current;
-    const now = Date.now();
-    await savePoster({ ...structuredClone(p), id: uid(), name: p.name + ' (copy)', createdAt: now, updatedAt: now });
-    notify(`Saved “${p.name} (copy)” to My posters. You are still editing the original.`);
-  }
-
   async function saveTemplate(name: string, keepPictures: string[]) {
     setTemplateDialog(false);
     try {
@@ -1051,8 +1025,8 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       items.push('-');
       items.push({ label: 'Add note', onClick: () => addNote(el) });
     } else {
-      items.push({ label: 'Align left edges', onClick: () => arrange((els, d) => align(els, 'left', { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin })) });
-      items.push({ label: 'Align top edges', onClick: () => arrange((els, d) => align(els, 'top', { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin })) });
+      items.push({ label: 'Align left edges', onClick: () => arrange((els, d) => align(els, 'left', pageBox(d))) });
+      items.push({ label: 'Align top edges', onClick: () => arrange((els, d) => align(els, 'top', pageBox(d))) });
     }
     items.push('-');
     items.push({ label: many ? `Delete ${selectedIds.length} elements` : 'Delete', shortcut: 'Del', danger: true, onClick: removeSelected });
@@ -1184,11 +1158,21 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
   // Check badge red (a brand-new poster is full of them) but are pointed out again in the Export menu.
   // Items the person dismissed on this poster are left out of the badge, the Export menu and the list.
   const { shown: issues, hidden: dismissedIssues } = splitDismissed(allIssues, poster.dismissedIssues);
-  const exportWarning = exportWarningFor(issues);
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const badge = { count: problems || issues.filter((i) => i.severity === 'warning' && !i.leftover).length, urgent: problems > 0 };
 
   if (viewing) return <ViewMode poster={poster} vision={vision} onVision={setVision} onClose={() => setViewing(false)} />;
+
+  const reviewSwitch = sidePanel && (
+    <ReviewSwitch
+      current={sidePanel}
+      notes={openNotes(poster).length}
+      onPick={(p) => {
+        if (p === 'check') runCheck();
+        setSidePanel(p);
+      }}
+    />
+  );
 
   return (
     <div className="editor" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
@@ -1219,16 +1203,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         <button className="icon-btn phone-hide" onClick={() => setZoom((z) => Math.min(4, z * 1.25))} title="Zoom in">+</button>
         <span className="sep phone-hide" />
         <div className="phone-hide topbar-group">
-        <AppearanceMenu
-          panels
-          label="View"
-          footer={(close) => (
-            <>
-              <button className="btn small-btn" onClick={() => { close(); setShortcutsOpen(true); }}>Keyboard shortcuts <kbd>?</kbd></button>
-              <button className="btn small-btn" onClick={() => { close(); setSettingsOpen(true); }}>All settings…</button>
-            </>
-          )}
-        >
+        <ViewMenu>
           <div className="field-label">While editing</div>
           <label className="check" title="Blue lines that show the columns">
             <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Show column guides
@@ -1239,15 +1214,12 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           <div className="appearance-gap">
             <VisionSelect mode={vision} onChange={setVision} />
           </div>
-        </AppearanceMenu>
+        </ViewMenu>
         </div>
-        <button className="icon-btn phone-hide" aria-label="Settings" title="Settings: theme, contrast, interface size, panels, printing and backups" onClick={() => setSettingsOpen(true)}>
-          <GearIcon />
-        </button>
         <button
           className="icon-btn phone-hide"
-          aria-label="Help"
-          title="Help: keyboard shortcuts, tour and settings"
+          aria-label="Settings and help"
+          title="Settings, keyboard shortcuts and the tour"
           aria-haspopup="menu"
           aria-expanded={!!helpMenu}
           onClick={(e) => {
@@ -1255,25 +1227,19 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             setHelpMenu({ x: r.left, y: r.bottom + 4 });
           }}
         >
-          ?
+          <GearIcon />
         </button>
         <span className="sep phone-hide" />
         <button
-          className={'btn check-btn notes-btn phone-hide' + (notesOpen ? ' active' : '')}
-          onClick={() => toggleSidePanel('notes')}
-          title="Comments for co-authors and supervisors. Saved with the poster, never printed."
-        >
-          Notes
-          {openNotes(poster).length > 0 && <span className="badge note-badge">{openNotes(poster).length}</span>}
-        </button>
-        <button
-          className={'btn check-btn' + (checkOpen ? ' active' : '')}
+          className={'btn check-btn' + (sidePanel ? ' active' : '')}
           data-tour="check"
+          aria-expanded={!!sidePanel}
           onClick={() => {
+            if (sidePanel) return setSidePanel(null);
             runCheck();
-            toggleSidePanel('check');
+            setSidePanel('check');
           }}
-          title="Look for small text, low contrast, blurry images and leftover example text"
+          title="Check the poster before printing, find and replace words, and read co-authors’ notes"
         >
           Check
           {badge.count > 0 && (
@@ -1281,10 +1247,13 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
               {badge.count}
             </span>
           )}
+          {openNotes(poster).length > 0 && (
+            <span className="badge note-badge" title="Open notes from co-authors" aria-label={`${openNotes(poster).length} open ${openNotes(poster).length === 1 ? 'note' : 'notes'}`}>
+              {openNotes(poster).length}
+            </span>
+          )}
         </button>
-        <button className={'btn phone-hide' + (findOpen ? ' active' : '')} onClick={() => toggleSidePanel('find')} title={keys('Find and replace words on the poster (Ctrl/⌘ F)')}>Find</button>
         <button className="btn phone-hide" onClick={() => setViewing(true)} title="See the poster full screen, without editing tools">Preview</button>
-        <button className="btn phone-hide" onClick={copyImage} title="Copy an image of the poster to share">Copy image</button>
         <button
           className="icon-btn phone-only"
           aria-label="More"
@@ -1298,71 +1267,16 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         >
           ☰
         </button>
-        <div className="menu-wrap" data-tour="export">
-          <button ref={exportBtn} className="btn primary" aria-expanded={exportOpen} aria-controls="export-menu" onClick={() => setExportOpen((o) => !o)}>Export ▾</button>
-          {exportOpen && (
-            <div className="menu" id="export-menu" role="group" aria-label="Export" ref={exportMenu}>
-              {exportWarning && (
-                <button
-                  className={exportWarning.urgent ? 'menu-warn' : 'menu-note'}
-                  onClick={() => {
-                    setExportOpen(false);
-                    setCheckTab('problems');
-                    setSidePanel('check');
-                  }}
-                >
-                  <strong>{exportWarning.headline}</strong>
-                  <span>{[...exportWarning.more, 'Show me'].join(' · ')}</span>
-                </button>
-              )}
-              <button onClick={() => runExport('pdf')}>
-                <strong>PDF</strong>
-                <span>
-                  For printing: sharp text and graphics at any size
-                  {(prefs.pdfBleedMm > 0 || prefs.pdfCropMarks) &&
-                    ` · with ${[prefs.pdfBleedMm > 0 && 'bleed', prefs.pdfCropMarks && 'crop marks'].filter(Boolean).join(' and ')}`}
-                </span>
-              </button>
-              <button onClick={() => runExport('pptx')}>
-                <strong>PowerPoint (.pptx)</strong>
-                <span>Editable text, shapes and native charts</span>
-              </button>
-              <button onClick={() => runExport('png')}>
-                <strong>PNG image</strong>
-                <span>For web, slides or social media</span>
-              </button>
-              <button onClick={() => runExport('project')}>
-                <strong>Project file (.poster.json)</strong>
-                <span>Back up, or open on another computer</span>
-              </button>
-              <div className="menu-print">
-                <strong>For the print shop (PDF)</strong>
-                <label>
-                  Bleed
-                  <select aria-label="Bleed" value={prefs.pdfBleedMm} onChange={(e) => setPrefs({ pdfBleedMm: +e.target.value })}>
-                    {BLEED_CHOICES.map((b) => (
-                      <option key={b.mm} value={b.mm}>{b.label}</option>
-                    ))}
-                  </select>
-                </label>
-                <label className="check">
-                  <input type="checkbox" checked={prefs.pdfCropMarks} onChange={(e) => setPrefs({ pdfCropMarks: e.target.checked })} /> Crop marks
-                </label>
-                <small>Only if your printer asks. Bleed extends edge-to-edge colours and photos past the edge so nothing white shows after trimming; crop marks show where to cut.</small>
-              </div>
-              <label className="menu-dpi">
-                Image quality for PNG
-                <select value={dpi} onChange={(e) => setDpi(+e.target.value)}>
-                  <option value={100}>Draft (100 dpi)</option>
-                  <option value={150}>Good (150 dpi)</option>
-                  <option value={200}>High (200 dpi)</option>
-                  <option value={300}>Print (300 dpi)</option>
-                </select>
-                {effectiveDpi(poster, dpi) < dpi && <small>Capped at {effectiveDpi(poster, dpi)} dpi for this size by browser limits.</small>}
-              </label>
-            </div>
-          )}
-        </div>
+        <ExportMenu
+          poster={poster}
+          issues={issues}
+          onExport={runExport}
+          onCopyImage={copyImage}
+          onReview={() => {
+            setCheckTab('problems');
+            setSidePanel('check');
+          }}
+        />
       </header>
       {banner && (
         <div className="notice-bar" role="status">
@@ -1373,8 +1287,6 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       <div className={`workspace${prefs.swapPanels ? ' swapped' : ''}`}>
         {prefs.showTools ? (
           <LeftPanel
-            poster={poster}
-            update={update}
             onInsert={insert}
             onInsertImage={() => chooseImage()}
             onInsertChart={() => setChartDialog({})}
@@ -1383,9 +1295,6 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             onInsertReferences={() => setRefsOpen(true)}
             onInsertTable={() => insert('table')}
             onInsertEquation={() => openEquation()}
-            onFillFromAbstract={() => setAbstractOpen(true)}
-            notify={notify}
-            onUndo={undo}
           />
         ) : (
           <button className="panel-reveal tools" title="Show tools panel" aria-label="Show tools panel" onClick={() => setPrefs({ showTools: true })}>
@@ -1461,7 +1370,11 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
         </main>
         {prefs.showProperties ? (
           <Inspector
-            onShowShortcuts={() => setShortcutsOpen(true)}
+            posterSettings={<PosterSettings poster={poster} update={update} notify={notify} onUndo={undo} onFillFromAbstract={() => setAbstractOpen(true)} />}
+            onClearSelection={() => {
+              setEditingId(null);
+              setSelectedIds([]);
+            }}
             poster={poster}
             el={selectedIds.length > 1 ? null : selected}
             multi={selectedIds.length}
@@ -1471,7 +1384,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             overflow={overflow}
             onShrinkText={() => shrinkToFit()}
             onGrowBox={() => growToFit()}
-            onAlign={(mode) => arrange((els, d) => align(els, mode, { x: d.margin, y: d.margin, w: d.width - 2 * d.margin, h: d.height - 2 * d.margin }))}
+            onAlign={(mode) => arrange((els, d) => align(els, mode, pageBox(d)))}
             onDistribute={(axis) => arrange((els) => distribute(els, axis))}
             onMatchSize={(dim) => arrange((els) => matchSize(els, dim))}
             editing={!!editingId && editingId === selectedId}
@@ -1505,14 +1418,12 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           x={posterMenu.x}
           y={posterMenu.y}
           onClose={() => setPosterMenu(null)}
-          items={[
-            { label: 'Duplicate this poster', onClick: duplicatePoster },
-            { label: 'Copy at another size…', onClick: () => setCopySizeOpen(true) },
-            { label: 'Download project file', onClick: () => exportPosterFile(posterRef.current) },
-            { label: 'Save as my template…', onClick: () => setTemplateDialog(true) },
-            '-',
-            { label: 'Delete this poster…', danger: true, onClick: () => setConfirmDelete(true) },
-          ]}
+          items={posterActionItems({
+            onCopy: () => setCopySizeOpen(true),
+            onDownload: () => exportPosterFile(posterRef.current),
+            onSaveTemplate: () => setTemplateDialog(true),
+            onDelete: () => setConfirmDelete(true),
+          })}
         />
       )}
       {helpMenu && (
@@ -1521,15 +1432,13 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
           y={helpMenu.y}
           onClose={() => setHelpMenu(null)}
           items={[
+            { label: 'Settings…', onClick: () => setSettingsOpen(true) },
+            '-',
             { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setShortcutsOpen(true) },
             {
               label: 'Take the tour',
-              onClick: () => {
-                setExportOpen(false);
-                setTouring(true);
-              },
+              onClick: () => setTouring(true),
             },
-            { label: 'Settings…', onClick: () => setSettingsOpen(true) },
           ]}
         />
       )}
@@ -1545,7 +1454,6 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
             },
             { label: 'Find and replace', onClick: () => setSidePanel('find') },
             { label: 'Preview', onClick: () => setViewing(true) },
-            { label: 'Copy image', onClick: copyImage },
             '-',
             { label: 'Redo', disabled: !canRedo, onClick: redo },
             { label: 'Zoom in', onClick: () => setZoom((z) => Math.min(4, z * 1.25)) },
@@ -1563,6 +1471,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.el)} onClose={() => setMenu(null)} />}
       {checkOpen && (
         <CheckPanel
+          switcher={reviewSwitch}
           issues={issues}
           dismissed={dismissedIssues}
           onDismiss={dismissIssue}
@@ -1603,6 +1512,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       )}
       {findOpen && (
         <FindPanel
+          switcher={reviewSwitch}
           poster={poster}
           posterNode={posterNode.current}
           onPick={(id) => pickIssue(id, undefined, false)}
@@ -1616,6 +1526,7 @@ export default function Editor({ initial, notice: initialNotice, onClose }: Prop
       )}
       {notesOpen && (
         <NotesPanel
+          switcher={reviewSwitch}
           poster={poster}
           reviewer={reviewer}
           onReviewer={(name) => {

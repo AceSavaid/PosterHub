@@ -95,24 +95,29 @@ test('a graph picks similar columns, warns about mixed scales and fills an empty
   await expect(page.locator('.toast')).toContainText('empty figure box');
 });
 
-test('library: rename in place and “Download backup”', async ({ page }) => {
+test('library: one ⋯ menu per poster to rename in place and download the project file', async ({ page }) => {
   await newPoster(page, 'Blank', 'Old name');
   await page.getByRole('button', { name: /My posters/ }).click();
   const card = page.locator('.poster-card', { hasText: 'Old name' });
-  await card.getByRole('button', { name: 'Rename' }).click();
+  await card.getByRole('button', { name: 'More for Old name' }).click();
+  // the same actions as the editor's Poster options menu, plus Rename
+  await expect(page.getByRole('menuitem')).toHaveText(['Rename', 'Make a copy…', 'Download project file', 'Save as my template…', 'Delete…']);
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
   const input = page.getByRole('textbox', { name: 'Poster name' });
   await input.fill('New name');
   await input.press('Enter');
   await expect(page.locator('.card-name', { hasText: 'New name' })).toBeVisible();
   // Esc cancels a rename
   const renamed = page.locator('.poster-card', { hasText: 'New name' });
-  await renamed.getByRole('button', { name: 'Rename' }).click();
+  await renamed.getByRole('button', { name: 'More for New name' }).click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
   await input.fill('Discarded');
   await input.press('Escape');
   await expect(page.locator('.card-name', { hasText: 'New name' })).toBeVisible();
 
   const dl = page.waitForEvent('download');
-  await page.locator('.poster-card', { hasText: 'New name' }).getByRole('button', { name: 'Download backup' }).click();
+  await page.getByRole('button', { name: 'More for New name' }).click();
+  await page.getByRole('menuitem', { name: 'Download project file' }).click();
   expect((await dl).suggestedFilename()).toBe('New-name.poster.json');
 });
 

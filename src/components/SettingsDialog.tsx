@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { DEFAULT_PREFS, useUiPrefs, type Contrast, type Theme, type UiSize } from '../lib/uiPrefs';
-import { BLEED_CHOICES } from '../lib/print';
 import { BRAND_KITS } from '../brandKits';
 import { loadReviewerName, saveReviewerName } from '../lib/notes';
 import { askToKeepStorage, formatBytes, storageUse, type StorageUse } from '../lib/backup';
@@ -87,22 +86,13 @@ export default function SettingsDialog({ onClose, storageKind = 'browser', onBac
         <h3>Editor</h3>
         <div className="settings-checks">
           <label className="check">
-            <input type="checkbox" checked={prefs.showTools} onChange={(e) => change({ showTools: e.target.checked })} /> Show tools panel
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={prefs.showProperties} onChange={(e) => change({ showProperties: e.target.checked })} /> Show properties panel
-          </label>
-          <label className="check">
-            <input type="checkbox" checked={prefs.swapPanels} onChange={(e) => change({ swapPanels: e.target.checked })} /> Tools on the right
-          </label>
-          <label className="check">
             <input type="checkbox" checked={prefs.showNotes} onChange={(e) => change({ showNotes: e.target.checked })} /> Show review notes on the poster
           </label>
           <label className="check">
             <input type="checkbox" checked={prefs.showTips} onChange={(e) => change({ showTips: e.target.checked })} /> Show a tip for the selected element
           </label>
         </div>
-        <p className="hint">{keys('Ctrl/⌘ \\ hides or shows both panels. Press ? in the editor for every shortcut.')}</p>
+        <p className="hint">{keys('Side panels are under View ▾ in the editor; Ctrl/⌘ \\ hides or shows both. Press ? in the editor for every shortcut.')}</p>
 
         <div className="settings-grid">
           <label htmlFor="settings-reviewer" className="field-label">Your name on notes</label>
@@ -119,21 +109,6 @@ export default function SettingsDialog({ onClose, storageKind = 'browser', onBac
             ))}
           </select>
         </div>
-
-        <h3>Printing (PDF)</h3>
-        <div className="settings-grid">
-          <label htmlFor="settings-bleed" className="field-label">Bleed</label>
-          <select id="settings-bleed" value={prefs.pdfBleedMm} onChange={(e) => change({ pdfBleedMm: +e.target.value })}>
-            {BLEED_CHOICES.map((b) => (
-              <option key={b.mm} value={b.mm}>{b.label}</option>
-            ))}
-          </select>
-          <span />
-          <label className="check">
-            <input type="checkbox" checked={prefs.pdfCropMarks} onChange={(e) => change({ pdfCropMarks: e.target.checked })} /> Crop marks
-          </label>
-        </div>
-        <p className="hint">Only needed when a print shop asks for them. They are added to “PDF for printing” exports.</p>
 
         {storageKind === 'browser' && (
           <>

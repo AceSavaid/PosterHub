@@ -79,14 +79,18 @@ test.describe('library', () => {
   test('duplicates and deletes posters', async ({ page }) => {
     await newPoster(page, { name: 'Original' });
     await backToLibrary(page);
-    await page.locator('.poster-card', { hasText: 'Original' }).getByRole('button', { name: 'Duplicate' }).click();
+    await page.getByRole('button', { name: 'More for Original', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Make a copy…' }).click();
+    await page.getByRole('dialog', { name: 'Make a copy' }).getByRole('button', { name: 'Make copy' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
-    await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'More for Original (copy)' }).click();
+    await page.getByRole('menuitem', { name: 'Delete…' }).click();
     // an in-app "are you sure?" box, where Cancel keeps the poster
     const confirm = page.getByRole('alertdialog', { name: 'Delete “Original (copy)”?' });
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toBeVisible();
-    await page.locator('.poster-card', { hasText: 'Original (copy)' }).getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'More for Original (copy)' }).click();
+    await page.getByRole('menuitem', { name: 'Delete…' }).click();
     await confirm.getByRole('button', { name: 'Delete poster' }).click();
     await expect(page.locator('.poster-card', { hasText: 'Original (copy)' })).toHaveCount(0);
   });
@@ -229,6 +233,7 @@ test.describe('switching layouts', () => {
     const methodsBody = page.locator('.poster .el-text .el-body').nth(bodyIndex);
     await typeInto(methodsBody, 'Forty-two adults slept in the lab.');
 
+    await page.locator('.stage').click({ position: { x: 5, y: 5 } }); // nothing selected: Properties shows the poster settings
     await page.getByRole('tab', { name: 'Layout' }).click();
     await page.getByRole('combobox', { name: 'Layout' }).selectOption('sidebar');
     await page.getByRole('button', { name: /^Apply to/ }).click();
@@ -252,17 +257,16 @@ test.describe('switching layouts', () => {
 });
 
 test.describe('editing', () => {
-  test('applies a layout after asking first', async ({ page }) => {
+  test('applies a layout straight away, and Undo puts it back', async ({ page }) => {
     await newPoster(page);
     const before = await elements(page).count();
     expect(before).toBeGreaterThan(0);
-    await page.locator('.panel.left .tabs').getByRole('tab', { name: 'Layout' }).click();
-    await page.locator('.panel.left label', { hasText: /^Layout/ }).locator('select').selectOption({ label: 'Blank' });
-    await page.getByRole('button', { name: /^Apply to/ }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
-    await expect(elements(page)).toHaveCount(before);
+    await page.locator('.panel.right .tabs').getByRole('tab', { name: 'Layout' }).click();
+    await page.locator('.panel.right label', { hasText: /^Layout/ }).locator('select').selectOption({ label: 'Blank' });
     await page.getByRole('button', { name: /^Apply to/ }).click();
     await expect(elements(page)).toHaveCount(0);
+    await page.locator('.toast').getByRole('button', { name: 'Undo' }).click();
+    await expect(elements(page)).toHaveCount(before);
   });
 
   test('types into text, with undo and redo', async ({ page }) => {
@@ -642,7 +646,8 @@ test.describe('export, import and sharing', () => {
     await allowClipboard(context, browserName);
     await recordClipboard(page);
     await newPoster(page, { size: 'A4' });
-    await page.getByRole('button', { name: 'Copy image' }).click();
+    await page.getByRole('button', { name: 'Export ▾' }).click();
+    await page.getByRole('button', { name: /^Copy as image/ }).click();
     await expect(page.locator('.toast')).toContainText('copied');
     expect((await copiedPng(page)).subarray(1, 4).toString()).toBe('PNG');
   });

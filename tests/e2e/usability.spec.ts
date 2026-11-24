@@ -6,7 +6,7 @@ const FIXTURES = path.join(import.meta.dirname, '..', 'fixtures');
 async function newPoster(page: Page, template = 'Classic columns', name = '') {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  if (name) await page.getByLabel('Name').fill(name);
+  if (name) await page.getByLabel('Poster title').fill(name);
   await page.getByRole('button', { name: new RegExp('^' + template) }).click();
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();

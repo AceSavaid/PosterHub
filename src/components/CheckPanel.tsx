@@ -43,6 +43,8 @@ interface Props {
   onClose: () => void;
   /** show the poster as seen with this kind of vision */
   onPreview?: (mode: VisionMode) => void;
+  /** jump to and start filling the next box with example text or no picture */
+  onFillNext?: () => void;
 }
 
 /** Poster problems, a spelling pass and word counts, in three tabs. */
@@ -77,10 +79,14 @@ export default function CheckPanel(props: Props) {
   );
 }
 
-function Problems({ issues, dismissed = [], onDismiss, onRestore, onPick, onPickNote, onFix, onPreview, onAlt }: Props) {
+function Problems({ issues: all, dismissed = [], onDismiss, onRestore, onPick, onPickNote, onFix, onPreview, onAlt, onFillNext }: Props) {
+  // Example text and empty figure boxes are one to-do, not a list of near-identical cards.
+  const leftovers = all.filter((i) => i.leftover);
+  const grouped = leftovers.length > 1;
+  const issues = grouped ? all.filter((i) => !i.leftover) : all;
   const problems = issues.filter((i) => i.severity === 'problem').length;
   const warnings = issues.filter((i) => i.severity === 'warning').length;
-  if (issues.length === 0)
+  if (all.length === 0)
     return (
       <>
         <div className="check-ok">
@@ -96,7 +102,8 @@ function Problems({ issues, dismissed = [], onDismiss, onRestore, onPick, onPick
         {problems > 0 && `${problems} to fix`}
         {problems > 0 && warnings > 0 && ', '}
         {warnings > 0 && `${warnings} to look at`}
-        {problems + warnings === 0 && 'Only suggestions'}
+        {grouped && `${problems + warnings > 0 ? ', ' : ''}${leftovers.length} boxes to fill`}
+        {problems + warnings === 0 && !grouped && 'Only suggestions'}
         {' · click an item to select it'}
       </p>
       <ul className="issue-list">
@@ -128,6 +135,31 @@ function Problems({ issues, dismissed = [], onDismiss, onRestore, onPick, onPick
             )}
           </li>
         ))}
+        {grouped && (
+          <li className="issue warning leftovers">
+            <div className="leftover-head">
+              <span className="issue-icon" aria-hidden>{ICON.warning}</span>
+              <span>
+                <strong id="issue-title-leftovers">{leftovers.length} boxes still have example text or no picture</strong>
+                <span className="issue-detail">Replace them with your own words and figures, or delete the ones you don’t need.</span>
+              </span>
+            </div>
+            {onFillNext && <button className="btn small-btn primary fill-next-btn" onClick={onFillNext}>Fill the next one</button>}
+            <details className="leftover-list">
+              <summary>Show which</summary>
+              <ul>
+                {leftovers.map((i) => (
+                  <li key={i.id}>
+                    <button className="link" disabled={!i.elementId} onClick={() => i.elementId && onPick(i.elementId)}>{i.title.replace(/ still has example text$/, '')}</button>
+                    {onDismiss && (
+                      <button className="issue-dismiss inline" aria-label={'Dismiss ' + i.title} title="Dismiss: hide this on this poster" onClick={() => onDismiss(i)}>×</button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </li>
+        )}
       </ul>
       <Dismissed dismissed={dismissed} onRestore={onRestore} />
     </>

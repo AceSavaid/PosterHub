@@ -26,6 +26,10 @@ import ViewMenu from './ViewMenu';
 import ExportMenu, { type ExportKind } from './ExportMenu';
 import ReviewSwitch, { type SidePanel } from './ReviewSwitch';
 import { useLatest } from '../lib/useLatest';
+import { reflowColumn } from '../lib/reflow';
+import { nameAfterTitleEdit, titleText } from '../lib/startText';
+import { fillProgress, nextToFill } from '../lib/fillProgress';
+import TextToolbar from './TextToolbar';
 import SettingsDialog from './SettingsDialog';
 import GearIcon from './GearIcon';
 import { keys } from '../lib/keys';
@@ -374,6 +378,18 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
     });
   }
 
+  /** Saves typed text. Editing the title renames a poster that is still unnamed (or named after its old title). */
+  function commitText(id: string, html: string) {
+    update((d) => {
+      const el = d.elements.find((e) => e.id === id);
+      if (!el) return;
+      const before = titleText(d);
+      el.html = html;
+      const next = nameAfterTitleEdit(d.name, before, titleText(d));
+      if (next) d.name = next;
+    });
+  }
+
   function commitTable(id: string, t: TableSpec, key?: string) {
     updateElement(id, { table: t }, key);
     fitTable(id, key);
@@ -603,6 +619,60 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
     const extra = el.h * MM_TO_PX - n.clientHeight; // padding + border
     updateElement(el.id, { h: (n.scrollHeight + extra) / MM_TO_PX + 0.5 }, key);
   }
+
+  /** Height (layout px) the text in a box needs, whether or not it fits right now. */
+  function contentHeight(n: HTMLElement) {
+    const old = n.style.height;
+    n.style.height = 'auto';
+    const h = n.offsetHeight;
+    n.style.height = old;
+    return h;
+  }
+
+  /** Empty mm at the bottom of a text box (what it can give up when the column above it grows). */
+  function spareMm(id: string) {
+    const n = textNode(id);
+    if (!n || n.classList.contains('el-table-wrap')) return 0;
+    return Math.max(0, (n.clientHeight - contentHeight(n)) / MM_TO_PX - 2);
+  }
+
+  const columnFullWarned = useRef<string | null>(null);
+  /** Grows (or shrinks back) a text box to fit its text, moving the boxes below it in the column. */
+  function fitColumn(id: string, key: string) {
+    const n = textNode(id);
+    const el = posterRef.current.elements.find((e) => e.id === id);
+    if (!n || !el || el.rotation || el.locked) return;
+    const extra = el.h * MM_TO_PX - n.clientHeight; // padding + border
+    const need = (contentHeight(n) + extra) / MM_TO_PX + 0.5;
+    const overflowing = n.scrollHeight > n.clientHeight + 1;
+    if (!overflowing && !(el.grew && need < el.h - 0.5)) return;
+    let short = 0;
+    update((d) => void (short = reflowColumn(d, id, overflowing ? Math.max(need, el.h) : need, spareMm).short), key);
+    if (short > 0.5 && columnFullWarned.current !== key) {
+      columnFullWarned.current = key;
+      notify('This column is full, so the text no longer fits its box. Shrink the text, or move something out of the column.', { label: 'Shrink text to fit', run: () => shrinkToFit(id) });
+    }
+  }
+
+  const fitColumnRef = useLatest(fitColumn);
+  // While typing, the box grows with its text and the rest of the column moves down (one undo step per edit).
+  useEffect(() => {
+    if (!editingId) return;
+    const node = posterNode.current?.querySelector<HTMLElement>(`[data-id="${editingId}"] .el-body`);
+    if (!node) return;
+    const id = editingId;
+    const key = `reflow-${id}-${Date.now()}`;
+    let frame = 0;
+    const onInput = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => fitColumnRef.current(id, key));
+    };
+    node.addEventListener('input', onInput);
+    return () => {
+      cancelAnimationFrame(frame);
+      node.removeEventListener('input', onInput);
+    };
+  }, [editingId]);
 
   function shrinkToFit(id = selectedId) {
     const n = id && textNode(id);
@@ -1070,6 +1140,30 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
     if (focus) node?.focus({ preventScroll: true });
   }
 
+  /** Zooms in until the element is comfortable to read and work on, and centres it. */
+  function zoomTo(id: string) {
+    const el = posterRef.current.elements.find((e) => e.id === id);
+    const s = scroller.current;
+    if (!el || !s) return;
+    const want = Math.min((s.clientWidth * 0.6) / (el.w * MM_TO_PX), (s.clientHeight * 0.7) / (el.h * MM_TO_PX), 1.5);
+    if (want > zoom * 1.05) setZoom(want);
+    setTimeout(() => {
+      const node = posterNode.current?.querySelector<HTMLElement>(`[data-id="${id}"]`);
+      node?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'auto' });
+    }, 30);
+  }
+
+  /** "Next": the next box that still has example text or no picture, zoomed in and ready to type in. */
+  function fillNext() {
+    setEditingId(null);
+    const next = nextToFill(posterRef.current, selectedId);
+    if (!next) return notify('Every box is filled in.');
+    setSelectedId(next.id);
+    zoomTo(next.id);
+    if (next.style && !next.refList) setTimeout(() => setEditingId(next.id), 60);
+    else setTimeout(() => posterNode.current?.querySelector<HTMLElement>(`[data-id="${next.id}"]`)?.focus({ preventScroll: true }), 60);
+  }
+
   /** Double-click / Enter on text: the reference list opens the references dialog instead of typing. */
   function startEditing(id: string | null) {
     const el = id ? posterRef.current.elements.find((x) => x.id === id) : null;
@@ -1159,6 +1253,8 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
   // Items the person dismissed on this poster are left out of the badge, the Export menu and the list.
   const { shown: issues, hidden: dismissedIssues } = splitDismissed(allIssues, poster.dismissedIssues);
   const problems = issues.filter((i) => i.severity === 'problem').length;
+  const progress = fillProgress(poster);
+  const editingEl = editingId ? poster.elements.find((e) => e.id === editingId && e.style && !e.refList) ?? null : null;
   const badge = { count: problems || issues.filter((i) => i.severity === 'warning' && !i.leftover).length, urgent: problems > 0 };
 
   if (viewing) return <ViewMode poster={poster} vision={vision} onVision={setVision} onClose={() => setViewing(false)} />;
@@ -1301,6 +1397,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             <span>Tools</span>
           </button>
         )}
+        <div className="stage-wrap">
         <main
           className="stage"
           aria-label="Poster"
@@ -1340,7 +1437,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
               }
               onEdit={startEditing}
               onChange={(id, patch, key) => updateElement(id, patch, key)}
-              onCommitText={(id, html) => updateElement(id, { html })}
+              onCommitText={commitText}
               onCommitTable={(id, t) => commitTable(id, t)}
               onActiveCell={setActiveCell}
               onContextMenu={(el, x, y) => setMenu({ x, y, el })}
@@ -1368,6 +1465,13 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             />
           </div>
         </main>
+        {progress.left.length > 0 && !editingId && (
+          <button className="btn fill-next" onClick={fillNext} title="Go to the next box that still has example text or no picture">
+            <span className="fill-count">{progress.filled} of {progress.total} filled</span>
+            <span className="fill-go">Next box →</span>
+          </button>
+        )}
+        </div>
         {prefs.showProperties ? (
           <Inspector
             posterSettings={<PosterSettings poster={poster} update={update} notify={notify} onUndo={undo} onFillFromAbstract={() => setAbstractOpen(true)} />}
@@ -1472,6 +1576,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
       {checkOpen && (
         <CheckPanel
           switcher={reviewSwitch}
+          onFillNext={fillNext}
           issues={issues}
           dismissed={dismissedIssues}
           onDismiss={dismissIssue}
@@ -1629,6 +1734,15 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
       )}
       {shortcutsOpen && <ShortcutsDialog onClose={() => setShortcutsOpen(false)} />}
       <div className="toast-region" role="status" aria-live="polite">
+        {editingEl && (
+          <TextToolbar
+            key={editingEl.id}
+            el={editingEl}
+            poster={poster}
+            node={posterNode.current?.querySelector<HTMLElement>(`[data-id="${editingEl.id}"]`) ?? null}
+            onStyle={(patch) => updateElement(editingEl.id, (e) => void Object.assign(e.style!, patch))}
+          />
+        )}
         {toast && (
           <div className="toast">
             {toast.msg}

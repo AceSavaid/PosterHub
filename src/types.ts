@@ -165,6 +165,8 @@ export interface PosterElement {
   refTitle?: string;
   /** Description of an image or graph for screen readers and exported files (alt text). */
   alt?: string;
+  /** mm this text box has grown to fit its text, pushing the column below down (it shrinks back by up to this much) */
+  grew?: number;
   /** clockwise rotation in degrees, around the element's centre */
   rotation?: number;
   /** part of the image to show, as fractions of the original (0–1) */

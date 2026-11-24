@@ -79,7 +79,7 @@ test('dialogs take focus, keep Tab inside, close on Escape and hand focus back',
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'New poster' });
   await expect(dialog).toHaveAttribute('aria-modal', 'true');
-  await expect(page.getByLabel('Name')).toBeFocused();
+  await expect(page.getByLabel('Poster title')).toBeFocused();
   for (let i = 0; i < 40; i++) {
     await page.keyboard.press('Tab');
     expect(await page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'))).toBe(true);
@@ -131,7 +131,9 @@ test('a poster can be edited with the keyboard alone', async ({ page }) => {
   await expect(results).toHaveAttribute('aria-label', /, selected$/);
   await expect(page.getByRole('complementary', { name: 'Properties' }).getByRole('heading', { name: 'Section header' })).toBeVisible();
 
-  // arrows nudge it by 1 mm
+  // arrows nudge it by 1 mm (position and size are folded away under one heading)
+  await page.getByText('Background, border, position and size').click();
+  await results.focus();
   const x0 = await page.getByLabel('X', { exact: true }).inputValue();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByLabel('X', { exact: true })).toHaveValue(String(Math.round((+x0 + 1) * 10) / 10));

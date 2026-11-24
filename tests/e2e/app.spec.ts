@@ -13,10 +13,13 @@ const FIXTURES = path.join(import.meta.dirname, '..', 'fixtures');
 async function newPoster(page: Page, opts: { name?: string; landscape?: boolean; size?: string; columns?: number; template?: string } = {}) {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  if (opts.name) await page.getByLabel('Name').fill(opts.name);
+  if (opts.name) await page.getByLabel('Poster title').fill(opts.name);
   if (opts.landscape) await page.getByRole('button', { name: 'Landscape' }).click();
   if (opts.size) await page.getByLabel('Size').selectOption(opts.size);
-  if (opts.columns) await page.getByLabel('Columns').selectOption(String(opts.columns));
+  if (opts.columns) {
+    await page.getByText('More options').click();
+    await page.getByLabel('Columns').selectOption(String(opts.columns));
+  }
   if (opts.template) await page.getByRole('button', { name: new RegExp(opts.template) }).click();
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
@@ -109,6 +112,7 @@ test.describe('templates', () => {
     await page.getByRole('button', { name: 'Landscape' }).click();
     const landscape = (await thumb.boundingBox())!;
     expect(landscape.width).toBeGreaterThan(landscape.height);
+    await page.getByText('More options').click();
     await page.getByRole('button', { name: 'Crimson' }).click();
     await expect(thumb.locator('rect[fill="#8b1e2d"]').first()).toBeAttached();
     await page.locator('[data-template="sidebar"]').click();
@@ -188,6 +192,7 @@ test.describe('templates', () => {
         await page.goto('/');
         await page.getByRole('button', { name: '+ New poster' }).first().click();
         if (landscape) await page.getByRole('button', { name: 'Landscape' }).click();
+        await page.getByText('More options').click();
         await page.getByLabel('Columns').selectOption(String(columns));
         if (['clinical', 'lab', 'computing', 'humanities'].includes(id)) await page.getByText('By research field').click();
         await page.locator(`[data-template="${id}"]`).click();

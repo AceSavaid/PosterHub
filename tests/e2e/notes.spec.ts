@@ -20,7 +20,7 @@ test.beforeEach(async ({ page }) => {
 async function newPoster(page: Page, name = 'Notes test', template = 'Classic columns') {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Poster title').fill(name);
   await page.getByLabel('Size').selectOption('A4');
   await page.getByRole('button', { name: new RegExp('^' + template) }).click();
   await page.getByRole('button', { name: 'Create poster' }).click();

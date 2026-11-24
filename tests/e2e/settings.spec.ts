@@ -6,7 +6,7 @@ async function newPoster(page: Page, template = 'Classic columns', name?: string
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
   await page.getByRole('button', { name: new RegExp('^' + template) }).click();
-  if (name) await page.getByRole('dialog', { name: 'New poster' }).getByLabel('Name', { exact: true }).fill(name);
+  if (name) await page.getByRole('dialog', { name: 'New poster' }).getByLabel('Poster title').fill(name);
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
 }

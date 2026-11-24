@@ -6,6 +6,7 @@ test('picking the Ontario Tech brand kit once starts new posters with its colour
   await expect(page.getByRole('button', { name: 'Brand kit' })).toHaveCount(0);
   await page.getByRole('button', { name: '+ New poster' }).first().click();
   const np = page.getByRole('dialog', { name: 'New poster' });
+  await np.getByText('More options').click();
   await expect(np.getByLabel('Brand kit')).toHaveValue('');
   await np.getByLabel('Brand kit').selectOption({ label: 'Ontario Tech University' });
   await expect(np.getByLabel('Heading font')).toHaveValue('Ubuntu');
@@ -24,6 +25,7 @@ test('picking the Ontario Tech brand kit once starts new posters with its colour
   await page.reload();
   await expect(page.getByRole('heading', { name: 'My posters' })).toBeVisible();
   await page.getByRole('button', { name: '+ New poster' }).first().click();
+  await np.getByText('More options').click();
   await expect(np.getByLabel('Brand kit')).toHaveValue('ontario-tech');
   await expect(np.getByLabel('Heading font')).toHaveValue('Ubuntu');
 

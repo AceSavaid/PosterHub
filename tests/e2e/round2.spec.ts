@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 async function newPoster(page: Page, template = 'Blank', name = '') {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  if (name) await page.getByLabel('Name').fill(name);
+  if (name) await page.getByLabel('Poster title').fill(name);
   await page.getByRole('button', { name: new RegExp('^' + template) }).click();
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
@@ -45,8 +45,9 @@ test('poster check lists problems and selects them', async ({ page }) => {
   await page.getByRole('button', { name: 'Export ▾' }).click();
   await page.getByRole('button', { name: /^Check/ }).click();
   const panel = page.getByRole('dialog', { name: 'Poster check' });
-  await expect(panel).toContainText('still has example text');
-  await panel.getByRole('button', { name: /Title “Your Poster Title/ }).click();
+  await expect(panel).toContainText('still have example text');
+  await panel.getByText('Show which').click();
+  await panel.getByRole('button', { name: /^Title “Your Poster Title/ }).click();
   await expect(page.locator('.insp-head h3')).toHaveText('Title');
 
   // fix the title and the item disappears
@@ -54,7 +55,7 @@ test('poster check lists problems and selects them', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('Sleep and memory');
   await page.keyboard.press('Escape');
-  await expect(panel.getByRole('button', { name: /Title “/ })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: /^Title “/ })).toHaveCount(0);
   await panel.getByRole('button', { name: 'Close' }).click();
   await expect(panel).toHaveCount(0);
 });
@@ -72,6 +73,7 @@ test('right-click menu duplicates, locks and deletes', async ({ page }) => {
   await els(page).first().click({ button: 'right', position: { x: 25, y: 25 } });
   await page.getByRole('menuitem', { name: /Duplicate/ }).click();
   await expect(els(page)).toHaveCount(2);
+  await page.locator('.more-props > summary').click();
   await page.getByLabel('Y', { exact: true }).fill('900'); // move the copy out of the way
   await els(page).last().click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Lock position' }).click();
@@ -90,8 +92,8 @@ test('formats only the selected words', async ({ page }) => {
   await page.getByRole('button', { name: 'Text box', exact: true }).click();
   await page.keyboard.type('plain then special');
   await page.keyboard.press('Shift+ControlOrMeta+ArrowLeft');
-  await page.getByRole('button', { name: 'A+ larger' }).click();
-  await page.getByRole('button', { name: 'Colour selected words accent' }).click();
+  await page.getByRole('button', { name: /bigger text/ }).click();
+  await page.getByRole('button', { name: 'Text colour accent' }).click();
   await page.keyboard.press('Escape');
   const html = await page.locator('.poster .el-body').innerHTML();
   expect(html).toMatch(/font-size: 3\d(\.5)?pt/);

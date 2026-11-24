@@ -14,8 +14,6 @@ import { ColorInput } from './ColorInput';
 import type { AlignMode } from '../lib/arrange';
 import { SHAPE_CHOICES } from '../lib/shapes';
 import { isCropped, normAngle } from '../lib/geometry';
-import { resizeSelection, styleSelection } from '../lib/richtext';
-import { PALETTE_ROLES } from '../model';
 import { CITATION_STYLES, DEFAULT_STYLE, shortLabel } from '../lib/refs/format';
 import { TYPE_NAMES } from '../lib/a11y';
 import { keys } from '../lib/keys';
@@ -178,6 +176,49 @@ export default function Inspector(props: Props) {
   const fmt = (cmd: 'bold' | 'italic' | 'underline', key: 'bold' | 'italic' | 'underline') =>
     editing ? document.execCommand(cmd) : setStyle({ [key]: !st![key] } as Partial<TextStyle>);
 
+  const backgroundSection = (
+        <section>
+          <h4>{el.type === 'shape' ? (el.shape === 'line' ? 'Line colour' : 'Fill') : 'Background'}</h4>
+          <ColorInput value={el.fill} palette={poster.palette} allowNone={el.type !== 'shape' || (el.shape !== 'line' && !!el.borderWidth)} onChange={(c) => onChange({ fill: c, gradient: undefined })} />
+          {el.gradient && (
+            <p className="muted small">
+              Gradient from the template.{' '}
+              <button className="btn small-btn" onClick={() => onChange({ gradient: undefined })}>
+                Use a solid colour
+              </button>
+            </p>
+          )}
+          {el.shape !== 'line' && (
+            <>
+              <div className="row2">
+                <label>
+                  Border (pt)
+                  <input type="number" min={0} step={0.5} value={el.borderWidth ?? 0} onChange={(e) => onChange({ borderWidth: Math.max(0, +e.target.value || 0) }, 'bw')} />
+                </label>
+                {(el.type !== 'shape' || el.shape === 'rect' || !el.shape) && (
+                  <label>
+                    Corner radius (mm)
+                    <input type="number" min={0} value={n(el.radius ?? 0)} onChange={(e) => onChange({ radius: Math.max(0, +e.target.value || 0) }, 'rad')} />
+                  </label>
+                )}
+              </div>
+              {!!el.borderWidth && (
+                <>
+                  <div className="field-label">Border colour</div>
+                  <ColorInput value={el.borderColor ?? '@primary'} palette={poster.palette} onChange={(c) => onChange({ borderColor: c })} />
+                </>
+              )}
+              {el.type !== 'shape' && (
+                <label>
+                  Inner padding (mm)
+                  <input type="number" min={0} value={n(el.padding ?? 0)} onChange={(e) => onChange({ padding: Math.max(0, +e.target.value || 0) }, 'pad')} />
+                </label>
+              )}
+            </>
+          )}
+        </section>
+  );
+
   return (
     <aside className="panel right" aria-label="Properties">
       <div className="panel-body">
@@ -255,29 +296,7 @@ export default function Inspector(props: Props) {
             </div>
             <div className="field-label">Text colour</div>
             <ColorInput value={st.color} palette={poster.palette} onChange={(c) => setStyle({ color: c ?? '@text' })} />
-            {editing && (
-              <div className="sel-format">
-                <div className="field-label">Selected words</div>
-                <div className="toolbar-row">
-                  <button className="fmt" title="Make selected words larger" aria-label="A+ larger" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1.15)}>A+</button>
-                  <button className="fmt" title="Make selected words smaller" aria-label="A− smaller" onMouseDown={(e) => e.preventDefault()} onClick={() => resizeSelection(1 / 1.15)}>A−</button>
-                  <span className="sep" />
-                  {PALETTE_ROLES.filter((r) => r !== 'background' && r !== 'surface').map((r) => (
-                    <button
-                      key={r}
-                      className="swatch"
-                      style={{ background: poster.palette[r] }}
-                      title={'Colour selected words: ' + r}
-                      aria-label={'Colour selected words ' + r}
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => styleSelection({ color: poster.palette[r] })}
-                    />
-                  ))}
-                  <button className="swatch" style={{ background: '#ffffff' }} title="White" aria-label="Colour selected words white" onMouseDown={(e) => e.preventDefault()} onClick={() => styleSelection({ color: '#ffffff' })} />
-                </div>
-                <p className="hint">Select words while typing, then use B / I / U, size or colour to change only those words.</p>
-              </div>
-            )}
+            {editing && <p className="hint">Select words to make only those bold, bigger or a different colour with the bar above the text.</p>}
           </section>
         )}
 
@@ -427,48 +446,10 @@ export default function Inspector(props: Props) {
           </section>
         )}
 
-        <section>
-          <h4>{el.type === 'shape' ? (el.shape === 'line' ? 'Line colour' : 'Fill') : 'Background'}</h4>
-          <ColorInput value={el.fill} palette={poster.palette} allowNone={el.type !== 'shape' || (el.shape !== 'line' && !!el.borderWidth)} onChange={(c) => onChange({ fill: c, gradient: undefined })} />
-          {el.gradient && (
-            <p className="muted small">
-              Gradient from the template.{' '}
-              <button className="btn small-btn" onClick={() => onChange({ gradient: undefined })}>
-                Use a solid colour
-              </button>
-            </p>
-          )}
-          {el.shape !== 'line' && (
-            <>
-              <div className="row2">
-                <label>
-                  Border (pt)
-                  <input type="number" min={0} step={0.5} value={el.borderWidth ?? 0} onChange={(e) => onChange({ borderWidth: Math.max(0, +e.target.value || 0) }, 'bw')} />
-                </label>
-                {(el.type !== 'shape' || el.shape === 'rect' || !el.shape) && (
-                  <label>
-                    Corner radius (mm)
-                    <input type="number" min={0} value={n(el.radius ?? 0)} onChange={(e) => onChange({ radius: Math.max(0, +e.target.value || 0) }, 'rad')} />
-                  </label>
-                )}
-              </div>
-              {!!el.borderWidth && (
-                <>
-                  <div className="field-label">Border colour</div>
-                  <ColorInput value={el.borderColor ?? '@primary'} palette={poster.palette} onChange={(c) => onChange({ borderColor: c })} />
-                </>
-              )}
-              {el.type !== 'shape' && (
-                <label>
-                  Inner padding (mm)
-                  <input type="number" min={0} value={n(el.padding ?? 0)} onChange={(e) => onChange({ padding: Math.max(0, +e.target.value || 0) }, 'pad')} />
-                </label>
-              )}
-            </>
-          )}
-        </section>
-
-        <ArrangeSection count={1} {...props} />
+        {el.type === 'shape' && backgroundSection}
+        <MoreProps label={el.type === 'shape' ? 'Position and size' : 'Background, border, position and size'}>
+          {el.type !== 'shape' && backgroundSection}
+          <ArrangeSection count={1} {...props} />
 
         <section>
           <h4>Position and size (mm)</h4>
@@ -502,8 +483,39 @@ export default function Inspector(props: Props) {
             <button className="btn small-btn" onClick={() => onLayer('back')}>Send to back</button>
           </div>
         </section>
+        </MoreProps>
       </div>
     </aside>
+  );
+}
+
+const MORE_KEY = 'posterhub.moreProps';
+/** The less-used settings fold away so the panel starts with what people change most; it stays open once opened. */
+function MoreProps({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(MORE_KEY) === 'open';
+    } catch {
+      return false;
+    }
+  });
+  return (
+    <details
+      className="more-props"
+      open={open}
+      onToggle={(e) => {
+        const o = (e.currentTarget as HTMLDetailsElement).open;
+        setOpen(o);
+        try {
+          localStorage.setItem(MORE_KEY, o ? 'open' : 'closed');
+        } catch {
+          /* private mode: it just won't be remembered */
+        }
+      }}
+    >
+      <summary>{label}</summary>
+      {open && children}
+    </details>
   );
 }
 

@@ -46,7 +46,7 @@ async function goOffline(context: BrowserContext) {
 
 async function createPoster(page: Page, name: string) {
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Poster title').fill(name);
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
 }

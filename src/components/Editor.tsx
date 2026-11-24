@@ -378,14 +378,13 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
     });
   }
 
-  /** Saves typed text. Editing the title renames a poster that is still unnamed (or named after its old title). */
+  /** Saves typed text. Editing the title names a poster that is still unnamed. */
   function commitText(id: string, html: string) {
     update((d) => {
       const el = d.elements.find((e) => e.id === id);
       if (!el) return;
-      const before = titleText(d);
       el.html = html;
-      const next = nameAfterTitleEdit(d.name, before, titleText(d));
+      const next = nameAfterTitleEdit(d.name, titleText(d));
       if (next) d.name = next;
     });
   }
@@ -1468,7 +1467,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
         {progress.left.length > 0 && !editingId && (
           <button className="btn fill-next" onClick={fillNext} title="Go to the next box that still has example text or no picture">
             <span className="fill-count">{progress.filled} of {progress.total} filled</span>
-            <span className="fill-go">Next box →</span>
+            <span className="fill-go">Go to an empty box →</span>
           </button>
         )}
         </div>

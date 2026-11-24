@@ -131,9 +131,7 @@ test('a poster can be edited with the keyboard alone', async ({ page }) => {
   await expect(results).toHaveAttribute('aria-label', /, selected$/);
   await expect(page.getByRole('complementary', { name: 'Properties' }).getByRole('heading', { name: 'Section header' })).toBeVisible();
 
-  // arrows nudge it by 1 mm (position and size are folded away under one heading)
-  await page.getByText('Background, border, position and size').click();
-  await results.focus();
+  // arrows nudge it by 1 mm
   const x0 = await page.getByLabel('X', { exact: true }).inputValue();
   await page.keyboard.press('ArrowRight');
   await expect(page.getByLabel('X', { exact: true })).toHaveValue(String(Math.round((+x0 + 1) * 10) / 10));

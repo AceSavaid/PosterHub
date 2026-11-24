@@ -1,5 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 
+// these start like a first visit: Properties' extra settings folded (the tour is still skipped)
+test.use({ storageState: { cookies: [], origins: [{ origin: 'http://localhost:4173', localStorage: [{ name: 'posterhub.tour', value: 'done' }] }] } });
+
 const els = (page: Page) => page.locator('.poster .el');
 const box = (page: Page, text: string) => els(page).filter({ hasText: new RegExp('^' + text) }).first();
 const top = (page: Page, text: string) => box(page, text).evaluate((n) => parseFloat((n as HTMLElement).style.top));
@@ -83,7 +86,7 @@ test('Next jumps to the next box with example text, ready to type over', async (
   // the Check panel shows the same to-do as one item
   await page.locator('.check-btn').click();
   await expect(page.getByText(/\d+ boxes still have example text or no picture/)).toBeVisible();
-  await page.getByRole('button', { name: 'Fill the next one' }).click();
+  await page.getByRole('button', { name: 'Go to an empty box', exact: true }).click();
   await expect(page.locator('.el.editing')).toHaveCount(1);
 });
 

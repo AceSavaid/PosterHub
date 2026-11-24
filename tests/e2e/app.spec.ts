@@ -194,7 +194,8 @@ test.describe('templates', () => {
         if (landscape) await page.getByRole('button', { name: 'Landscape' }).click();
         await page.getByText('More options').click();
         await page.getByLabel('Columns').selectOption(String(columns));
-        if (['clinical', 'lab', 'computing', 'humanities'].includes(id)) await page.getByText('By research field').click();
+        // the gallery opens on the last layout used, so the research-field group may already be open
+        if (['clinical', 'lab', 'computing', 'humanities'].includes(id) && (await page.locator('details.field-layouts[open]').count()) === 0) await page.getByText('By research field').click();
         await page.locator(`[data-template="${id}"]`).click();
         await page.getByRole('button', { name: 'Create poster' }).click();
         await expect(page.locator('.poster .el-title')).toBeVisible();
@@ -508,7 +509,7 @@ test.describe('export, import and sharing', () => {
     const pdf = await download(page, /^PDF/);
     expect(pdf.name).toBe('Export-test.pdf');
     expect(pdf.data.subarray(0, 4).toString()).toBe('%PDF');
-    expect(await pdfText(pdf.data)).toContain('Your Poster Title Goes Here');
+    expect(await pdfText(pdf.data)).toContain('Export test');
 
     const png = await download(page, /^PNG image/);
     expect(png.name).toBe('Export-test.png');
@@ -518,7 +519,7 @@ test.describe('export, import and sharing', () => {
     expect(pptx.name).toBe('Export-test.pptx');
     const zip = await JSZip.loadAsync(pptx.data);
     const slide = await zip.file('ppt/slides/slide1.xml')!.async('string');
-    expect(slide).toContain('Your Poster Title Goes Here');
+    expect(slide).toContain('Export test');
     expect(Object.keys(zip.files).some((f) => f.startsWith('ppt/charts/chart'))).toBe(true);
     const pres = await zip.file('ppt/presentation.xml')!.async('string');
     expect(pres).toMatch(/sldSz cx="10692\d{3}" cy="15120\d{3}"/); // A3 in EMU
@@ -556,7 +557,7 @@ test.describe('export, import and sharing', () => {
 
     const pdf = await download(page, /^PDF/);
     const text = await pdfText(pdf.data);
-    for (const s of ['Your Poster Title Goes Here', 'Introduction', 'reaction time', 'αβγ', 'First finding', 'Control', 'Drug', 'Score'])
+    for (const s of ['Vector', 'Introduction', 'reaction time', 'αβγ', 'First finding', 'Control', 'Drug', 'Score'])
       expect(text).toContain(s);
     const info = await inspectPdf(pdf.data);
     expect(info.images).toHaveLength(0); // no rasterised poster or chart

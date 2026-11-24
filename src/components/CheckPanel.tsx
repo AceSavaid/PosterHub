@@ -144,15 +144,15 @@ function Problems({ issues: all, dismissed = [], onDismiss, onRestore, onPick, o
                 <span className="issue-detail">Replace them with your own words and figures, or delete the ones you don’t need.</span>
               </span>
             </div>
-            {onFillNext && <button className="btn small-btn primary fill-next-btn" onClick={onFillNext}>Fill the next one</button>}
+            {onFillNext && <button className="btn small-btn primary fill-next-btn" onClick={onFillNext}>Go to an empty box</button>}
             <details className="leftover-list">
               <summary>Show which</summary>
               <ul>
                 {leftovers.map((i) => (
                   <li key={i.id}>
-                    <button className="link" disabled={!i.elementId} onClick={() => i.elementId && onPick(i.elementId)}>{i.title.replace(/ still has example text$/, '')}</button>
+                    <button className="link" id={'issue-title-' + i.id} disabled={!i.elementId} onClick={() => i.elementId && onPick(i.elementId)}>{i.title.replace(/ still has example text$/, '')}</button>
                     {onDismiss && (
-                      <button className="issue-dismiss inline" aria-label={'Dismiss ' + i.title} title="Dismiss: hide this on this poster" onClick={() => onDismiss(i)}>×</button>
+                      <button className="issue-dismiss inline" aria-label="Dismiss" aria-describedby={'issue-title-' + i.id} title="Dismiss: hide this on this poster" onClick={() => onDismiss(i)}>×</button>
                     )}
                   </li>
                 ))}

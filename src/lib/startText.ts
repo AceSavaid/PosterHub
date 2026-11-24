@@ -28,12 +28,11 @@ export function titleText(p: Poster) {
 }
 
 /**
- * The name a poster should get after its title changed from `before` to `after`:
- * it follows the title while it is still unnamed or was named after the old title.
- * Returns null to keep the current name.
+ * The name a poster should get after its title changed: an unnamed poster takes its title as
+ * its name; a poster that already has a name keeps it. Returns null to keep the current name.
  */
-export function nameAfterTitleEdit(name: string, before: string, after: string): string | null {
+export function nameAfterTitleEdit(name: string, after: string): string | null {
   const next = after.replace(/\s+/g, ' ').trim().slice(0, 120);
   if (!next || /^Your Poster Title Goes Here$/i.test(next) || next === name) return null;
-  return name === UNTITLED || !name.trim() || name === before ? next : null;
+  return name === UNTITLED || !name.trim() ? next : null;
 }

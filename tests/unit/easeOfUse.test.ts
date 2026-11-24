@@ -77,12 +77,11 @@ describe('start text', () => {
     expect(titleText(p)).toBe('Your Poster Title Goes Here');
   });
 
-  it('names an unnamed poster after its title, and keeps a name the person chose', () => {
-    expect(nameAfterTitleEdit(UNTITLED, 'Your Poster Title Goes Here', 'Sleep and memory')).toBe('Sleep and memory');
-    expect(nameAfterTitleEdit('Sleep', 'Sleep', 'Sleep and memory')).toBe('Sleep and memory');
-    expect(nameAfterTitleEdit('Conference copy', 'Sleep', 'Sleep and memory')).toBeNull();
-    expect(nameAfterTitleEdit(UNTITLED, 'x', 'Your Poster Title Goes Here')).toBeNull();
-    expect(nameAfterTitleEdit(UNTITLED, 'x', '')).toBeNull();
+  it('names an unnamed poster after its title, and keeps a name it already has', () => {
+    expect(nameAfterTitleEdit(UNTITLED, 'Sleep and memory')).toBe('Sleep and memory');
+    expect(nameAfterTitleEdit('Sleep', 'Sleep and memory')).toBeNull();
+    expect(nameAfterTitleEdit(UNTITLED, 'Your Poster Title Goes Here')).toBeNull();
+    expect(nameAfterTitleEdit(UNTITLED, '')).toBeNull();
   });
 });
 

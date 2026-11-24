@@ -73,7 +73,6 @@ test('right-click menu duplicates, locks and deletes', async ({ page }) => {
   await els(page).first().click({ button: 'right', position: { x: 25, y: 25 } });
   await page.getByRole('menuitem', { name: /Duplicate/ }).click();
   await expect(els(page)).toHaveCount(2);
-  await page.locator('.more-props > summary').click();
   await page.getByLabel('Y', { exact: true }).fill('900'); // move the copy out of the way
   await els(page).last().click({ button: 'right' });
   await page.getByRole('menuitem', { name: 'Lock position' }).click();

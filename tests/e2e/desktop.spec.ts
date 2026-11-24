@@ -73,7 +73,7 @@ test('desktop app keeps the library as files in Documents/PosterHub', async ({ p
   await expect(page.getByText('Documents/PosterHub folder')).toBeVisible();
 
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  await page.getByLabel('Name').fill('Coral reef survey');
+  await page.getByLabel('Poster title').fill('Coral reef survey');
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
 

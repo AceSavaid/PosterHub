@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 test('copies a poster at another size from the editor and from My posters', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  await page.getByLabel('Name').fill('Sleep study');
+  await page.getByLabel('Poster title').fill('Sleep study');
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
 
@@ -59,7 +59,7 @@ test('copies a poster at another size from the editor and from My posters', asyn
 test('Make a copy at the same size is an exact copy, from the editor and from My posters', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  await page.getByLabel('Name').fill('Lab meeting');
+  await page.getByLabel('Poster title').fill('Lab meeting');
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
 

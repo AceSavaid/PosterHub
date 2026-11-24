@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Orientation, Palette, PosterElement } from '../types';
-import { PALETTES, SIZE_PRESETS, TEMPLATES, columnLefts, columnWidth, createPoster, resolveColor, sizeFor, type TemplateId, POPULAR_GOOGLE_FONTS, SYSTEM_FONTS } from '../model';
+import { PALETTES, TEMPLATES, columnLefts, columnWidth, createPoster, resolveColor, sizeFor, type TemplateId, POPULAR_GOOGLE_FONTS, SYSTEM_FONTS } from '../model';
 import type { Poster } from '../types';
 import { SizeFields } from './SizeFields';
 import { PaletteSwatches } from './PaletteSwatches';
 import { useDialog } from '../lib/useDialog';
 import MyTemplates from './MyTemplates';
-import { posterFromTemplate, type UserTemplate } from '../lib/userTemplates';
+import { listTemplates, posterFromTemplate, type UserTemplate } from '../lib/userTemplates';
+import { applyStartText, UNTITLED } from '../lib/startText';
 import { addKitFonts, fillLogoSpots, kitPalette, type BrandKit } from '../lib/brandKit';
 import { BRAND_KITS, brandKitById } from '../brandKits';
 import { useUiPrefs } from '../lib/uiPrefs';
@@ -32,21 +33,33 @@ export function buildNewPoster(o: Parameters<typeof createPoster>[0], kit: Brand
 }
 
 export default function NewPosterDialog({ onCreate, onCancel }: Props) {
-  // The last brand kit picked is remembered, so it only has to be chosen once.
+  // The last brand kit and the last poster's size, layout, colours and fonts are remembered,
+  // so making the next poster for the same conference is just a title and Create.
   const [prefs, changePrefs] = useUiPrefs();
+  const last = prefs.newPoster;
   const [kit, setKit] = useState<BrandKit | null>(() => brandKitById(prefs.brandKit));
-  const [name, setName] = useState('');
-  const [orientation, setOrientation] = useState<Orientation>('portrait');
-  const [preset, setPreset] = useState('A0');
-  const [size, setSize] = useState(sizeFor('A0', 'portrait'));
-  const [columns, setColumns] = useState(3);
-  const [palette, setPalette] = useState<Palette>(() => kitLook(kit).palette);
-  const [template, setTemplate] = useState<TemplateId>('classic');
-  const [fieldOpen, setFieldOpen] = useState(false);
-  const [headingFont, setHeadingFont] = useState(() => kitLook(kit).headingFont);
-  const [bodyFont, setBodyFont] = useState(() => kitLook(kit).bodyFont);
+  const [title, setTitle] = useState('');
+  const [authors, setAuthors] = useState('');
+  const [orientation, setOrientation] = useState<Orientation>(last?.orientation ?? 'portrait');
+  const [preset, setPreset] = useState(last?.preset ?? 'A0');
+  const [size, setSize] = useState(() => (last ? { width: last.width, height: last.height } : sizeFor('A0', 'portrait')));
+  const [columns, setColumns] = useState(last?.columns ?? 3);
+  const [palette, setPalette] = useState<Palette>(() => {
+    const kitPal = kit ? kitPalette(kit) : null;
+    if (last) return (kitPal && kitPal.name === last.palette ? kitPal : PALETTES.find((p) => p.name === last.palette)) ?? kitLook(kit).palette;
+    return kitLook(kit).palette;
+  });
+  const [template, setTemplate] = useState<TemplateId>(() => (TEMPLATES.some((t) => t.id === last?.template) ? (last!.template as TemplateId) : 'classic'));
+  const [fieldOpen, setFieldOpen] = useState(() => !!TEMPLATES.find((t) => t.id === last?.template)?.field);
+  const [headingFont, setHeadingFont] = useState(() => last?.headingFont ?? kitLook(kit).headingFont);
+  const [bodyFont, setBodyFont] = useState(() => last?.bodyFont ?? kitLook(kit).bodyFont);
   /** A saved template from My templates; when set it supplies size, colours and fonts. */
   const [mine, setMine] = useState<UserTemplate | null>(null);
+  /** whether this person has any saved templates (they then show up front) */
+  const [hasMine, setHasMine] = useState(false);
+  useEffect(() => {
+    listTemplates().then((l) => setHasMine(l.length > 0), () => {});
+  }, []);
 
   function pickKit(id: string) {
     const k = brandKitById(id);
@@ -60,8 +73,12 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
   }
 
   const fonts = [...new Set([...(kit ? [kit.headingFont, kit.bodyFont, ...(kit.googleFonts ?? [])] : []), ...POPULAR_GOOGLE_FONTS, ...SYSTEM_FONTS])];
+  if (!fonts.includes(headingFont)) fonts.unshift(headingFont);
+  if (!fonts.includes(bodyFont)) fonts.unshift(bodyFont);
   const dialog = useDialog<HTMLDivElement>(onCancel, 'new-poster-title');
   const [fromAbstract, setFromAbstract] = useState(false);
+  const name = title.trim().replace(/\s+/g, ' ').slice(0, 120) || UNTITLED;
+  const myTemplates = <MyTemplates selected={mine?.id ?? null} onSelect={setMine} />;
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onCancel()}>
@@ -71,30 +88,27 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
           e.preventDefault();
           if (mine) {
             // A saved template keeps its own look; the kit only fills logo spots it left empty.
-            const p = posterFromTemplate(mine, name || 'Untitled poster');
+            const p = applyStartText(posterFromTemplate(mine, name), { title, authors });
             if (kit) fillLogoSpots(p, kit);
             return onCreate(p, { fromAbstract });
           }
-          onCreate(buildNewPoster({ name: name || 'Untitled poster', ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }, kit), { fromAbstract });
+          changePrefs({ newPoster: { template, palette: palette.name, orientation, preset, width: size.width, height: size.height, columns, headingFont, bodyFont } });
+          const p = buildNewPoster({ name, ...size, sizePreset: preset, columns, palette, template, headingFont, bodyFont }, kit);
+          onCreate(applyStartText(p, { title, authors }), { fromAbstract });
         }}
       >
         <h2 id="new-poster-title">New poster</h2>
         <div className="form-grid">
           <label className="span2">
-            Name
-            <input autoFocus value={name} placeholder="e.g. Conference 2026 – Sleep and memory" onChange={(e) => setName(e.target.value)} />
+            Poster title
+            <input autoFocus value={title} maxLength={300} placeholder="e.g. Sleep spindles and overnight memory in adolescents" onChange={(e) => setTitle(e.target.value)} />
+            <span className="hint">Goes on the poster and names it in My posters. You can leave it for later.</span>
           </label>
-          {BRAND_KITS.length > 0 && (
-            <label className="span2">
-              Brand kit
-              <select value={kit?.id ?? ''} onChange={(e) => pickKit(e.target.value)}>
-                <option value="">None</option>
-                {BRAND_KITS.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
-              </select>
-              {kit && <span className="hint">{kit.name} colours and fonts{kit.logos.length ? `, with ${kit.logos.length > 1 ? 'its logos' : 'its logo'} in the layout’s logo spots` : ''}. You can still change anything below.</span>}
-            </label>
-          )}
-          <MyTemplates selected={mine?.id ?? null} onSelect={setMine} />
+          <label className="span2">
+            <span>Authors <span className="muted">(optional)</span></span>
+            <input value={authors} maxLength={400} placeholder="e.g. A. Lee, B. Chen — Department of Psychology, Ontario Tech University" onChange={(e) => setAuthors(e.target.value)} />
+          </label>
+          {hasMine && myTemplates}
           {mine && (
             <p className="span2 hint mine-note" role="status">
               Using your template “{mine.name}” with its own size, colours and fonts. <button type="button" className="link" onClick={() => setMine(null)}>Pick a built-in layout instead</button>
@@ -102,7 +116,7 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
           )}
           {!mine && <>
           <div className="span2">
-            <div className="field-label">Layout <span className="muted">· previews follow the colours, size and columns you pick below</span></div>
+            <div className="field-label">Layout <span className="muted">· previews follow the size and colours you pick</span></div>
             {(() => {
               const card = (t: (typeof TEMPLATES)[number]) => (
                 <button type="button" key={t.id} data-template={t.id} aria-pressed={template === t.id} className={'template-card' + (template === t.id ? ' active' : '')} onClick={() => { setTemplate(t.id); setMine(null); }}>
@@ -124,10 +138,6 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
               </>;
             })()}
           </div>
-          <div className="span2">
-            <div className="field-label">Colour palette</div>
-            <PaletteSwatches value={palette.name} onPick={setPalette} extra={kit ? [kitPalette(kit)] : []} />
-          </div>
           <SizeFields
             orientation={orientation}
             preset={preset}
@@ -139,31 +149,56 @@ export default function NewPosterDialog({ onCreate, onCancel }: Props) {
               setSize({ width: w, height: h });
             }}
           />
-          <label>
-            Columns
-            <select value={columns} onChange={(e) => setColumns(+e.target.value)}>
-              {[1, 2, 3, 4, 5, 6].map((n) => (
-                <option key={n} value={n}>
-                  {n} column{n > 1 ? 's' : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Heading font
-            <select value={headingFont} onChange={(e) => setHeadingFont(e.target.value)}>
-              {fonts.map((f) => <option key={f}>{f}</option>)}
-            </select>
-          </label>
-          <label>
-            Body font
-            <select value={bodyFont} onChange={(e) => setBodyFont(e.target.value)}>
-              {fonts.map((f) => <option key={f}>{f}</option>)}
-            </select>
-          </label>
           </>}
+          <details className="span2 more-options">
+            <summary>
+              More options <span className="muted">· {mine ? 'brand kit, my templates' : `${kit ? kit.name + ', ' : ''}${palette.name}, ${columns} column${columns > 1 ? 's' : ''}, ${headingFont} and ${bodyFont}`}</span>
+            </summary>
+            <div className="form-grid">
+              {BRAND_KITS.length > 0 && (
+                <label className="span2">
+                  Brand kit
+                  <select value={kit?.id ?? ''} onChange={(e) => pickKit(e.target.value)}>
+                    <option value="">None</option>
+                    {BRAND_KITS.map((k) => <option key={k.id} value={k.id}>{k.name}</option>)}
+                  </select>
+                  {kit && <span className="hint">{kit.name} colours and fonts{kit.logos.length ? `, with ${kit.logos.length > 1 ? 'its logos' : 'its logo'} in the layout’s logo spots` : ''}. You can still change anything below.</span>}
+                </label>
+              )}
+              {!hasMine && myTemplates}
+              {!mine && <>
+              <div className="span2">
+                <div className="field-label">Colour palette</div>
+                <PaletteSwatches value={palette.name} onPick={setPalette} extra={kit ? [kitPalette(kit)] : []} />
+              </div>
+              <label>
+                Columns
+                <select value={columns} onChange={(e) => setColumns(+e.target.value)}>
+                  {[1, 2, 3, 4, 5, 6].map((n) => (
+                    <option key={n} value={n}>
+                      {n} column{n > 1 ? 's' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span />
+              <label>
+                Heading font
+                <select value={headingFont} onChange={(e) => setHeadingFont(e.target.value)}>
+                  {fonts.map((f) => <option key={f}>{f}</option>)}
+                </select>
+              </label>
+              <label>
+                Body font
+                <select value={bodyFont} onChange={(e) => setBodyFont(e.target.value)}>
+                  {fonts.map((f) => <option key={f}>{f}</option>)}
+                </select>
+              </label>
+              </>}
+            </div>
+          </details>
         </div>
-        {!mine && <p className="hint">Sizes available: {SIZE_PRESETS.length} presets or any custom size. You can change everything here later.</p>}
+        {!mine && <p className="hint">{last ? 'Starts with the size, layout and look of your last new poster. ' : ''}You can change everything here later.</p>}
         <div className="modal-actions sticky-actions">
           <label className="check from-abstract" title="Paste your abstract or open a Word file next, and its title, authors and sections fill the poster">
             <input type="checkbox" checked={fromAbstract} onChange={(e) => setFromAbstract(e.target.checked)} /> Fill it from my abstract or Word file

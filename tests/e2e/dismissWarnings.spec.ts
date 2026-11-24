@@ -12,16 +12,18 @@ async function newPoster(page: Page) {
 
 test('a Check item can be dismissed, stays dismissed after a reload and can be brought back', async ({ page }) => {
   const panel = await newPoster(page);
-  const items = panel.locator('.issue-list > li');
+  // a new poster's example text is one grouped item; its boxes are listed under "Show which"
+  await panel.getByText('Show which').click();
+  const items = panel.locator('.leftover-list li');
   await expect(items.first()).toBeVisible();
   const before = await items.count();
-  const title = (await items.first().locator('strong').innerText()).trim();
+  const title = (await items.first().locator('.link').innerText()).trim();
 
   // screen readers hear which item the button dismisses
   await expect(items.first().getByRole('button', { name: 'Dismiss', exact: true })).toHaveAccessibleDescription(title);
   await items.first().getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(items).toHaveCount(before - 1);
-  await expect(panel.locator('.issue-list')).not.toContainText(title);
+  await expect(panel.locator('.leftover-list')).not.toContainText(title);
   await expect(page.locator('.toast')).toContainText('Dismissed');
 
   // Undo in the message brings it straight back
@@ -39,13 +41,14 @@ test('a Check item can be dismissed, stays dismissed after a reload and can be b
   await page.reload();
   await expect(page.locator('.poster')).toBeVisible();
   await page.getByRole('button', { name: /^Check/ }).click();
-  await expect(panel.locator('.issue-list > li')).toHaveCount(before - 1);
+  await panel.getByText('Show which').click();
+  await expect(panel.locator('.leftover-list li')).toHaveCount(before - 1);
   await panel.getByRole('button', { name: /1 dismissed/ }).click();
   const list = panel.getByRole('list', { name: 'Dismissed' });
   await expect(list).toContainText(title);
 
-  await list.getByRole('button', { name: `Bring back: ${title}` }).click();
-  await expect(panel.locator('.issue-list > li')).toHaveCount(before);
+  await list.getByRole('button', { name: new RegExp('^Bring back: ' + title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }).click();
+  await expect(panel.locator('.leftover-list li')).toHaveCount(before);
   await expect(panel.getByRole('button', { name: /dismissed/ })).toHaveCount(0);
 });
 
@@ -80,7 +83,8 @@ test('dismissing a problem takes it off the Check badge and the Export menu', as
 
 test('pop-up messages can be closed straight away', async ({ page }) => {
   const panel = await newPoster(page);
-  const first = panel.locator('.issue-list > li').first();
+  await panel.getByText('Show which').click();
+  const first = panel.locator('.leftover-list li').first();
   await first.getByRole('button', { name: 'Dismiss', exact: true }).click();
   await expect(page.locator('.toast')).toBeVisible();
   await page.getByRole('button', { name: 'Dismiss message' }).click();

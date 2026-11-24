@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 async function blankPoster(page: Page, name = 'Maths poster') {
   await page.goto('/');
   await page.getByRole('button', { name: '+ New poster' }).first().click();
-  await page.getByLabel('Name').fill(name);
+  await page.getByLabel('Poster title').fill(name);
   await page.getByLabel('Size').selectOption('A3');
   await page.getByRole('button', { name: /^Blank/ }).click();
   await page.getByRole('button', { name: 'Create poster' }).click();

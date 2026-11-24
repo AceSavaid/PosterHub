@@ -91,6 +91,7 @@ test('opens a Word file, uses its title, and asks before adding to text the pers
   );
   const buffer = await zip.generateAsync({ type: 'nodebuffer' });
 
+  await page.locator('.stage').click({ position: { x: 5, y: 5 } }); // nothing selected: Properties shows the poster settings
   await page.getByRole('button', { name: 'Fill from abstract or Word…' }).click();
   const d = dialog(page);
   const chooser = page.waitForEvent('filechooser');
@@ -120,4 +121,18 @@ test('explains that a blank poster needs a layout first', async ({ page }) => {
   await expect(d.getByRole('button', { name: 'Next: check where it goes' })).toBeDisabled();
   await page.keyboard.press('Escape');
   await expect(d).toHaveCount(0);
+});
+
+test('the New poster dialog can start straight from an abstract', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '+ New poster' }).first().click();
+  await page.getByLabel('Fill it from my abstract or Word file').check();
+  await page.getByRole('button', { name: 'Create poster' }).click();
+  await expect(page.locator('.poster')).toBeVisible();
+  await expect(dialog(page)).toBeVisible();
+  await expect(dialog(page).getByLabel('Abstract')).toBeFocused();
+  // it isn't an Insert button any more: it changes the whole poster, so it sits with the poster settings
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.panel.left').getByRole('button', { name: /Fill from abstract/ })).toHaveCount(0);
+  await expect(page.locator('.panel.right').getByRole('button', { name: 'Fill from abstract or Word…' })).toBeVisible();
 });

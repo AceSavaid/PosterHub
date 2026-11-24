@@ -70,7 +70,7 @@ test('dragging a box on empty space selects what it touches', async ({ page }) =
   await expect(page.getByRole('heading', { name: '3 elements selected' })).toBeVisible();
   // clicking empty space clears the selection
   await page.mouse.click(first.x - 5, first.y - 40);
-  await expect(page.getByRole('heading', { name: 'Nothing selected' })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Properties' }).getByRole('heading', { name: 'Poster' })).toBeVisible();
 });
 
 test('centres a single element on the page', async ({ page }) => {

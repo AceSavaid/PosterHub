@@ -20,6 +20,7 @@ import { multiply, rotate, translate } from './matrix';
 import { isCropped, placeImage, rad } from '../geometry';
 import { iconArt, iconColors, loadIcons } from '../icons/library';
 import { drawIcon } from './iconDraw';
+import { headingIconSpot, headingIconSpec } from '../headingIcon';
 
 Chart.register(...registerables);
 
@@ -115,7 +116,7 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
 
   // Equations are typeset again here (same engine and layout as the editor) and drawn as paths.
   if (p.elements.some((e) => e.type === 'equation' && e.equation)) await loadMath();
-  if (p.elements.some((e) => e.type === 'icon' && e.icon)) await loadIcons();
+  if (p.elements.some((e) => (e.type === 'icon' && e.icon) || e.headingIcon)) await loadIcons();
 
   // 3. Paint. Artwork is clipped to the bleed edge (the trim when there is no bleed); crop marks go outside it.
   painter.save();
@@ -241,6 +242,13 @@ export async function buildVectorPdf(node: HTMLElement, p: Poster, opts: VectorP
       else warnings.push('An icon was not found in the icon library and was left out.');
     } else if (isTextType(e)) {
       drawText(painter, fonts, textByEl.get(e.id) ?? []);
+      const end = headingIconSpot(e, node);
+      const spec = headingIconSpec(e);
+      if (end && spec && end.size > 0) {
+        const art = iconArt(e.headingIcon!.id);
+        if (art) drawIcon(painter, art, iconColors(spec, pal), { x: cx + end.x, y: cy + end.y, w: end.size, h: end.size });
+        else warnings.push('A heading icon was not found in the icon library and was left out.');
+      }
     } else if (e.type === 'table') {
       const wrap = node.querySelector<HTMLElement>(`.el[data-id="${CSS.escape(e.id)}"] .el-table-wrap`);
       if (wrap) drawTable(painter, fonts, e, p, wrap, frame, textByEl.get(e.id) ?? []);

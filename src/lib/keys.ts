@@ -45,3 +45,9 @@ export function keys(text: string, onMac = isMac()): string {
 
 /** The name of the main modifier key, for sentences: "⌘" or "Ctrl". */
 export const modKey = (onMac = isMac()) => (onMac ? '⌘' : 'Ctrl');
+
+/** True for the Alt+/ (Option+/ on a Mac) key press that opens "Search the menus". */
+export function isCommandSearchKey(e: Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'key' | 'code'>) {
+  // On a Mac, Option+/ types "÷", so look at the physical key too.
+  return e.altKey && !e.ctrlKey && !e.metaKey && (e.code === 'Slash' || e.key === '/');
+}

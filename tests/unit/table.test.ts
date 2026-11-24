@@ -132,7 +132,7 @@ describe('tables in the poster', () => {
     p.elements = [el];
     expect(checkPoster(p).some((i) => i.title === 'An empty table')).toBe(true);
     el.table = t([['a', 'b']], { fontSize: 8 });
-    expect(checkPoster(p).some((i) => i.title.includes('Table text may be too small') && i.severity === 'problem')).toBe(true);
+    expect(checkPoster(p).some((i) => i.title.includes('Table text is too small') && i.severity === 'problem')).toBe(true);
     expect(checkPoster(p, new Map(), new Set([el.id])).some((i) => i.title.includes('rows are hidden'))).toBe(true);
   });
 

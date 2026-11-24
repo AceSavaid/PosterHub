@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CropRect, PosterElement } from '../types';
 import { FULL_CROP, clampCrop, type Handle } from '../lib/geometry';
+import { trackPointer } from '../lib/pointer';
 
 const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 const MAX_W = 640;
@@ -106,14 +107,7 @@ export default function CropDialog({ el, onApply, onCancel }: Props) {
       if (w < 0.02 || h < 0.02 || x < -0.001 || y < -0.001 || x + w > 1.001 || y + h > 1.001) return;
       setCrop(clampCrop({ x, y, w, h }));
     };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      window.removeEventListener('pointercancel', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-    window.addEventListener('pointercancel', up);
+    trackPointer(move);
   }
 
   const pxW = natural ? Math.round(crop.w * natural.w) : 0;

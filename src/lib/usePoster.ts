@@ -1,13 +1,21 @@
 import { useCallback, useRef, useState } from 'react';
+import { produce, setAutoFreeze } from 'immer';
 import type { Poster, PosterElement } from '../types';
 import { syncCitations } from './refs/citations';
+
+// Undo steps share every part of the poster an edit didn't touch, so nothing may change a poster
+// in place outside `update`. Development builds (and the FREEZE_POSTER test build) freeze each
+// version to catch any code that tries; release builds skip the freeze for speed.
+setAutoFreeze(import.meta.env.DEV || import.meta.env.VITE_FREEZE_POSTER === '1');
 
 const HISTORY_LIMIT = 100;
 
 /**
  * Holds the poster being edited plus undo/redo history.
- * `update` takes a mutator over a structured clone. Passing a `coalesce` key
- * merges rapid updates (dragging, typing in a number field) into one undo step.
+ * `update` takes a mutator over a draft of the poster (immer). Only the objects it changes are
+ * copied, so undo steps share pictures and untouched elements instead of duplicating them, and an
+ * element that didn't change keeps the same object (which lets the canvas skip redrawing it).
+ * Passing a `coalesce` key merges rapid updates (dragging, typing in a number field) into one undo step.
  */
 export function usePosterHistory(initial: Poster) {
   const [poster, setPoster] = useState(initial);
@@ -20,12 +28,13 @@ export function usePosterHistory(initial: Poster) {
 
   const update = useCallback((fn: (draft: Poster) => void, coalesce?: string) => {
     const prev = current.current;
-    const draft = structuredClone(prev);
-    fn(draft);
-    // citation numbers and the reference list follow every change (text, order, layout)
-    syncCitations(draft);
-    draft.updatedAt = Date.now();
     const now = Date.now();
+    const draft = produce(prev, (d) => {
+      fn(d);
+      // citation numbers and the reference list follow every change (text, order, layout)
+      syncCitations(d);
+      d.updatedAt = now;
+    });
     const merge = coalesce && last.current.key === coalesce && now - last.current.t < 1200;
     if (!merge) {
       undoStack.current.push(prev);

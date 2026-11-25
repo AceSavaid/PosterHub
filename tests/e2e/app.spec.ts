@@ -270,6 +270,7 @@ test.describe('editing', () => {
     const before = await elements(page).count();
     expect(before).toBeGreaterThan(0);
     await page.locator('.panel.right .tabs').getByRole('tab', { name: 'Layout' }).click();
+    await page.getByText('Switch layout…').click();
     await page.locator('.panel.right label', { hasText: /^Layout/ }).locator('select').selectOption({ label: 'Blank' });
     await page.getByRole('button', { name: /^Apply to/ }).click();
     await expect(elements(page)).toHaveCount(0);
@@ -492,9 +493,11 @@ test.describe('graphs', () => {
 
 test.describe('export, import and sharing', () => {
   async function download(page: Page, label: RegExp) {
-    await page.getByRole('button', { name: 'Export ▾' }).click();
+    // the project file is in the poster's ⋯ menu; the others are under Export
+    const project = label.test('Project file');
+    await page.getByRole('button', { name: project ? 'Poster menu' : 'Export ▾' }).click();
     const dl = page.waitForEvent('download');
-    await page.getByRole('button', { name: label }).click();
+    await (project ? page.getByRole('menuitem', { name: 'Download project file' }) : page.getByRole('button', { name: label })).click();
     const d = await dl;
     const file = path.join(os.tmpdir(), `${Date.now()}-${d.suggestedFilename()}`);
     await d.saveAs(file);

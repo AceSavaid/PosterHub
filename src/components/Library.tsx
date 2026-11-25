@@ -30,6 +30,7 @@ const fmtDate = (t: number) => new Date(t).toLocaleString(undefined, { dateStyle
 export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: string, start?: 'abstract') => void }) {
   const [posters, setPosters] = useState<PosterSummary[] | null>(null);
   const [creating, setCreating] = useState(false);
+  const [openMenu, setOpenMenu] = useState<{ x: number; y: number } | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
@@ -168,7 +169,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
       const t = await downloadLibraryBackup();
       if (t) {
         changePrefs({ lastBackupAt: t, backupSnoozedUntil: 0 });
-        setNotice('Backup downloaded. To bring the posters back, use “Open project file” and pick that file.');
+        setNotice('Backup downloaded. To bring the posters back, use Open ▾ → Open project file… and pick that file.');
       }
     } catch (e) {
       setError('Could not make the backup: ' + String(e));
@@ -187,8 +188,29 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
           <Logo /> PosterHub
         </div>
         <div className="lib-actions">
-          <button className="btn" onClick={importTemplate}>Import PowerPoint template</button>
-          <button className="btn" onClick={importProject}>Open project file</button>
+          <button
+            className="btn"
+            aria-haspopup="menu"
+            aria-expanded={!!openMenu}
+            title="Open a project file, or start from a PowerPoint template"
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setOpenMenu({ x: r.left, y: r.bottom + 4 });
+            }}
+          >
+            Open ▾
+          </button>
+          {openMenu && (
+            <ContextMenu
+              x={openMenu.x}
+              y={openMenu.y}
+              onClose={() => setOpenMenu(null)}
+              items={[
+                { label: 'Open project file…', onClick: importProject },
+                { label: 'Import PowerPoint template…', onClick: importTemplate },
+              ]}
+            />
+          )}
           <button className="btn primary" onClick={() => setCreating(true)}>+ New poster</button>
           <button className="icon-btn" aria-label="Settings" title="Settings" onClick={() => setSettingsOpen(true)}>
             <GearIcon />
@@ -200,7 +222,7 @@ export default function Library({ onOpen }: { onOpen: (p: Poster, notice?: strin
           <h1>My posters</h1>
           {!!posters?.length && <input className="search" placeholder="Search posters" aria-label="Search posters" value={query} onChange={(e) => setQuery(e.target.value)} />}
           {!!posters?.length && where?.kind === 'browser' && (
-            <button className="btn" onClick={backupAll} title="One project file with every poster. Open it with “Open project file” to restore.">
+            <button className="btn" onClick={backupAll} title="One project file with every poster. Open it with Open ▾ → Open project file… to restore.">
               Download all posters
             </button>
           )}

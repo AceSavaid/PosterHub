@@ -47,15 +47,17 @@ test('side panels can be swapped and hidden, and stay that way', async ({ page }
   const stage = page.locator('.stage');
   expect((await tools.boundingBox())!.x).toBeLessThan((await stage.boundingBox())!.x);
 
-  await page.getByRole('button', { name: 'View ▾' }).click();
-  await page.getByLabel('Tools on the right').check();
+  // side panels are set up in Settings
+  await page.getByRole('button', { name: 'Settings and help' }).click();
+  await page.getByRole('menuitem', { name: 'Settings…' }).click();
+  await page.getByLabel('Insert panel on the right').check();
   expect((await tools.boundingBox())!.x).toBeGreaterThan((await stage.boundingBox())!.x);
   expect((await props.boundingBox())!.x).toBeLessThan((await stage.boundingBox())!.x);
 
-  await page.getByLabel('Show properties panel').uncheck();
+  await page.getByLabel('Show the Properties panel').uncheck();
   await expect(props).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(page.locator('.appearance-menu')).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);
 
   // preferences survive a reload
   await page.reload();

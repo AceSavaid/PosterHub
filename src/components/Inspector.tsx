@@ -19,7 +19,7 @@ import { isCropped, normAngle } from '../lib/geometry';
 import { CITATION_STYLES, DEFAULT_STYLE, shortLabel } from '../lib/refs/format';
 import { TYPE_NAMES } from '../lib/a11y';
 import { keys } from '../lib/keys';
-import { TEXT_STYLES, styleNameOf, styleShortcut, type TextStyleName } from '../lib/textStyles';
+import { TEXT_STYLES, styleNameOf, type TextStyleName } from '../lib/textStyles';
 import { elementTip } from '../lib/tips';
 import { useUiPrefs } from '../lib/uiPrefs';
 
@@ -72,9 +72,11 @@ interface Props {
   onFillTable?: (cells: string[][]) => void;
   /** numbered captions for images, graphs and tables (figure id, action) */
   onCaption?: (figId: string, a: CaptionAction) => void;
+  /** opens the element's action menu (the ⋯ in the header) */
+  onMore?: (x: number, y: number) => void;
 }
 
-const ALIGN: { mode: AlignMode; label: string; icon: string }[] = [
+export const ALIGN: { mode: AlignMode; label: string; icon: string }[] = [
   { mode: 'left', label: 'Align left edges', icon: '⇤' },
   { mode: 'hcenter', label: 'Align centres (horizontally)', icon: '↔' },
   { mode: 'right', label: 'Align right edges', icon: '⇥' },
@@ -115,11 +117,10 @@ function ArrangeSection({ count, onAlign, onDistribute, onMatchSize, onTidy }: {
       )}
       {count > 1 && (
         <div className="toolbar-row">
-          <button className="btn small-btn" onClick={() => onMatchSize('w')}>Same width</button>
-          <button className="btn small-btn" onClick={() => onMatchSize('h')}>Same height</button>
+          <button className="btn small-btn" title="Copies the width of the first element you selected" onClick={() => onMatchSize('w')}>Same width</button>
+          <button className="btn small-btn" title="Copies the height of the first element you selected" onClick={() => onMatchSize('h')}>Same height</button>
         </div>
       )}
-      {count > 1 && <p className="hint">“Same width / height” copies the size of the first element you selected.</p>}
     </section>
   );
 }
@@ -148,8 +149,27 @@ function ElementTip({ el }: { el: PosterElement }) {
   );
 }
 
+/** The ⋯ in the panel header: opens the same menu as right-clicking the element (copy, order, lock, delete…). */
+function MoreButton({ onMore }: { onMore?: (x: number, y: number) => void }) {
+  if (!onMore) return null;
+  return (
+    <button
+      className="icon-btn"
+      aria-label="Element actions"
+      title="Copy, duplicate, order, lock, delete…"
+      aria-haspopup="menu"
+      onClick={(e) => {
+        const r = e.currentTarget.getBoundingClientRect();
+        onMore(r.right - 210, r.bottom + 4);
+      }}
+    >
+      ⋯
+    </button>
+  );
+}
+
 export default function Inspector(props: Props) {
-  const { poster, el, editing, onChange, onDelete, onDuplicate, onLayer, onReplaceImage, onCrop, onEditChart, onEditEquation, multi, overflow, onShrinkText, onGrowBox, onCite, onOpenReferences, onSetStyle } = props;
+  const { poster, el, editing, onChange, onLayer, onReplaceImage, onCrop, onEditChart, onEditEquation, multi, overflow, onShrinkText, onGrowBox, onCite, onOpenReferences, onSetStyle } = props;
   if (multi > 1) {
     return (
       <aside className="panel right" aria-label="Properties">
@@ -157,27 +177,18 @@ export default function Inspector(props: Props) {
           <div className="insp-head">
             <h3>{props.grouped ? `Group of ${multi}` : `${multi} elements selected`}</h3>
             {props.onClearSelection && <PosterLink onClick={props.onClearSelection} />}
-            <div className="icon-row">
-              <button className="icon-btn" title={keys('Duplicate (Ctrl/⌘ D)')} onClick={onDuplicate}>⧉</button>
-              <button className="icon-btn danger" title="Delete (Delete key)" onClick={onDelete}>🗑</button>
-            </div>
+            <MoreButton onMore={props.onMore} />
           </div>
           {(props.onGroup || props.onUngroup) && (
             <section>
-              <h4>Group</h4>
               <div className="toolbar-row">
                 {props.onGroup && <button className="btn small-btn" onClick={props.onGroup} title={keys('Ctrl/⌘ G')}>Group</button>}
                 {props.onUngroup && <button className="btn small-btn" onClick={props.onUngroup} title={keys('Ctrl/⌘ Shift G')}>Ungroup</button>}
               </div>
-              <p className="hint">
-                {props.grouped
-                  ? keys('Drag to move the group; drag a corner to resize it all (Shift lets it stretch). Ctrl/⌘-click picks out one element.')
-                  : 'Group them to keep a figure with its caption, or a row of logos, together.'}
-              </p>
+              {props.grouped && <p className="hint">{keys('Drag a corner to resize it all. Ctrl/⌘-click picks out one element.')}</p>}
             </section>
           )}
           <ArrangeSection count={multi} {...props} />
-          {!props.grouped && <p className="hint">Drag any of them to move them together. Shift-click to add or remove one from the selection.</p>}
         </div>
       </aside>
     );
@@ -248,13 +259,12 @@ export default function Inspector(props: Props) {
         <div className="insp-head">
           <h3>{el.refList ? 'Reference list' : TYPE_NAMES[el.type]}</h3>
           {props.onClearSelection && <PosterLink onClick={props.onClearSelection} />}
-          <div className="icon-row">
-            <button className="icon-btn" title={keys('Duplicate (Ctrl/⌘ D)')} onClick={onDuplicate}>⧉</button>
-            <button className="icon-btn" title={el.locked ? 'Unlock' : 'Lock position'} aria-label="Lock position" aria-pressed={!!el.locked} onClick={() => onChange({ locked: !el.locked })}>
-              {el.locked ? '🔒' : '🔓'}
+          {el.locked && (
+            <button className="icon-btn" title="Locked in place. Click to unlock" aria-label="Unlock" onClick={() => onChange({ locked: false })}>
+              🔒
             </button>
-            <button className="icon-btn danger" title="Delete (Delete key)" onClick={onDelete}>🗑</button>
-          </div>
+          )}
+          <MoreButton onMore={props.onMore} />
         </div>
         <ElementTip el={el} />
 
@@ -279,14 +289,14 @@ export default function Inspector(props: Props) {
         {st && (
           <section>
             <h4>Text</h4>
-            {props.onTextStyle && styleNameOf(el) && (
+            {!editing && props.onTextStyle && styleNameOf(el) && (
               <div className="row2 text-style-row">
                 <label>
                   Text style
                   <select value={styleNameOf(el)!} onChange={(e) => props.onTextStyle!(e.target.value as TextStyleName)} title={keys('Ctrl/⌘ Alt 1 heading, Ctrl/⌘ Alt 2 subheading, Ctrl/⌘ Alt 0 normal text, Ctrl/⌘ Alt 9 caption')}>
                     {TEXT_STYLES.map((s) => (
                       <option key={s.name} value={s.name}>
-                        {s.label} ({styleShortcut(s.name)})
+                        {s.label}
                       </option>
                     ))}
                   </select>
@@ -311,6 +321,8 @@ export default function Inspector(props: Props) {
               </label>
             </div>
             <div className="toolbar-row">
+              {!editing && (
+                <>
               <button className={'fmt' + (st.bold ? ' on' : '')} onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('bold', 'bold')} title={keys('Bold (Ctrl/⌘ B)')}>
                 <b>B</b>
               </button>
@@ -320,23 +332,23 @@ export default function Inspector(props: Props) {
               <button className={'fmt' + (st.underline ? ' on' : '')} onMouseDown={(e) => e.preventDefault()} onClick={() => fmt('underline', 'underline')} title={keys('Underline (Ctrl/⌘ U)')}>
                 <u>U</u>
               </button>
-              {editing && (
-                <>
-                  <button className="fmt" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('superscript')} title="Superscript">x²</button>
-                  <button className="fmt" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('subscript')} title="Subscript">x₂</button>
-                  <button className="fmt" onMouseDown={(e) => e.preventDefault()} onClick={() => document.execCommand('insertUnorderedList')} title="Bullet list">•≡</button>
+              <span className="sep" />
                 </>
               )}
-              <span className="sep" />
               {(['left', 'center', 'right', 'justify'] as const).map((a) => (
                 <button key={a} className={'fmt' + (st.align === a ? ' on' : '')} onClick={() => setStyle({ align: a })} title={'Align ' + a}>
                   <AlignIcon a={a} />
                 </button>
               ))}
             </div>
-            <div className="field-label">Text colour</div>
-            <ColorInput value={st.color} palette={poster.palette} onChange={(c) => setStyle({ color: c ?? '@text' })} />
-            {editing && <p className="hint">Select words to make only those bold, bigger or a different colour with the bar above the text.</p>}
+            {editing ? (
+              <p className="hint">Style, bold, colour and lists for the words you select are in the bar above the text.</p>
+            ) : (
+              <>
+                <div className="field-label">Text colour</div>
+                <ColorInput value={st.color} palette={poster.palette} onChange={(c) => setStyle({ color: c ?? '@text' })} />
+              </>
+            )}
           </section>
         )}
 
@@ -792,8 +804,7 @@ function HeadingIconSection({ poster, el, onChange }: { poster: Poster; el: Post
       <h4>Icon at the end{info ? ': ' + info.label : ''}</h4>
       {!ic ? (
         <>
-          <p className="hint">Add an icon to the right-hand end of this heading. It is sized and lined up to match the text automatically.</p>
-          <button className="btn" aria-expanded={picking} onClick={() => setPicking(!picking)}>
+          <button className="btn" title="Sized and lined up to match the heading automatically" aria-expanded={picking} onClick={() => setPicking(!picking)}>
             {picking ? 'Cancel' : 'Add icon to heading…'}
           </button>
         </>
@@ -848,7 +859,6 @@ function HeadingIconSection({ poster, el, onChange }: { poster: Poster; el: Post
                 onChange((x) => void delete x.headingIcon);
               }}>Remove icon</button>
           </div>
-          <p className="hint">The icon grows and shrinks with the heading’s text size.</p>
         </>
       )}
       {picking && (

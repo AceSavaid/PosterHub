@@ -33,6 +33,7 @@ test('no field in the Layout panel or the Export menu is cut off', async ({ page
   expect(await clippedFields(page, '.panel.right')).toEqual([]);
 
   await page.getByRole('button', { name: 'Export ▾' }).click();
+  await page.getByText('Print and image options').click();
   const bleed = page.getByLabel('Bleed');
   await expect(bleed).toBeVisible();
   expect(await clippedFields(page, '#export-menu')).toEqual([]);
@@ -71,7 +72,7 @@ test.describe('on a phone', () => {
     await expect(page.getByTitle(/^Undo/)).toBeVisible();
     await expect(page.getByRole('button', { name: /^Check/ })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Export ▾' })).toBeVisible();
-    for (const hidden of ['Notes', 'Find', 'Preview', 'Copy image']) await expect(page.getByRole('button', { name: hidden, exact: true })).toBeHidden();
+    for (const hidden of ['Notes', 'Find', 'Preview', 'Copy image', 'Zoom']) await expect(page.getByRole('button', { name: hidden, exact: true })).toBeHidden();
     await expect(page.getByRole('button', { name: 'View ▾' })).toBeHidden();
 
     // every button sits inside the screen
@@ -83,7 +84,7 @@ test.describe('on a phone', () => {
 
     await page.getByRole('button', { name: 'More' }).click();
     const menu = page.getByRole('menu');
-    for (const item of ['Notes', 'Find and replace', 'Preview', 'Redo', 'Zoom in', 'Zoom out', 'Fit to screen', 'Poster options…', 'Settings…', 'Keyboard shortcuts', 'Take the tour']) {
+    for (const item of ['Notes', 'Find and replace', 'Preview', 'Redo', 'Zoom', 'Poster', 'Settings…', 'Help']) {
       await expect(menu.getByRole('menuitem', { name: item })).toBeVisible();
     }
     await expect(menu.getByRole('menuitem', { name: 'Redo' })).toBeDisabled();
@@ -92,7 +93,7 @@ test.describe('on a phone', () => {
     await expect(page.locator('.notes-panel, [aria-label="Notes"]').first()).toBeVisible();
 
     await page.getByRole('button', { name: 'More' }).click();
-    await page.getByRole('menuitem', { name: 'Poster options…' }).click();
+    await page.getByRole('menuitem', { name: 'Poster', exact: true }).click();
     await expect(page.getByRole('menuitem', { name: 'Make a copy…' })).toBeVisible();
   });
 
@@ -143,7 +144,7 @@ test('one Check button opens the review panel, which switches between Check, Fin
   await page.getByRole('button', { name: /^Check/ }).click();
   const sw = page.locator('.review-switch');
   await expect(page.getByRole('dialog', { name: 'Poster check' })).toBeVisible();
-  await sw.getByRole('button', { name: 'Notes' }).click();
+  await sw.getByRole('tab', { name: 'Notes' }).click();
   await expect(page.getByRole('dialog', { name: 'Review notes' })).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Poster check' })).toHaveCount(0);
   // the Check button closes whichever is showing
@@ -151,7 +152,7 @@ test('one Check button opens the review panel, which switches between Check, Fin
   await expect(sw).toHaveCount(0);
 
   await page.getByRole('button', { name: /^Check/ }).click();
-  await sw.getByRole('button', { name: 'Notes' }).click();
+  await sw.getByRole('tab', { name: 'Notes' }).click();
   await page.getByRole('button', { name: 'Export ▾' }).click();
   await page.locator('#export-menu .menu-note').click();
   await expect(page.getByRole('dialog', { name: 'Poster check' })).toBeVisible();
@@ -179,10 +180,13 @@ test('Export keeps each format’s options under it and remembers the PNG qualit
   await page.getByRole('button', { name: 'Export ▾' }).click();
   const menu = page.locator('#export-menu');
   const names = await menu.locator(':scope > button strong').allTextContents();
-  expect(names).toEqual(['PDF', 'PNG image', 'Copy as image', 'PowerPoint (.pptx)', 'Project file (.poster.json)']);
+  expect(names).toEqual(['PDF', 'PNG image', 'Copy as image', 'PowerPoint (.pptx)']);
+  await menu.getByText('Print and image options').click();
   await menu.getByRole('combobox').last().selectOption('300');
   await page.reload();
   await expect(page.locator('.poster')).toBeVisible();
   await page.getByRole('button', { name: 'Export ▾' }).click();
+  await expect(menu).toContainText('Print quality');
+  await menu.getByText('Print and image options').click();
   await expect(menu.getByRole('combobox').last()).toHaveValue('300');
 });

@@ -10,7 +10,7 @@ test('conference tab checks the poster against the call for posters', async ({ p
 
   await page.getByRole('button', { name: /^Check/ }).click();
   const panel = page.getByRole('dialog', { name: 'Poster check' });
-  await panel.getByRole('tab', { name: 'Conference' }).click();
+  await panel.getByRole('tab', { name: 'Words' }).click();
   await panel.getByLabel('Conference name').fill('ISMB');
   await panel.getByLabel('Required size').selectOption('A0');
   await panel.getByLabel('Orientation').selectOption('portrait');
@@ -33,14 +33,14 @@ test('conference tab checks the poster against the call for posters', async ({ p
   await page.keyboard.press('End');
   await page.keyboard.type(' (P-142)');
   await page.keyboard.press('Escape');
-  await panel.getByRole('tab', { name: 'Conference' }).click();
+  await panel.getByRole('tab', { name: 'Words' }).click();
   await expect(panel.getByRole('heading', { name: '2 of 4 rules met' })).toBeVisible();
 
   // rules are saved with the poster and survive a reload
   await expect(page.locator('.save-state')).toHaveText('Saved');
   await page.reload();
   await page.getByRole('button', { name: /^Check/ }).click();
-  await panel.getByRole('tab', { name: 'Conference' }).click();
+  await panel.getByRole('tab', { name: 'Words' }).click();
   await expect(panel.getByLabel('Conference name')).toHaveValue('ISMB');
   await expect(panel.getByRole('heading', { name: '2 of 4 rules met' })).toBeVisible();
 

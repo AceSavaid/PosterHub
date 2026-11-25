@@ -35,6 +35,7 @@ test('PDF bleed and crop marks for the print shop', async ({ page }) => {
     return { w: el.offsetWidth, h: el.offsetHeight };
   });
   await page.getByRole('button', { name: 'Export ▾' }).click();
+  await page.getByText('Print and image options').click();
   await page.getByLabel('Bleed').selectOption({ label: '3 mm' });
   await page.getByLabel('Crop marks').check();
   await expect(page.getByRole('button', { name: /^PDF/ })).toContainText('with bleed and crop marks');

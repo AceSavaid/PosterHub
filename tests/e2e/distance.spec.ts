@@ -13,6 +13,7 @@ test('View mode previews the poster from a distance and marks small text', async
   await page.getByLabel('Size (pt)').fill('14');
   await page.keyboard.press('Escape');
 
+  await page.getByRole('button', { name: 'View ▾' }).click();
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const width = () => page.locator('.view-mode .poster').evaluate((n) => n.getBoundingClientRect().width);
   const posterMm = await page.locator('.view-mode .poster').evaluate((n) => (n as HTMLElement).offsetWidth / (96 / 25.4));

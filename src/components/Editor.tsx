@@ -13,7 +13,7 @@ import { copyImageToClipboard, effectiveDpi, exportPdf, exportPng, exportPptx, m
 import { Canvas } from './Canvas';
 import { reducedMotion } from '../lib/a11y';
 import LeftPanel, { PosterSettings } from './LeftPanel';
-import Inspector from './Inspector';
+import Inspector, { ALIGN } from './Inspector';
 import { equationBoxSize, typesetLatex } from '../lib/math';
 import { chartCanvases } from './ChartView';
 import { Logo } from './Library';
@@ -158,6 +158,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
   // The tour starts by itself the first time someone opens a poster; Help → Take the tour replays it.
   const [touring, setTouring] = useState(false);
   const [helpMenu, setHelpMenu] = useState<{ x: number; y: number } | null>(null);
+  const [zoomMenu, setZoomMenu] = useState<{ x: number; y: number } | null>(null);
   /** the phone toolbar's More menu, holding the buttons that don't fit on one row */
   const [moreMenu, setMoreMenu] = useState<{ x: number; y: number } | null>(null);
   useEffect(() => {
@@ -1245,14 +1246,32 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
     if (canUngroup(selectedIds, els)) items.push({ label: 'Ungroup', shortcut: 'Ctrl/⌘ Shift G', onClick: ungroupSelected });
     items.push('-');
     if (!many) {
-      items.push({ label: 'Bring to front', onClick: () => layer('front') });
-      items.push({ label: 'Send to back', onClick: () => layer('back') });
+      items.push({
+        label: 'Order',
+        items: [
+          { label: 'Bring to front', onClick: () => layer('front') },
+          { label: 'Bring forward', onClick: () => layer('up') },
+          { label: 'Send backward', onClick: () => layer('down') },
+          { label: 'Send to back', onClick: () => layer('back') },
+        ],
+      });
       items.push({ label: el.locked ? 'Unlock' : 'Lock position', onClick: () => updateElement(el.id, { locked: !el.locked }) });
-      items.push('-');
       items.push({ label: 'Add note', onClick: () => addNote(el) });
     } else {
-      items.push({ label: 'Align left edges', onClick: () => arrange((els, d) => align(els, 'left', pageBox(d))) });
-      items.push({ label: 'Align top edges', onClick: () => arrange((els, d) => align(els, 'top', pageBox(d))) });
+      items.push({
+        label: 'Align',
+        items: [
+          ...ALIGN.map((a) => ({ label: a.label, onClick: () => arrange((els, d) => align(els, a.mode, pageBox(d))) })),
+          '-',
+          { label: 'Tidy up', onClick: () => void tidy() },
+          ...(selectedIds.length > 2
+            ? [
+                { label: 'Space evenly across', onClick: () => arrange((els) => distribute(els, 'x')) },
+                { label: 'Space evenly down', onClick: () => arrange((els) => distribute(els, 'y')) },
+              ]
+            : []),
+        ],
+      });
     }
     items.push('-');
     items.push({ label: many ? `Delete ${selectedIds.length} elements` : 'Delete', shortcut: 'Del', danger: true, onClick: removeSelected });
@@ -1531,12 +1550,22 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
 
   if (viewing) return <ViewMode poster={poster} vision={vision} onVision={setVision} onClose={() => setViewing(false)} />;
 
+  const posterItems = posterActionItems({
+    onCopy: () => setCopySizeOpen(true),
+    onDownload: () => exportPosterFile(posterRef.current),
+    onSaveTemplate: () => setTemplateDialog(true),
+    onDelete: () => setConfirmDelete(true),
+  });
+
   const reviewSwitch = sidePanel && (
     <ReviewSwitch
       current={sidePanel}
+      tab={checkTab}
+      problems={issues.filter((i) => i.severity !== 'tip').length}
       notes={openNotes(poster).length}
-      onPick={(p) => {
+      onPick={(p, tab) => {
         if (p === 'check') runCheck();
+        if (tab) setCheckTab(tab);
         setSidePanel(p);
       }}
     />
@@ -1552,8 +1581,8 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
         <input className="poster-name" value={poster.name} onChange={(e) => update((d) => void (d.name = e.target.value), 'name')} aria-label="Poster name" />
         <button
           className="icon-btn phone-hide"
-          aria-label="Poster options"
-          title="Poster options"
+          aria-label="Poster menu"
+          title="Poster: make a copy, download the project file, save as a template, delete"
           onClick={(e) => {
             const r = e.currentTarget.getBoundingClientRect();
             setPosterMenu({ x: r.left, y: r.bottom + 4 });
@@ -1566,12 +1595,21 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
         <button className="icon-btn" disabled={!canUndo} onClick={undo} title={keys('Undo (Ctrl/⌘ Z)')}>↶</button>
         <button className="icon-btn phone-hide" disabled={!canRedo} onClick={redo} title={keys('Redo (Ctrl/⌘ Shift Z)')}>↷</button>
         <span className="sep phone-hide" />
-        <button className="icon-btn phone-hide" onClick={() => setZoom((z) => Math.max(0.02, z / 1.25))} title={keys('Zoom out (Ctrl/⌘ -)')}>−</button>
-        <button className="btn ghost zoom-label phone-hide" onClick={fit} title={keys('Fit to screen (Shift 0 or Ctrl/⌘ 0)')} aria-label={`${Math.round(zoom * 100)}%, fit to screen`}>{Math.round(zoom * 100)}%</button>
-        <button className="icon-btn phone-hide" onClick={() => setZoom((z) => Math.min(4, z * 1.25))} title={keys('Zoom in (Ctrl/⌘ =)')}>+</button>
-        <span className="sep phone-hide" />
+        <button
+          className="btn ghost zoom-label phone-hide"
+          title="Zoom in, zoom out or fit to screen"
+          aria-label={`Zoom ${Math.round(zoom * 100)}%`}
+          aria-haspopup="menu"
+          aria-expanded={!!zoomMenu}
+          onClick={(e) => {
+            const r = e.currentTarget.getBoundingClientRect();
+            setZoomMenu({ x: r.left, y: r.bottom + 4 });
+          }}
+        >
+          {Math.round(zoom * 100)}% <span aria-hidden="true">▾</span>
+        </button>
         <div className="phone-hide topbar-group">
-        <ViewMenu>
+        <ViewMenu onPreview={() => setViewing(true)}>
           <div className="field-label">While editing</div>
           <label className="check" title="Blue lines that show the columns">
             <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Show column guides
@@ -1621,7 +1659,6 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             </span>
           )}
         </button>
-        <button className="btn phone-hide" onClick={() => setViewing(true)} title="See the poster full screen, without editing tools">Preview</button>
         <button
           className="icon-btn phone-only"
           aria-label="More"
@@ -1738,7 +1775,7 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             />
           </div>
         </main>
-        {progress.left.length > 0 && !editingId && (
+        {progress.left.length > 0 && !editingId && !checkOpen && (
           <button className="btn fill-next" onClick={fillNext} title="Go to the next box that still has example text or no picture">
             <span className="fill-count">{progress.filled} of {progress.total} filled</span>
             <span className="fill-go">Go to an empty box →</span>
@@ -1787,6 +1824,10 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             onFillTable={(cells) => selected && fillTable(selected, cells)}
             onEditEquation={() => selected && openEquation(selected)}
             onCaption={(id, a) => captionAction(id, a)}
+            onMore={(x, y) => {
+              const el = selected ?? poster.elements.find((e) => e.id === selectedIds[0]);
+              if (el) setMenu({ x, y, el });
+            }}
           />
         ) : (
           <button className="panel-reveal props" title={keys('Show properties panel (Ctrl/⌘ \\)')} aria-label="Show properties panel" onClick={() => setPrefs({ showProperties: true })}>
@@ -1799,12 +1840,20 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
           x={posterMenu.x}
           y={posterMenu.y}
           onClose={() => setPosterMenu(null)}
-          items={posterActionItems({
-            onCopy: () => setCopySizeOpen(true),
-            onDownload: () => exportPosterFile(posterRef.current),
-            onSaveTemplate: () => setTemplateDialog(true),
-            onDelete: () => setConfirmDelete(true),
-          })}
+          items={posterItems}
+        />
+      )}
+      {zoomMenu && (
+        <ContextMenu
+          x={zoomMenu.x}
+          y={zoomMenu.y}
+          onClose={() => setZoomMenu(null)}
+          items={[
+            { label: 'Zoom in', shortcut: 'Ctrl/⌘ =', onClick: () => setZoom((z) => Math.min(4, z * 1.25)) },
+            { label: 'Zoom out', shortcut: 'Ctrl/⌘ -', onClick: () => setZoom((z) => Math.max(0.02, z / 1.25)) },
+            { label: 'Fit to screen', shortcut: 'Ctrl/⌘ 0', onClick: fit },
+            { label: 'Actual size (100%)', onClick: () => setZoom(1) },
+          ]}
         />
       )}
       {helpMenu && (
@@ -1838,15 +1887,25 @@ export default function Editor({ initial, notice: initialNotice, startWith, onCl
             { label: 'Preview', onClick: () => setViewing(true) },
             '-',
             { label: 'Redo', disabled: !canRedo, onClick: redo },
-            { label: 'Zoom in', onClick: () => setZoom((z) => Math.min(4, z * 1.25)) },
-            { label: 'Zoom out', onClick: () => setZoom((z) => Math.max(0.02, z / 1.25)) },
-            { label: 'Fit to screen', onClick: fit },
+            {
+              label: 'Zoom',
+              items: [
+                { label: 'Zoom in', onClick: () => setZoom((z) => Math.min(4, z * 1.25)) },
+                { label: 'Zoom out', onClick: () => setZoom((z) => Math.max(0.02, z / 1.25)) },
+                { label: 'Fit to screen', onClick: fit },
+              ],
+            },
+            { label: 'Poster', items: posterItems },
             '-',
-            { label: 'Poster options…', onClick: () => setPosterMenu({ x: moreMenu.x, y: moreMenu.y }) },
             { label: 'Settings…', onClick: () => setSettingsOpen(true) },
-            { label: 'Search the menus', onClick: () => setCommandOpen(true) },
-            { label: 'Keyboard shortcuts', shortcut: '?', onClick: () => setShortcutsOpen(true) },
-            { label: 'Take the tour', onClick: () => setTouring(true) },
+            {
+              label: 'Help',
+              items: [
+                { label: 'Search the menus', onClick: () => setCommandOpen(true) },
+                { label: 'Keyboard shortcuts', onClick: () => setShortcutsOpen(true) },
+                { label: 'Take the tour', onClick: () => setTouring(true) },
+              ],
+            },
           ]}
         />
       )}

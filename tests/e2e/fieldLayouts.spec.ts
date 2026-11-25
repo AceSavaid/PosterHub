@@ -55,6 +55,7 @@ test('Switch layout moves written text from a clinical poster into another field
   await expect(page.locator('.poster .el-text .el-body', { hasText: 'A 54-year-old with a rare rash.' })).toHaveCount(1);
   await page.locator('.stage').click({ position: { x: 5, y: 5 } }); // nothing selected: Properties shows the poster settings
   await page.getByRole('tab', { name: 'Layout' }).click();
+  await page.getByText('Switch layout…').click();
   const select = page.getByRole('combobox', { name: 'Layout' });
   await expect(select.locator('optgroup[label="By research field"] option')).toHaveCount(4);
   await select.selectOption('lab');

@@ -33,7 +33,7 @@ async function makeStyledPoster(page: Page) {
 }
 
 async function saveAsTemplate(page: Page, name: string) {
-  await page.getByRole('button', { name: 'Poster options' }).click();
+  await page.getByRole('button', { name: 'Poster menu' }).click();
   await page.getByRole('menuitem', { name: 'Save as my template…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Save as my template' });
   await expect(dialog).toBeVisible();

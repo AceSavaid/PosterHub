@@ -12,9 +12,10 @@ async function newPoster(page: Page) {
 }
 
 async function openPreview(page: Page) {
-  const button = page.getByRole('button', { name: 'Preview', exact: true });
-  if (await button.isVisible()) {
-    await button.tap();
+  const view = page.getByRole('button', { name: 'View ▾' });
+  if (await view.isVisible()) {
+    await view.tap();
+    await page.getByRole('button', { name: 'Preview', exact: true }).tap();
   } else {
     // a phone top bar tucks Preview into the "More" menu
     await page.getByRole('button', { name: /^More/ }).first().tap();
@@ -144,6 +145,7 @@ test('desktop: click zooms in on that spot, drag pans, Ctrl + scroll and the but
   await page.getByRole('button', { name: '+ New poster' }).first().click();
   await page.getByRole('button', { name: /^Classic columns/ }).click();
   await page.getByRole('button', { name: 'Create poster' }).click();
+  await page.getByRole('button', { name: 'View ▾' }).click();
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
   const fit = await posterBox(page);
   await expect(page.getByRole('button', { name: 'Zoom out' })).toBeDisabled();

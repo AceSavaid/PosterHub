@@ -17,7 +17,7 @@ interface Props {
   onReview: () => void;
 }
 
-/** The Export ▾ button and its menu: one warning line, then each format with its own options under it. */
+/** The Export ▾ button and its menu: one warning line, the formats, and their print and image options folded at the bottom. The project file is under the poster's ⋯ menu. */
 export default function ExportMenu({ poster, issues, onExport, onCopyImage, onReview }: Props) {
   const [prefs, change] = useUiPrefs();
   const [open, setOpen] = useState(false);
@@ -50,37 +50,14 @@ export default function ExportMenu({ poster, issues, onExport, onCopyImage, onRe
           <button onClick={() => run('pdf')}>
             <strong>PDF</strong>
             <span>
-              For printing: sharp text and graphics at any size
+              For printing
               {(prefs.pdfBleedMm > 0 || prefs.pdfCropMarks) && ` · with ${[prefs.pdfBleedMm > 0 && 'bleed', prefs.pdfCropMarks && 'crop marks'].filter(Boolean).join(' and ')}`}
             </span>
           </button>
-          <div className="menu-print">
-            <label>
-              Bleed
-              <select aria-label="Bleed" value={prefs.pdfBleedMm} onChange={(e) => change({ pdfBleedMm: +e.target.value })}>
-                {BLEED_CHOICES.map((b) => (
-                  <option key={b.mm} value={b.mm}>{b.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="check">
-              <input type="checkbox" checked={prefs.pdfCropMarks} onChange={(e) => change({ pdfCropMarks: e.target.checked })} /> Crop marks
-            </label>
-            <small>Only if your print shop asks. Bleed runs edge colours and photos past the trim so no white shows; crop marks show where to cut.</small>
-          </div>
           <button onClick={() => run('png')}>
             <strong>PNG image</strong>
-            <span>For web, slides or social media</span>
+            <span>For web, slides or social media · {PNG_DPI_CHOICES.find((c) => c.dpi === prefs.pngDpi)?.label.split(' (')[0] ?? prefs.pngDpi + ' dpi'} quality</span>
           </button>
-          <label className="menu-dpi">
-            Quality
-            <select value={prefs.pngDpi} onChange={(e) => change({ pngDpi: +e.target.value })}>
-              {PNG_DPI_CHOICES.map((c) => (
-                <option key={c.dpi} value={c.dpi}>{c.label}</option>
-              ))}
-            </select>
-            {effectiveDpi(poster, prefs.pngDpi) < prefs.pngDpi && <small>Capped at {effectiveDpi(poster, prefs.pngDpi)} dpi for this size by browser limits.</small>}
-          </label>
           <button
             onClick={() => {
               setOpen(false);
@@ -92,12 +69,34 @@ export default function ExportMenu({ poster, issues, onExport, onCopyImage, onRe
           </button>
           <button onClick={() => run('pptx')}>
             <strong>PowerPoint (.pptx)</strong>
-            <span>Editable text, shapes and native charts</span>
+            <span>Editable text, shapes and charts</span>
           </button>
-          <button onClick={() => run('project')}>
-            <strong>Project file (.poster.json)</strong>
-            <span>Back up, or open on another computer</span>
-          </button>
+          <details className="menu-options" open={prefs.pdfBleedMm > 0 || prefs.pdfCropMarks || undefined}>
+            <summary>Print and image options</summary>
+            <div className="menu-print">
+              <label>
+                PDF bleed
+                <select aria-label="Bleed" value={prefs.pdfBleedMm} onChange={(e) => change({ pdfBleedMm: +e.target.value })}>
+                  {BLEED_CHOICES.map((b) => (
+                    <option key={b.mm} value={b.mm}>{b.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={prefs.pdfCropMarks} onChange={(e) => change({ pdfCropMarks: e.target.checked })} /> Crop marks
+              </label>
+              <small>Only if your print shop asks. Bleed runs edge colours past the trim; crop marks show where to cut.</small>
+            </div>
+            <label className="menu-dpi">
+              PNG quality
+              <select value={prefs.pngDpi} onChange={(e) => change({ pngDpi: +e.target.value })}>
+                {PNG_DPI_CHOICES.map((c) => (
+                  <option key={c.dpi} value={c.dpi}>{c.label}</option>
+                ))}
+              </select>
+              {effectiveDpi(poster, prefs.pngDpi) < prefs.pngDpi && <small>Capped at {effectiveDpi(poster, prefs.pngDpi)} dpi for this size by browser limits.</small>}
+            </label>
+          </details>
         </div>
       )}
     </div>

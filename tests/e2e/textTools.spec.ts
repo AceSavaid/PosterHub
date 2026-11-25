@@ -53,7 +53,7 @@ test('replace one match at a time', async ({ page }) => {
   await page.getByRole('button', { name: /^Title/ }).first().click();
   await setTitle(page, 'cat and cat and cat');
   await page.getByRole('button', { name: /^Check/ }).click();
-  await page.locator('.review-switch').getByRole('button', { name: 'Find' }).click();
+  await page.locator('.review-switch').getByRole('tab', { name: 'Find' }).click();
   const panel = page.getByRole('dialog', { name: 'Find and replace' });
   await panel.getByPlaceholder('Word or phrase').fill('cat');
   await panel.getByLabel('Whole words only').check();

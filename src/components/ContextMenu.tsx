@@ -76,7 +76,8 @@ export default function ContextMenu({ x, y, items, onClose }: { x: number; y: nu
       role="menuitem"
       className={it.danger ? 'danger' : ''}
       disabled={it.disabled}
-      onMouseEnter={() => !it.items && sub !== null && !(document.activeElement as HTMLElement | null)?.closest('.cm-sub') && setSub(null)}
+      // pointing at another top-level item closes an open submenu; items inside the submenu leave it open
+      onMouseEnter={(e) => sub !== null && !e.currentTarget.closest('.cm-sub') && setSub(null)}
       onClick={() => {
         onClose();
         it.onClick?.();

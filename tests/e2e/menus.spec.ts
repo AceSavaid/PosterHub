@@ -72,6 +72,9 @@ test('right-click groups ordering and lining up into submenus', async ({ page })
   await page.getByRole('menuitem', { name: 'Align' }).hover();
   const align = page.getByRole('menu', { name: 'Align' });
   await expect(align.getByRole('menuitem')).toHaveText(['Align left edges', 'Align centres (horizontally)', 'Align right edges', 'Align top edges', 'Align middles (vertically)', 'Align bottom edges', 'Tidy up']);
+  // pointing at an item inside the submenu keeps it open
+  await align.getByRole('menuitem', { name: 'Align top edges' }).hover();
+  await expect(align).toBeVisible();
   const x = () => page.locator('.poster .el.selected').evaluateAll((ns) => ns.map((n) => Math.round(parseFloat((n as HTMLElement).style.left))));
   await align.getByRole('menuitem', { name: 'Align right edges' }).click();
   await expect(page.getByRole('menu')).toHaveCount(0);

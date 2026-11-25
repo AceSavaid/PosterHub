@@ -197,42 +197,39 @@ function LayoutTab({ poster, update, notify, onUndo, onFillFromAbstract }: Pick<
         {num('Margin', 'margin')}
         {num('Gap between columns', 'gutter')}
       </div>
-      <p className="hint">
-        Columns show as blue guides, and elements snap to them while you drag (hold Alt to skip). Changing the number of columns moves the guides only; your
-        content stays where it is.
-      </p>
-      <h3>Switch layout</h3>
-      <p className="hint">Rearranges the poster into another layout with {poster.columns} column{poster.columns > 1 ? 's' : ''}. Your content moves into the matching places.</p>
-      <div className="form-grid">
-        <label className="span2">
-          Layout
-          <select value={template} onChange={(e) => setTemplate(e.target.value as TemplateId)}>
-            {TEMPLATES.filter((t) => !t.field).map((t) => (
-              <option key={t.id} value={t.id}>{t.label}</option>
-            ))}
-            <optgroup label="By research field">
-              {TEMPLATES.filter((t) => t.field).map((t) => (
+      <p className="hint">Columns are the blue guides. Changing them moves only the guides, not your content.</p>
+      <h3>Rearrange</h3>
+      <details className="fold-btn">
+        <summary className="btn">Switch layout…</summary>
+        <div className="form-grid">
+          <label className="span2">
+            Layout
+            <select value={template} onChange={(e) => setTemplate(e.target.value as TemplateId)}>
+              {TEMPLATES.filter((t) => !t.field).map((t) => (
                 <option key={t.id} value={t.id}>{t.label}</option>
               ))}
-            </optgroup>
-          </select>
-        </label>
-        <p className="hint span2">{templateDef(template).description} Your text, figures and logos carry over.</p>
-        <button
-          className="btn span2"
-          onClick={() => {
-            // No "are you sure?": it's one undo step, and the toast offers Undo right there.
-            const { elements, report } = applyLayout(poster, template);
-            update((d) => void (d.elements = elements));
-            notify(describeReport(report), { label: 'Undo', run: onUndo });
-          }}
-        >
-          Apply to {poster.columns} column{poster.columns > 1 ? 's' : ''}
-        </button>
-      </div>
-      <h3>Fill from your abstract</h3>
-      <p className="hint">Paste an abstract or open a Word file, and its title, authors and sections go into this poster’s matching boxes.</p>
-      <button className="btn" onClick={onFillFromAbstract}>
+              <optgroup label="By research field">
+                {TEMPLATES.filter((t) => t.field).map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </optgroup>
+            </select>
+          </label>
+          <p className="hint span2">{templateDef(template).description} Your text, figures and logos move into the matching places.</p>
+          <button
+            className="btn span2"
+            onClick={() => {
+              // No "are you sure?": it's one undo step, and the toast offers Undo right there.
+              const { elements, report } = applyLayout(poster, template);
+              update((d) => void (d.elements = elements));
+              notify(describeReport(report), { label: 'Undo', run: onUndo });
+            }}
+          >
+            Apply to {poster.columns} column{poster.columns > 1 ? 's' : ''}
+          </button>
+        </div>
+      </details>
+      <button className="btn" title="Paste an abstract or open a Word file; its title, authors and sections go into the matching boxes" onClick={onFillFromAbstract}>
         Fill from abstract or Word…
       </button>
     </>

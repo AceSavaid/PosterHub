@@ -164,7 +164,9 @@ test('the Ω button finds and adds special characters without leaving the text',
 
 test('buttons with a shortcut name it in their tooltip, and the typing shortcuts work', async ({ page }) => {
   await newPoster(page);
-  await expect(page.getByRole('button', { name: 'Zoom in' }).or(page.locator('button[title^="Zoom in"]')).first()).toHaveAttribute('title', /Zoom in \((Ctrl\+=|⌘=)\)/);
+  await page.locator('.zoom-label').click();
+  await expect(page.getByRole('menuitem', { name: /^Zoom in/ })).toContainText(/Ctrl\+=|⌘=/);
+  await page.keyboard.press('Escape');
   const body = await newTextBox(page);
   for (const [name, key] of [['Bold', /Ctrl\+B|⌘B/], ['A+ bigger text', /Ctrl\+Shift\+\.|⌘⇧\./], ['Bullet list', /Ctrl\+Shift\+8|⌘⇧8/], ['x² superscript', /Ctrl\+\.|⌘\./]] as const)
     await expect(bar(page).getByRole('button', { name, exact: true })).toHaveAttribute('title', key);

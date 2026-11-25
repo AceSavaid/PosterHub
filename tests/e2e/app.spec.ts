@@ -210,6 +210,7 @@ test.describe('templates', () => {
     await newPoster(page);
     await expect(page.locator('.poster .img-placeholder', { hasText: 'Logo' })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Layout' }).click();
+    await page.getByText('Switch layout…').click();
     await page.getByRole('combobox', { name: 'Layout' }).selectOption('boxed');
     await expect(page.getByText('Logos either side of the title')).toBeVisible();
     await page.getByRole('button', { name: /^Apply to/ }).click();
@@ -241,6 +242,7 @@ test.describe('switching layouts', () => {
 
     await page.locator('.stage').click({ position: { x: 5, y: 5 } }); // nothing selected: Properties shows the poster settings
     await page.getByRole('tab', { name: 'Layout' }).click();
+    await page.getByText('Switch layout…').click();
     await page.getByRole('combobox', { name: 'Layout' }).selectOption('sidebar');
     await page.getByRole('button', { name: /^Apply to/ }).click();
     await expect(page.locator('.toast')).toContainText('Moved your 1 section');
@@ -268,6 +270,7 @@ test.describe('editing', () => {
     const before = await elements(page).count();
     expect(before).toBeGreaterThan(0);
     await page.locator('.panel.right .tabs').getByRole('tab', { name: 'Layout' }).click();
+    await page.getByText('Switch layout…').click();
     await page.locator('.panel.right label', { hasText: /^Layout/ }).locator('select').selectOption({ label: 'Blank' });
     await page.getByRole('button', { name: /^Apply to/ }).click();
     await expect(elements(page)).toHaveCount(0);
@@ -490,9 +493,11 @@ test.describe('graphs', () => {
 
 test.describe('export, import and sharing', () => {
   async function download(page: Page, label: RegExp) {
-    await page.getByRole('button', { name: 'Export ▾' }).click();
+    // the project file is in the poster's ⋯ menu; the others are under Export
+    const project = label.test('Project file');
+    await page.getByRole('button', { name: project ? 'Poster menu' : 'Export ▾' }).click();
     const dl = page.waitForEvent('download');
-    await page.getByRole('button', { name: label }).click();
+    await (project ? page.getByRole('menuitem', { name: 'Download project file' }) : page.getByRole('button', { name: label })).click();
     const d = await dl;
     const file = path.join(os.tmpdir(), `${Date.now()}-${d.suggestedFilename()}`);
     await d.saveAs(file);
@@ -533,7 +538,8 @@ test.describe('export, import and sharing', () => {
     // re-import the project file as a new poster
     await backToLibrary(page);
     const chooser = page.waitForEvent('filechooser');
-    await page.getByRole('button', { name: 'Open project file' }).click();
+    await page.getByRole('button', { name: 'Open ▾' }).click();
+    await page.getByRole('menuitem', { name: 'Open project file…' }).click();
     await (await chooser).setFiles(proj.file);
     await expect(page.getByLabel('Poster name')).toHaveValue('Export test');
     await expect(page.locator('.poster .el-chart canvas')).toBeVisible();
@@ -660,6 +666,7 @@ test.describe('export, import and sharing', () => {
 
   test('view mode shows the poster read-only', async ({ page }) => {
     await newPoster(page);
+    await page.getByRole('button', { name: 'View ▾' }).click();
     await page.getByRole('button', { name: 'Preview', exact: true }).click();
     await expect(page.locator('.view-mode')).toBeVisible();
     await expect(page.locator('.view-mode .el-title')).toContainText('Your Poster Title');

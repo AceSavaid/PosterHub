@@ -47,34 +47,24 @@ interface Props {
   onFillNext?: () => void;
 }
 
-/** Poster problems, a spelling pass and word counts, in three tabs. */
+/** Poster problems, a spelling pass, and word counts with the conference's rules; the tabs are in `switcher`. */
 export default function CheckPanel(props: Props) {
-  const { switcher } = props;
-  const { issues, tab, onTab, onClose } = props;
-  const problems = issues.filter((i) => i.severity !== 'tip').length;
-  const tabs: { id: CheckTab; label: string }[] = [
-    { id: 'problems', label: problems ? `Problems (${problems})` : 'Problems' },
-    { id: 'spelling', label: 'Spelling' },
-    { id: 'words', label: 'Words' },
-    { id: 'conference', label: 'Conference' },
-  ];
+  const { switcher, tab, onClose } = props;
   return (
     <div className="check-panel" role="dialog" aria-label="Poster check">
       <div className="check-head">
         {switcher ?? <strong>Poster check</strong>}
         <button className="icon-btn" aria-label="Close" onClick={onClose}>×</button>
       </div>
-      <div className="seg check-tabs" role="tablist">
-        {tabs.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'active' : ''} onClick={() => onTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
       {tab === 'problems' && <Problems {...props} />}
       {tab === 'spelling' && <Spelling {...props} />}
-      {tab === 'words' && <Words {...props} />}
-      {tab === 'conference' && <Conference {...props} />}
+      {(tab === 'words' || tab === 'conference') && (
+        <>
+          <Words {...props} />
+          <h4 className="conference-head" id="conference-rules">Conference rules</h4>
+          <Conference {...props} />
+        </>
+      )}
     </div>
   );
 }
@@ -362,7 +352,7 @@ function Words({ poster, onPickMany, onWordLimit }: Props) {
 type Unit = 'mm' | 'in';
 
 /** The conference's rules for posters, and a tick or cross for each. */
-function Conference({ poster, onConference, onPickMany, onWordLimit }: Props) {
+function Conference({ poster, onConference, onPickMany }: Props) {
   const rules: ConferenceRules = poster.conference ?? {};
   // inches when the rule (or the poster) is a US size, else mm
   const [unit, setUnit] = useState<Unit>(() => {
@@ -461,20 +451,6 @@ function Conference({ poster, onConference, onPickMany, onWordLimit }: Props) {
           <label>
             Smallest text (pt)
             <input type="number" min={1} placeholder="None" value={rules.minFontPt ?? ''} onChange={(e) => set({ minFontPt: num(e.target.value) }, 'conf-pt')} />
-          </label>
-          <label>
-            Word limit
-            <input
-              type="number"
-              min={0}
-              step={50}
-              placeholder="None"
-              value={poster.wordLimit ?? ''}
-              onChange={(e) => {
-                const n = parseInt(e.target.value, 10);
-                onWordLimit(Number.isFinite(n) && n > 0 ? n : undefined);
-              }}
-            />
           </label>
         </div>
         <div className="row2">

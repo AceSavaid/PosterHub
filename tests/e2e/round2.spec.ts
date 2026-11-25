@@ -103,11 +103,11 @@ test('formats only the selected words', async ({ page }) => {
 
 test('copies and deletes the open poster from its options menu', async ({ page }) => {
   await newPoster(page, 'Blank', 'Lab meeting');
-  await page.getByRole('button', { name: 'Poster options' }).click();
+  await page.getByRole('button', { name: 'Poster menu' }).click();
   await page.getByRole('menuitem', { name: 'Make a copy…' }).click();
   await page.getByRole('dialog', { name: 'Make a copy' }).getByRole('button', { name: 'Make copy' }).click();
   await expect(page.locator('.toast')).toContainText('Lab meeting (copy)');
-  await page.getByRole('button', { name: 'Poster options' }).click();
+  await page.getByRole('button', { name: 'Poster menu' }).click();
   await page.getByRole('menuitem', { name: 'Delete…' }).click();
   await page.getByRole('alertdialog', { name: 'Delete “Lab meeting”?' }).getByRole('button', { name: 'Delete poster' }).click();
   await expect(page.getByRole('heading', { name: 'My posters' })).toBeVisible();

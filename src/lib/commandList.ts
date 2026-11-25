@@ -91,7 +91,7 @@ export function buildCommands(x: CommandContext): Command[] {
     c('pdf', 'Export', 'Download PDF for printing', () => x.exportAs('pdf'), { keywords: 'export print save' }),
     c('png', 'Export', 'Download PNG image', () => x.exportAs('png'), { keywords: 'export picture save' }),
     c('pptx', 'Export', 'Download PowerPoint', () => x.exportAs('pptx'), { keywords: 'export pptx slides save' }),
-    c('project', 'Export', 'Download project file', () => x.exportAs('project'), { keywords: 'backup save' }),
+    c('project', 'Poster', 'Download project file', () => x.exportAs('project'), { keywords: 'backup save' }),
     c('copy-image', 'Export', 'Copy the poster as an image', () => x.exportAs('copyImage'), { keywords: 'clipboard paste slack email' }),
     // Help
     c('settings', 'Help', 'Settings…', open('settings'), { keywords: 'preferences dark mode theme contrast' }),

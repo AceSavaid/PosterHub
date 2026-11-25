@@ -24,7 +24,8 @@ test('opening a booby-trapped project file does not run its code or contact othe
   });
   await page.goto('/');
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Open project file' }).click();
+  await page.getByRole('button', { name: 'Open ▾' }).click();
+  await page.getByRole('menuitem', { name: 'Open project file…' }).click();
   await (await chooser).setFiles({ name: 'trap.poster.json', mimeType: 'application/json', buffer: Buffer.from(boobyTrappedPoster()) });
   await expect(page.getByLabel('Poster name')).toHaveValue('Trap');
   await expect(page.locator('.poster').getByText('Innocent title')).toBeVisible();

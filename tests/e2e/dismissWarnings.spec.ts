@@ -55,7 +55,7 @@ test('a Check item can be dismissed, stays dismissed after a reload and can be b
 test('dismissing a problem takes it off the Check badge and the Export menu', async ({ page }) => {
   const panel = await newPoster(page);
   // a conference rule the poster does not meet is a problem (red)
-  await panel.getByRole('tab', { name: 'Conference' }).click();
+  await panel.getByRole('tab', { name: 'Words' }).click();
   await panel.getByLabel('Conference name').fill('ISMB');
   await panel.getByLabel('Orientation').selectOption('landscape');
   await panel.getByRole('tab', { name: /^Problems/ }).click();

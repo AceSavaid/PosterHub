@@ -28,9 +28,11 @@ async function newPoster(page: Page, name = 'Notes test', template = 'Classic co
 }
 
 async function download(page: Page, label: RegExp) {
-  await page.getByRole('button', { name: 'Export ▾' }).click();
+  // the project file is in the poster's ⋯ menu; the others are under Export
+  const project = label.test('Project file');
+  await page.getByRole('button', { name: project ? 'Poster menu' : 'Export ▾' }).click();
   const dl = page.waitForEvent('download');
-  await page.getByRole('button', { name: label }).click();
+  await (project ? page.getByRole('menuitem', { name: 'Download project file' }) : page.getByRole('button', { name: label })).click();
   const d = await dl;
   const file = path.join(os.tmpdir(), `${Date.now()}-${d.suggestedFilename()}`);
   await d.saveAs(file);
@@ -44,7 +46,7 @@ const pins = (page: Page) => page.locator('.note-pin');
 async function openNotes(page: Page) {
   if (await notesPanel(page).isVisible()) return;
   if (!(await page.locator('.review-switch').isVisible())) await page.getByRole('button', { name: /^Check/ }).click();
-  await page.locator('.review-switch').getByRole('button', { name: /^Notes/ }).click();
+  await page.locator('.review-switch').getByRole('tab', { name: /^Notes/ }).click();
   await expect(notesPanel(page)).toBeVisible();
 }
 
@@ -161,7 +163,7 @@ test('Check lists open notes and clicking one opens it', async ({ page }) => {
   await addNote(page, 'Is n=12 enough?');
   await page.getByLabel('Note text').press('Escape');
   // Notes and Check share the review panel: switch over to Poster check
-  await page.locator('.review-switch').getByRole('button', { name: 'Poster check' }).click();
+  await page.locator('.review-switch').getByRole('tab', { name: /^Problems/ }).click();
   const check = page.getByRole('dialog', { name: 'Poster check' });
   const item = check.getByRole('button', { name: /Open note from Dr\. Lee: “Is n=12 enough\?”/ });
   await expect(item).toBeVisible();
@@ -229,7 +231,8 @@ test('notes in a shared file are shown as plain text, never run as code', async 
 
   await page.getByRole('button', { name: /My posters/ }).click();
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Open project file' }).click();
+  await page.getByRole('button', { name: 'Open ▾' }).click();
+  await page.getByRole('menuitem', { name: 'Open project file…' }).click();
   await (await chooser).setFiles(file);
   await expect(page.getByLabel('Poster name')).toHaveValue('From a co-author');
   await expect(page.locator('.check-btn .note-badge')).toHaveText('1');

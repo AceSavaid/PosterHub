@@ -75,6 +75,7 @@ test('previews the poster as colour-blind readers and greyscale print see it', a
   await page.keyboard.press('Escape');
 
   // view mode keeps the same preview and can change it
+  await page.getByRole('button', { name: 'View ▾' }).click();
   await page.getByRole('button', { name: 'Preview', exact: true }).click();
   await expect(page.getByLabel('See the poster as')).toHaveValue('deuteranopia');
   await page.getByLabel('See the poster as').selectOption('greyscale');

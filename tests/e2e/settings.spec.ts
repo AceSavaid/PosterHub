@@ -51,6 +51,7 @@ test('Settings has every option in one place, and they are remembered', async ({
   expect(await zoomOf(page, '.stage')).toBe('1');
   // print-shop options live next to the PDF button, and are remembered too
   await page.getByRole('button', { name: 'Export ▾' }).click();
+  await page.getByText('Print and image options').click();
   await page.getByLabel('Bleed').selectOption('3');
   await page.getByLabel('Crop marks').check();
   await page.keyboard.press('Escape');
@@ -63,6 +64,7 @@ test('Settings has every option in one place, and they are remembered', async ({
   expect(await attr(page, 'data-ui-size')).toBeNull();
   await page.getByRole('button', { name: 'Done' }).click();
   await page.getByRole('button', { name: 'Export ▾' }).click();
+  await page.getByText('Print and image options').click();
   await expect(page.getByLabel('Bleed')).toHaveValue('0');
 });
 
@@ -219,7 +221,8 @@ test('backs up every poster in one file and restores it without losing newer wor
   await expect(page.locator('.poster-card')).toHaveCount(1);
 
   const chooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Open project file' }).click();
+  await page.getByRole('button', { name: 'Open ▾' }).click();
+  await page.getByRole('menuitem', { name: 'Open project file…' }).click();
   await (await chooser).setFiles(saved);
   await expect(page.getByRole('status').filter({ hasText: 'Backup restored' })).toContainText('added 1 poster, kept 1 poster you already had');
   await expect(page.locator('.poster-card')).toHaveCount(2);

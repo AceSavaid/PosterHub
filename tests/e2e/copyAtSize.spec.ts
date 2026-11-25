@@ -15,7 +15,7 @@ test('copies a poster at another size from the editor and from My posters', asyn
   await expect(title).toHaveText('Sleep spindles predict memory');
 
   // From the editor: A1 landscape, rearranged into more columns.
-  await page.getByRole('button', { name: 'Poster options' }).click();
+  await page.getByRole('button', { name: 'Poster menu' }).click();
   await page.getByRole('menuitem', { name: 'Make a copy…' }).click();
   const dialog = page.getByRole('dialog', { name: 'Make a copy' });
   await expect(dialog).toBeVisible();
@@ -63,7 +63,7 @@ test('Make a copy at the same size is an exact copy, from the editor and from My
   await page.getByRole('button', { name: 'Create poster' }).click();
   await expect(page.locator('.poster')).toBeVisible();
 
-  await page.getByRole('button', { name: 'Poster options' }).click();
+  await page.getByRole('button', { name: 'Poster menu' }).click();
   await page.getByRole('menuitem', { name: 'Make a copy…' }).click();
   await page.getByRole('dialog', { name: 'Make a copy' }).getByRole('button', { name: 'Make copy' }).click();
   await expect(page.locator('.toast')).toContainText('Lab meeting (copy)');

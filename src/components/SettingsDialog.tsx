@@ -81,7 +81,7 @@ export default function SettingsDialog({ onClose, storageKind = 'browser', onBac
           <div className="field-label">Interface size</div>
           <Seg label="Interface size" value={prefs.uiSize} options={SIZES} onChange={(uiSize) => change({ uiSize })} />
         </div>
-        <p className="hint">Interface size makes menus, panels and buttons bigger. It doesn’t change the poster; use the zoom buttons for that.</p>
+        <p className="hint">Interface size makes menus, panels and buttons bigger. It doesn’t change the poster; use the zoom percentage at the top of the editor for that.</p>
 
         <h3>Editor</h3>
         <div className="settings-checks">
@@ -94,8 +94,17 @@ export default function SettingsDialog({ onClose, storageKind = 'browser', onBac
           <label className="check">
             <input type="checkbox" checked={prefs.autoFormat} onChange={(e) => change({ autoFormat: e.target.checked })} /> Format as I type: “- ” or “1. ” starts a list, curly quotes, 10–20 dashes
           </label>
+          <label className="check">
+            <input type="checkbox" checked={prefs.showTools} onChange={(e) => change({ showTools: e.target.checked })} /> Show the Insert panel
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={prefs.showProperties} onChange={(e) => change({ showProperties: e.target.checked })} /> Show the Properties panel
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={prefs.swapPanels} onChange={(e) => change({ swapPanels: e.target.checked })} /> Insert panel on the right
+          </label>
         </div>
-        <p className="hint">{keys('Side panels are under View ▾ in the editor; Ctrl/⌘ \\ hides or shows both. Press ? in the editor for every shortcut.')}</p>
+        <p className="hint">{keys('Ctrl/⌘ \\ hides or shows both side panels. Press ? in the editor for every shortcut.')}</p>
 
         <div className="settings-grid">
           <label htmlFor="settings-reviewer" className="field-label">Your name on notes</label>

@@ -124,9 +124,10 @@ test('library: one ⋯ menu per poster to rename in place and download the proje
 test('Layout tab explains that columns move guides only', async ({ page }) => {
   await newPoster(page);
   await page.getByRole('tab', { name: 'Layout' }).click();
-  await expect(page.getByText('content stays where it is')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Switch layout' })).toBeVisible();
+  await expect(page.getByText('moves only the guides, not your content')).toBeVisible();
+  await expect(page.getByText('Switch layout…')).toBeVisible();
   // switching applies straight away (no "are you sure?") and the toast's Undo puts everything back
+  await page.getByText('Switch layout…').click();
   await page.getByRole('combobox', { name: 'Layout' }).selectOption('boxed');
   const count = await page.locator('.poster > .el').count();
   await page.getByRole('button', { name: /^Apply to/ }).click();

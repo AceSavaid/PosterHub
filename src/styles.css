@@ -841,7 +841,9 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 
 /* Check / Find / Notes switcher at the top of the review panel */
 .check-head .review-switch { flex: 1; margin-right: 6px; }
-.review-switch button { flex: 1; justify-content: center; font-size: 12.5px; gap: 4px; }
+.review-switch button { flex: 1; justify-content: center; font-size: 12.5px; gap: 3px; padding: 6px 4px; }
+.review-switch .badge { font-size: 10px; min-width: 15px; padding: 0 4px; }
+.conference-head { margin: 14px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
 /* panel titles: "Insert" on the left, "Poster" on the right when nothing is selected */
 .panel-title { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 4px; }
 .insp-poster-title { padding: 14px 14px 4px; }
@@ -863,7 +865,7 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .workspace.swapped ~ .notes-panel { right: auto; left: 6px; }
 :root[data-ui-size] .check-panel.notes-panel { right: 6px; }
 :root[data-ui-size] .workspace.swapped ~ .notes-panel { right: auto; left: 6px; }
-.notes-panel .review-switch button { padding: 6px 6px; font-size: 12px; }
+.notes-panel .review-switch button { padding: 6px 2px; font-size: 11.5px; }
 
 /* New poster: colours, columns, fonts, brand kit and saved templates fold away under "More options". */
 .more-options { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
@@ -954,3 +956,16 @@ kbd { background: var(--bg3); border: 1px solid var(--line); border-bottom-width
 .command-empty { margin: 10px 4px 0; }
 .command-hint { margin: 8px 4px 0; }
 .issue-fix .fix-pt { font-weight: 600; }
+/* right-click submenus ("Order ▸", "Align ▸") */
+.cm-wrap { position: relative; }
+.context-menu.cm-sub { position: absolute; left: calc(100% - 4px); top: -5px; }
+.context-menu.cm-sub.left { left: auto; right: calc(100% - 4px); }
+/* Export menu: print and image options folded under the formats */
+.menu-options { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 4px; }
+.menu-options summary { cursor: pointer; padding: 6px 10px; font-size: 13px; color: var(--muted); }
+.menu-options[open] summary { color: var(--fg); }
+/* Poster settings: "Switch layout…" looks like a button and unfolds its picker underneath */
+.fold-btn { margin-bottom: 8px; }
+.fold-btn > summary { list-style: none; display: flex; justify-content: center; }
+.fold-btn > summary::-webkit-details-marker { display: none; }
+.fold-btn[open] > summary { margin-bottom: 8px; }
